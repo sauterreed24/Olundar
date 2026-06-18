@@ -368,12 +368,12 @@ export function getAftermathMissions(state) {
   normalizeCampaignState(state);
   const active = state.crises.missions
     .filter((mission) => !mission.completedTurn)
-    .map(missionView);
+    .map((mission) => missionView(state, mission));
   const recent = state.crises.missions
     .filter((mission) => mission.completedTurn && state.turn - mission.completedTurn <= 4)
     .slice(-3)
     .reverse()
-    .map(missionView);
+    .map((mission) => missionView(state, mission));
   return {
     title: 'Aftermath Missions',
     summary: aftermathMissionSummary(active, recent),
@@ -383,7 +383,11 @@ export function getAftermathMissions(state) {
   };
 }
 
-function missionView(mission) {
+function missionView(state, mission) {
+  const tile = tileAt(state, mission.x, mission.y);
+  const terrain = TERRAIN[mission.terrain || tile?.terrain];
+  const site = mission.site || missionSiteName(mission.type);
+  const routeStep = mission.chainLimit ? `Route ${mission.chainStep || 1}/${mission.chainLimit}` : '';
   return {
     id: mission.id,
     name: mission.name,
@@ -393,10 +397,21 @@ function missionView(mission) {
     y: mission.y,
     target: `${mission.x},${mission.y}`,
     required: missionRequirementText(mission.required),
+    site,
+    terrain: terrain?.name || 'Unknown terrain',
+    context: [site, terrain?.name, routeStep].filter(Boolean).join(' / '),
     completed: Boolean(mission.completedTurn),
     completedTurn: mission.completedTurn || null,
-    reward: mission.rewardText || 'A small campaign reward follows completion.'
+    reward: mission.completedTurn && mission.resultText ? mission.resultText : mission.rewardText || 'A small campaign reward follows completion.'
   };
+}
+
+function missionSiteName(type = '') {
+  if (type === 'repair') return 'Raid scar';
+  if (type === 'raid') return 'Raider camp';
+  if (type === 'escort') return 'Road camp';
+  if (type === 'accord') return 'Envoy waystation';
+  return 'Field site';
 }
 
 function missionRequirementText(required = 'any') {
@@ -1186,7 +1201,12 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
       text: 'Move a scout or cavalry unit to the marked road camp so the sponsored families can travel safely.',
       required: 'recon',
       tone: 'info',
-      rewardText: 'Completing it grants influence and steadies morale.'
+      site: 'Road camp',
+      chainTag: 'frontierFamilies',
+      chainStep: 1,
+      chainLimit: 2,
+      routeName: 'Frontier Family Route',
+      rewardText: 'Completing it grants influence, steadies morale, and may reveal the next safe-mile camp.'
     });
     return { tone: unit ? 'good' : 'info', text: unit ? 'Frontier families send a guide to Olundar and improve trust on the living front.' : contacts ? 'Frontier families improve trust, though no open muster ground was found.' : 'Frontier families become border contacts, though no open muster ground was found.' };
   }
@@ -1219,6 +1239,7 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
       text: 'Move an engineer to the marked street scar to finish repairs before raiders exploit it again.',
       required: 'engineer',
       tone: 'info',
+      site: 'Raid scar',
       rewardText: 'Completing it reinforces Olundar holdings and raises morale.'
     });
     return { tone: 'good', text: fortified ? 'Street repairs harden Olundar holdings and steady frightened households.' : 'Street repairs steady frightened households, though no holdings were available to reinforce.' };
@@ -1232,7 +1253,12 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
       text: 'Move a combat unit to the marked trailhead to scatter raiders before they return.',
       required: 'combat',
       tone: 'danger',
-      rewardText: 'Completing it grants gold, influence, and field experience.'
+      site: 'Raider trailhead',
+      chainTag: 'raiderTrail',
+      chainStep: 1,
+      chainLimit: 2,
+      routeName: 'Raider Trail',
+      rewardText: 'Completing it grants gold, influence, field experience, and may reveal the raider camp.'
     });
     return { tone: unit ? 'good' : 'info', text: unit ? 'A cavalry patrol hunts the road raiders and gives Olundar new influence.' : 'The hunt raises influence, but no open muster ground was found.' };
   }
@@ -1252,7 +1278,12 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
       text: 'Move a scout or cavalry unit to the marked envoy road to prove the accords are more than speeches.',
       required: 'recon',
       tone: 'good',
-      rewardText: 'Completing it improves known-faction trust and grants influence.'
+      site: 'Envoy road camp',
+      chainTag: 'accordRoad',
+      chainStep: 1,
+      chainLimit: 2,
+      routeName: 'Accord Road',
+      rewardText: 'Completing it improves known-faction trust, grants influence, and may reveal a waystation.'
     });
     return { tone: 'good', text: contacts ? 'Published accords raise morale and bind known factions closer to Olundar.' : 'Published accords raise morale, though no known faction can answer yet.' };
   }
@@ -1282,6 +1313,11 @@ function addAftermathMission(state, config) {
   normalizeCampaignState(state);
   const target = chooseAftermathMissionTarget(state, config.required);
   if (!target) return null;
+  return appendAftermathMission(state, config, target);
+}
+
+function appendAftermathMission(state, config, target) {
+  const tile = tileAt(state, target.x, target.y);
   const mission = {
     id: nextId(state, 'm'),
     type: config.type,
@@ -1289,9 +1325,17 @@ function addAftermathMission(state, config) {
     text: config.text,
     required: config.required || 'any',
     tone: config.tone || 'info',
+    site: config.site || missionSiteName(config.type),
+    terrain: tile?.terrain || config.terrain || null,
     x: target.x,
     y: target.y,
+    originX: target.originX ?? null,
+    originY: target.originY ?? null,
     radius: 0,
+    chainTag: config.chainTag || null,
+    chainStep: config.chainStep || (config.chainTag ? 1 : 0),
+    chainLimit: config.chainLimit || 0,
+    routeName: config.routeName || '',
     createdTurn: state.turn,
     completedTurn: null,
     rewardText: config.rewardText || ''
@@ -1307,8 +1351,10 @@ function chooseAftermathMissionTarget(state, required = 'any') {
   const preferred = required === 'combat' ? { x: unit.x + 2, y: unit.y } : { x: unit.x, y: unit.y - 1 };
   const options = neighbors4(unit.x, unit.y)
     .filter((tile) => missionTileIsUsable(state, unit, tile.x, tile.y))
+    .filter((tile) => !activeMissionAt(state, tile.x, tile.y))
     .sort((a, b) => manhattan(a.x, a.y, preferred.x, preferred.y) - manhattan(b.x, b.y, preferred.x, preferred.y));
-  return options[0] || null;
+  const target = options[0] || null;
+  return target ? { x: target.x, y: target.y, originX: unit.x, originY: unit.y } : null;
 }
 
 function missionPreferredUnit(state, required) {
@@ -1325,6 +1371,111 @@ function missionTileIsUsable(state, unit, x, y) {
   if (occupant && occupant.id !== unit.id) return false;
   const building = buildingAt(state, x, y);
   return !building || !isEnemy(state, unit.faction, building.faction);
+}
+
+function activeMissionAt(state, x, y, excludeId = null) {
+  return state.crises.missions.some((mission) => !mission.completedTurn && mission.id !== excludeId && mission.x === x && mission.y === y);
+}
+
+function chooseMissionChainTarget(state, mission, unit) {
+  const def = getUnitDef(unit);
+  if (!def) return null;
+  const originX = Number.isFinite(mission.originX) ? mission.originX : unit.x;
+  const originY = Number.isFinite(mission.originY) ? mission.originY : unit.y;
+  let dx = Math.sign(mission.x - originX);
+  let dy = Math.sign(mission.y - originY);
+  if (dx && dy) {
+    if (Math.abs(mission.x - originX) >= Math.abs(mission.y - originY)) dy = 0;
+    else dx = 0;
+  }
+  if (!dx && !dy) dx = mission.type === 'raid' ? 1 : 0;
+  if (!dx && !dy) dy = -1;
+
+  const candidates = [];
+  const pushCandidate = (x, y) => {
+    const tile = tileAt(state, x, y);
+    if (!tile || candidates.includes(tile)) return;
+    candidates.push(tile);
+  };
+  const perpendicular = dx ? [{ x: 0, y: 1 }, { x: 0, y: -1 }] : [{ x: 1, y: 0 }, { x: -1, y: 0 }];
+  for (const distance of [2, 3, 1, 4]) {
+    pushCandidate(mission.x + dx * distance, mission.y + dy * distance);
+    for (const offset of perpendicular) {
+      pushCandidate(mission.x + dx * distance + offset.x, mission.y + dy * distance + offset.y);
+    }
+  }
+  for (const tile of state.map.tiles) {
+    const distance = manhattan(mission.x, mission.y, tile.x, tile.y);
+    if (distance >= 1 && distance <= def.move) pushCandidate(tile.x, tile.y);
+  }
+
+  return candidates
+    .filter((tile) => manhattan(unit.x, unit.y, tile.x, tile.y) > 0)
+    .filter((tile) => missionTileIsUsable(state, unit, tile.x, tile.y))
+    .filter((tile) => !activeMissionAt(state, tile.x, tile.y, mission.id))
+    .filter((tile) => findPath(state, unit, tile.x, tile.y, def.move))
+    .sort((a, b) => missionRouteTargetScore(a, mission, unit) - missionRouteTargetScore(b, mission, unit))[0] || null;
+}
+
+function missionRouteTargetScore(tile, mission, unit) {
+  let score = manhattan(unit.x, unit.y, tile.x, tile.y);
+  if (tile.road && mission.type !== 'raid') score -= 3;
+  if (tile.terrain !== mission.terrain) score -= 1;
+  if (mission.type === 'raid' && ['forest', 'hills', 'ruins'].includes(tile.terrain)) score -= 2;
+  if (mission.type !== 'raid' && ['river', 'plains', 'ruins'].includes(tile.terrain)) score -= 1;
+  return score;
+}
+
+function addMissionFollowUp(state, mission, unit) {
+  if (!mission.chainTag || !mission.chainLimit || (mission.chainStep || 1) >= mission.chainLimit) return null;
+  const target = chooseMissionChainTarget(state, mission, unit);
+  if (!target) return null;
+  const nextStep = (mission.chainStep || 1) + 1;
+  const followUp = missionFollowUpConfig(mission, nextStep);
+  return appendAftermathMission(state, followUp, { x: target.x, y: target.y, originX: mission.x, originY: mission.y });
+}
+
+function missionFollowUpConfig(mission, nextStep) {
+  const base = {
+    chainTag: mission.chainTag,
+    chainStep: nextStep,
+    chainLimit: mission.chainLimit,
+    routeName: mission.routeName
+  };
+  if (mission.type === 'raid') {
+    return {
+      ...base,
+      type: 'raid',
+      name: 'Burn the Raider Camp',
+      text: 'Move a combat unit to the spawned raider camp before the trail reforms.',
+      required: 'combat',
+      tone: 'danger',
+      site: 'Raider camp',
+      rewardText: 'Completing it grants extra gold, influence, field experience, and terrain supplies.'
+    };
+  }
+  if (mission.type === 'accord') {
+    return {
+      ...base,
+      type: 'accord',
+      name: 'Mark the Accord Waystation',
+      text: 'Move a scout or cavalry unit to the next waystation so envoys can keep the route open.',
+      required: 'recon',
+      tone: 'good',
+      site: 'Accord waystation',
+      rewardText: 'Completing it improves known-faction trust, grants influence, and claims terrain supplies.'
+    };
+  }
+  return {
+    ...base,
+    type: 'escort',
+    name: 'Secure the Safe Mile',
+    text: 'Move a scout or cavalry unit to the next family camp to turn the route into a reliable corridor.',
+    required: 'recon',
+    tone: 'info',
+    site: 'Safe-mile camp',
+    rewardText: 'Completing it grants influence, steadies morale, and claims terrain supplies.'
+  };
 }
 
 function updateAftermathMissions(state) {
@@ -1357,32 +1508,69 @@ function completeAftermathMission(state, mission, unit) {
   mission.completedTurn = state.turn;
   mission.completedBy = unit.name;
   const outcome = applyAftermathMissionReward(state, mission, unit);
-  addMessage(state, `${mission.name} completed by ${unit.name}: ${outcome}`, 'good');
+  const terrainOutcome = applyAftermathMissionTerrainReward(state, mission);
+  const followUp = addMissionFollowUp(state, mission, unit);
+  const followUpText = followUp ? `A follow-up marker opens at ${followUp.x},${followUp.y}: ${followUp.name}.` : '';
+  mission.resultText = [outcome, terrainOutcome, followUpText].filter(Boolean).join(' ');
+  addMessage(state, `${mission.name} completed by ${unit.name}: ${mission.resultText}`, 'good');
 }
 
 function applyAftermathMissionReward(state, mission, unit) {
   if (mission.type === 'repair') {
     reinforceOlundarHoldings(state, 6, 2);
     adjustOlundarMorale(state, 1);
-    return 'roads and holdings are repaired, and morale rises.';
+    return 'Roads and holdings are repaired, and morale rises.';
   }
   if (mission.type === 'raid') {
     gainResources(state.factions.olundar.resources, { gold: 10, influence: 1 });
     unit.xp += 1;
-    return 'the raider trail is broken for gold, influence, and field experience.';
+    return 'The raider trail is broken for gold, influence, and field experience.';
   }
   if (mission.type === 'escort') {
     gainResources(state.factions.olundar.resources, { influence: 1 });
     adjustOlundarMorale(state, 1);
-    return 'families reach the safe road, raising morale and influence.';
+    return 'Families reach the safe road, raising morale and influence.';
   }
   if (mission.type === 'accord') {
     gainResources(state.factions.olundar.resources, { influence: 1 });
     adjustKnownLivingRelations(state, 2);
     recordKnownFactionMemory(state, 'fulfilled', 'Accord Route Carried', 'Olundar carried published accords onto the roads instead of leaving them in council chambers.', 1);
-    return 'envoys carry the accords forward, improving trust and influence.';
+    return 'Envoys carry the accords forward, improving trust and influence.';
   }
-  return 'the field task is resolved.';
+  return 'The field task is resolved.';
+}
+
+function applyAftermathMissionTerrainReward(state, mission) {
+  const tile = tileAt(state, mission.x, mission.y);
+  if (!tile || !TERRAIN[tile.terrain]) return '';
+  const resources = missionTerrainReward(tile);
+  if (!Object.keys(resources).length) return '';
+  gainResources(state.factions.olundar.resources, resources);
+  const terrain = TERRAIN[tile.terrain];
+  mission.terrain = tile.terrain;
+  mission.terrainRewardText = `${terrain.name} site yields ${formatCost(resources)}${tile.road ? ' from roadside caches' : ''}.`;
+  return mission.terrainRewardText;
+}
+
+function missionTerrainReward(tile) {
+  const reward = {};
+  if (tile.terrain === 'plains') reward.food = 8;
+  else if (tile.terrain === 'forest') reward.wood = 10;
+  else if (tile.terrain === 'hills') {
+    reward.stone = 6;
+    reward.iron = 3;
+  } else if (tile.terrain === 'river') {
+    reward.food = 10;
+    reward.gold = 2;
+  } else if (tile.terrain === 'marsh') {
+    reward.food = 6;
+    reward.wood = 4;
+  } else if (tile.terrain === 'ruins') {
+    reward.gold = 10;
+    reward.influence = 1;
+  }
+  if (tile.road) reward.gold = (reward.gold || 0) + 4;
+  return reward;
 }
 
 function discoveredLivingFactions(state) {
@@ -1580,7 +1768,7 @@ export function getStrategicMapLens(state, lensId = 'normal') {
       pushMarker({
         x: mission.x,
         y: mission.y,
-        name: mission.completedTurn ? `${mission.name} complete` : mission.name
+        name: mission.completedTurn ? `${mission.name} complete` : `${mission.site || missionSiteName(mission.type)}: ${mission.name}`
       }, mission.completedTurn ? 'missionComplete' : 'missionTarget', tone);
     }
   }

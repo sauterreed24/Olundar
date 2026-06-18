@@ -414,6 +414,7 @@ check('crisis aftermath creates delayed follow-up rulings', () => {
 });
 
 check('aftermath missions turn rulings into map objectives', () => {
+  const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
   const state = createGame('quality-aftermath-missions');
   state.turn = 8;
   state.flags.firstAllySeen = true;
@@ -453,6 +454,51 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(state.factions.olundar.resources.morale > beforeMorale, 'Completing a repair mission should improve morale beyond the aftermath ruling.');
   const completedLens = getStrategicMapLens(state, 'missions');
   assert(completedLens.markers.some((marker) => marker.kind === 'missionComplete' && marker.x === active.x && marker.y === active.y), 'Missions lens should retain recent completion markers.');
+
+  const routeState = createGame('quality-route-chain-missions');
+  routeState.turn = 8;
+  routeState.flags.firstAllySeen = true;
+  routeState.flags.firstDeadwalkerSeen = true;
+  for (const id of ['dawn', 'veyr', 'mire']) routeState.factions[id].discovered = true;
+  routeState.factions.olundar.resources = {
+    ...routeState.factions.olundar.resources,
+    food: 70,
+    wood: 90,
+    stone: 50,
+    iron: 50,
+    gold: 90,
+    influence: 8,
+    morale: 6
+  };
+  const escort = resolveCrisis(routeState, 'refugeeCaravan', 'escort');
+  assert(escort.ok, escort.reason || 'Refugee escort setup failed.');
+  routeState.turn += 2;
+  const frontier = resolveCrisis(routeState, 'refugeeAftermath', 'frontierFamilies');
+  assert(frontier.ok, frontier.reason || 'Frontier family aftermath failed.');
+  let routeMissions = getAftermathMissions(routeState);
+  const firstRoute = routeMissions.active.find((mission) => mission.name === 'Escort Frontier Families');
+  assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
+  const routeLens = getStrategicMapLens(routeState, 'missions');
+  assert(routeLens.markers.some((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:')), 'Missions lens should name spawned mission sites.');
+  const scout = routeState.units.find((unit) => unit.faction === 'olundar' && ['scout', 'cavalry'].includes(unit.type));
+  scout.hasActed = false;
+  const beforeRouteResources = resourceTotal(routeState);
+  const firstMove = moveUnit(routeState, scout.id, firstRoute.x, firstRoute.y);
+  assert(firstMove.ok, firstMove.reason || 'Scout should be able to complete the first route mission.');
+  routeMissions = getAftermathMissions(routeState);
+  const followUp = routeMissions.active.find((mission) => mission.name === 'Secure the Safe Mile');
+  assert(followUp && followUp.context.includes('Safe-mile camp') && followUp.context.includes('Route 2/2'), 'Completing a route mission should spawn a second safe-mile waypoint.');
+  const completedFirstRoute = routeState.crises.missions.find((mission) => mission.id === firstRoute.id);
+  assert(completedFirstRoute.terrainRewardText && completedFirstRoute.resultText.includes('follow-up marker'), 'Completed route missions should record terrain rewards and follow-up text.');
+  assert(resourceTotal(routeState) > beforeRouteResources, 'Terrain rewards should add resources beyond the base mission result.');
+  scout.hasActed = false;
+  const secondMove = moveUnit(routeState, scout.id, followUp.x, followUp.y);
+  assert(secondMove.ok, secondMove.reason || 'Scout should be able to complete the safe-mile waypoint.');
+  routeMissions = getAftermathMissions(routeState);
+  assert(!routeMissions.active.some((mission) => mission.context.includes('Route 3/')), 'Two-step route chains should stop after the final waypoint.');
+  assert(routeMissions.recent.some((mission) => mission.name === 'Secure the Safe Mile' && mission.context.includes('Safe-mile camp')), 'Completed route history should retain the spawned site context.');
+  const completedFollowUp = routeState.crises.missions.find((mission) => mission.id === followUp.id);
+  assert(completedFollowUp.terrainRewardText && !completedFollowUp.resultText.includes('follow-up marker'), 'Final route waypoint should keep terrain rewards without spawning another step.');
 
   const legacy = createGame('quality-mission-legacy');
   delete legacy.crises.missions;

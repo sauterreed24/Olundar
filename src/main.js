@@ -305,7 +305,7 @@ function renderAftermathMissions() {
           <article class="mission ${escapeHtml(mission.tone)}">
             <span>${escapeHtml(mission.required)}</span>
             <strong>${escapeHtml(mission.name)}</strong>
-            <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}. ${escapeHtml(mission.reward)}</small>
+            <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}${mission.context ? ` / ${escapeHtml(mission.context)}` : ''}. ${escapeHtml(mission.reward)}</small>
           </article>
         `).join('')}
       </div>
@@ -313,7 +313,7 @@ function renderAftermathMissions() {
     ${missions.recent.length ? `
       <div class="mission-history">
         <h3>Completed</h3>
-        ${missions.recent.map((mission) => `<p><b>T${mission.completedTurn} ${escapeHtml(mission.name)}:</b> ${escapeHtml(mission.reward)}</p>`).join('')}
+        ${missions.recent.map((mission) => `<p><b>T${mission.completedTurn} ${escapeHtml(mission.name)}:</b> ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}</p>`).join('')}
       </div>
     ` : ''}
   `;
