@@ -343,6 +343,12 @@ function renderDiplomacy() {
         ${entry.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}
       </div>
       <p class="diplo-advice">${escapeHtml(entry.advice)}</p>
+      ${entry.warAim ? `
+        <div class="war-aim ${escapeHtml(entry.warAim.tone)}">
+          <strong>War Aim</strong>
+          <p>${escapeHtml(entry.warAim.name)} - ${escapeHtml(entry.warAim.text)}</p>
+        </div>
+      ` : ''}
       ${entry.recent.length ? `
         <div class="diplo-recent">
           ${entry.recent.map((record) => `<p><b>T${record.turn} ${escapeHtml(record.outcome)}:</b> ${escapeHtml(record.detail)}</p>`).join('')}

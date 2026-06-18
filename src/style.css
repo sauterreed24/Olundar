@@ -1021,6 +1021,46 @@ button:disabled {
   color: #f9e6a8;
 }
 
+.war-aim {
+  display: grid;
+  gap: 0.28rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid rgba(136, 216, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(136, 216, 255, 0.055);
+}
+
+.war-aim.good {
+  border-color: rgba(186, 245, 140, 0.18);
+  background: rgba(186, 245, 140, 0.055);
+}
+
+.war-aim.danger {
+  border-color: rgba(255, 138, 138, 0.22);
+  background: rgba(255, 138, 138, 0.06);
+}
+
+.war-aim strong {
+  color: #88d8ff;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.war-aim.good strong {
+  color: var(--good);
+}
+
+.war-aim.danger strong {
+  color: var(--bad);
+}
+
+.war-aim p {
+  margin: 0 !important;
+  color: #ddd0ae;
+  font-size: 0.83rem;
+}
+
 .field-orders {
   display: grid;
   gap: 0.42rem;

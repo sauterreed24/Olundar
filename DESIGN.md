@@ -28,7 +28,7 @@ Units use sword, shield, spear, bow, cavalry, engineers, and onagers. The fun co
 
 ### 4. Diplomacy under annihilation
 
-Other civilizations are neither generic allies nor simple enemies. Some are honorable, some opportunistic, some suspicious. The player can trade, request aid, offer survival pacts, or pressure them for supplies. Bad diplomacy can create rivals while the Deadwalkers grow.
+Other civilizations are neither generic allies nor simple enemies. Some are honorable, some opportunistic, some suspicious. They pursue their own war aims before any pact: Dawnward forces shield hillforts, Veyr raiders chase leverage, and Mireclan scouts shadow the blight. The player can trade, request aid, offer survival pacts, or pressure them for supplies. Bad diplomacy can create rivals while the Deadwalkers grow.
 
 ### 5. The enemy is a civilization
 
@@ -150,6 +150,8 @@ Diplomacy is intentionally simple but consequential:
 - **Pressure Them:** grants quick resources but can turn civilizations hostile.
 
 The Diplomacy Ledger keeps current posture, pacts, trade, aid, pressure, field orders, and rivalry history visible so long campaigns do not hide important political consequences in the message log.
+
+War aims show what each discovered civilization is already trying to do without Olundar's orders. They make allies, opportunists, and suspicious scouts legible before the player has enough trust for a Survival Pact.
 
 Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures.
 

@@ -12,7 +12,8 @@ import {
   SCENARIOS,
   STARTING_RESOURCES,
   TERRAIN,
-  UNIT_TYPES
+  UNIT_TYPES,
+  WAR_AIMS
 } from './content.js';
 import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
 
@@ -49,7 +50,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       portalDestroyed: false,
       firstDeadwalkerSeen: false,
       firstAllySeen: false,
-      deadStrongholdsDestroyed: 0
+      deadStrongholdsDestroyed: 0,
+      warAimNotices: {}
     },
     diplomacyLog: [],
     objectives: OBJECTIVES.slice(),
@@ -76,6 +78,8 @@ function normalizeCampaignConfig(seedOrConfig, options = {}) {
 
 function normalizeCampaignState(state) {
   if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
+  if (!state.flags) state.flags = {};
+  if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
   if (!state.factions?.olundar?.fieldOrders) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
@@ -380,6 +384,7 @@ function diplomacyLedgerEntry(state, actor, id) {
   const trade = Boolean(actor.trades?.[id]);
   const fieldOrderId = pact ? actor.fieldOrders?.[id] || 'defendRoads' : null;
   const fieldOrder = fieldOrderId ? FIELD_ORDERS[fieldOrderId] : null;
+  const warAim = discovered ? factionWarAim(state, id) : null;
   const posture = discovered ? diplomacyPosture(relation, atWar, pact) : { label: 'Uncontacted', tone: 'info' };
   const recent = (state.diplomacyLog || []).filter((record) => record.factionId === id).slice(0, 2);
   return {
@@ -395,8 +400,9 @@ function diplomacyLedgerEntry(state, actor, id) {
     trade,
     atWar,
     fieldOrder,
-    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder),
-    advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar),
+    warAim,
+    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder, warAim),
+    advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim),
     recent,
     actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar)),
     fieldOrders: Object.values(FIELD_ORDERS).map((order) => ({
@@ -431,22 +437,36 @@ function diplomacyPosture(relation, atWar, pact) {
   return { label: 'Strained', tone: 'danger' };
 }
 
-function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = null) {
+function factionWarAim(state, factionId) {
+  const faction = state.factions[factionId];
+  if (!faction || factionId === 'olundar' || factionId === 'dead') return null;
+  if (state.factions.olundar.atWar?.[factionId] || faction.atWar?.olundar) return WAR_AIMS.rivalClaim;
+  if (factionId === 'dawn') return WAR_AIMS.dawnBulwark;
+  if (factionId === 'veyr') return WAR_AIMS.veyrRaid;
+  if (factionId === 'mire') return WAR_AIMS.mireScout;
+  return null;
+}
+
+function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = null, warAim = null) {
   if (!discovered) return ['Uncontacted'];
   const tags = [`Relation ${relation}`];
   if (pact) tags.push('Survival Pact');
   if (trade) tags.push('Trade');
   if (fieldOrder) tags.push(fieldOrder.name);
+  if (warAim && !pact) tags.push(`Aim: ${warAim.name}`);
   if (atWar) tags.push('At war');
   if (!pact && !trade && !atWar) tags.push('No accord');
   return tags;
 }
 
-function diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar) {
+function diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim = null) {
   if (!discovered) return `${state.factions[id].name} is still beyond current sight. Scout roads, towers, and frontier ruins to open talks.`;
   if (atWar) return 'This front is politically hostile. Defend first; aid, trade, and pacts are unavailable while rivalry is open.';
   if (!pact && relation >= 17) return 'Offer a Survival Pact now; the relation threshold is within reach and shared vision matters.';
   if (!trade && canAfford(state.factions.olundar.resources, DIPLOMACY_ACTIONS.trade.cost)) return 'Open trade to fund the war economy and keep relations warming.';
+  if (!pact && warAim?.id === 'veyrRaid') return 'Veyr is already raiding for leverage. Trade can turn that ambition into useful supply lines.';
+  if (!pact && warAim?.id === 'mireScout') return 'Mireclan scouts are watching the blight. A pact would turn their field knowledge into shared vision.';
+  if (!pact && warAim?.id === 'dawnBulwark') return 'Dawnward forces are defensive by instinct. Respect their walls and turn trust into a pact.';
   if (relation < 20) return 'Build trust before requesting war aid; aid is likely refused below 20 relation.';
   if (pact && knownDeadwalkerThreat(state)) return 'Use this pact for shared sight, then request aid when the siege front becomes urgent.';
   return 'Keep pressure low and preserve influence for aid, pacts, or emergency diplomacy.';
@@ -1651,6 +1671,8 @@ function runLivingAiTurn(state, factionId) {
   const faction = state.factions[factionId];
   const relation = state.factions.olundar.relations[factionId] ?? 0;
   const fieldOrder = activeFieldOrder(state, factionId);
+  const warAim = factionWarAim(state, factionId);
+  announceWarAim(state, factionId, warAim);
   // Muster slowly, faster when allied or threatened.
   const musterCadence = (fieldOrder || relation > 30) ? 4 : 6;
   if (state.turn % musterCadence === 0) {
@@ -1677,6 +1699,17 @@ function runLivingAiTurn(state, factionId) {
       aiTryAttack(state, unit);
       continue;
     }
+    const aimTarget = !fieldOrder ? factionWarAimTarget(state, unit, factionId, warAim?.id) : null;
+    if (aimTarget) {
+      if (manhattan(unit.x, unit.y, aimTarget.x, aimTarget.y) > (aimTarget.holdRadius || 0)) {
+        aiMoveToward(state, unit, aimTarget.x, aimTarget.y);
+        aiTryAttack(state, unit);
+      } else {
+        unit.hasActed = true;
+        unit.fortified = 1;
+      }
+      continue;
+    }
     const deadTarget = nearestTargetFaction(state, unit.x, unit.y, 'dead', relation > 15 ? 14 : 8);
     if (deadTarget) {
       aiMoveToward(state, unit, deadTarget.x, deadTarget.y);
@@ -1696,6 +1729,42 @@ function activeFieldOrder(state, factionId) {
   return state.factions.olundar.fieldOrders?.[factionId] || 'defendRoads';
 }
 
+function announceWarAim(state, factionId, warAim) {
+  if (!warAim || !state.factions[factionId]?.discovered || state.flags.warAimNotices[factionId]) return;
+  const notice = warAimNoticeText(state, factionId, warAim.id);
+  if (!notice) return;
+  state.flags.warAimNotices[factionId] = true;
+  addMessage(state, notice, warAim.tone === 'danger' ? 'danger' : 'info');
+}
+
+function warAimNoticeText(state, factionId, aimId) {
+  const faction = state.factions[factionId];
+  if (aimId === 'dawnBulwark') return `${faction.name} declares a shield-wall war aim around its hillforts.`;
+  if (aimId === 'veyrRaid') return `${faction.name} rides for Deadwalker spoils before choosing a side.`;
+  if (aimId === 'mireScout') return `${faction.name} scouts the blight-shadow for its own survival.`;
+  if (aimId === 'rivalClaim') return `${faction.name} presses a rival claim against Olundar.`;
+  return '';
+}
+
+function factionWarAimTarget(state, unit, factionId, aimId) {
+  if (!aimId) return null;
+  if (aimId === 'dawnBulwark') {
+    const holding = nearestFactionBuilding(state, unit.x, unit.y, factionId, ['city', 'watchtower', 'barracks', 'outpost']);
+    return nearestThreatToFactionAssets(state, unit.x, unit.y, factionId, 10)
+      || (holding ? { ...holding, holdRadius: 1 } : null);
+  }
+  if (aimId === 'veyrRaid') {
+    return nearestDeadwalkerStructure(state, unit.x, unit.y, 34) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 34);
+  }
+  if (aimId === 'mireScout') {
+    return nearestDeadwalkerStructure(state, unit.x, unit.y, 44) || easternScoutTarget(state, unit.x, unit.y);
+  }
+  if (aimId === 'rivalClaim') {
+    return nearestTargetFaction(state, unit.x, unit.y, 'olundar', 14);
+  }
+  return null;
+}
+
 function fieldOrderTarget(state, unit, orderId) {
   if (!orderId) return null;
   if (orderId === 'harassDeadworks') {
@@ -1708,6 +1777,14 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
   }
   return null;
+}
+
+function easternScoutTarget(state, x, y) {
+  const candidates = state.map.tiles
+    .filter((tile) => tile.x > x && TERRAIN[tile.terrain].passable)
+    .map((tile) => ({ x: tile.x, y: tile.y, dist: manhattan(x, y, tile.x, tile.y) + Math.max(0, 24 - tile.x) * 0.35 }))
+    .sort((a, b) => a.dist - b.dist);
+  return candidates[0] || null;
 }
 
 function nearestDeadwalkerStructure(state, x, y, maxDistance = Infinity) {

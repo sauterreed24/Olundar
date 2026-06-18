@@ -362,6 +362,13 @@ export const FIELD_ORDERS = {
   harassDeadworks: { id: 'harassDeadworks', name: 'Harass Deadworks', text: 'Push toward revealed Deadwalker structures and pressure their expansion.' }
 };
 
+export const WAR_AIMS = {
+  dawnBulwark: { id: 'dawnBulwark', name: 'Shield the Hillforts', tone: 'good', text: 'Defend Dawnward towers, city approaches, and nearby living holdings before taking wider risks.' },
+  veyrRaid: { id: 'veyrRaid', name: 'Raid for Leverage', tone: 'info', text: 'Probe toward Deadwalker works for spoils and bargaining power before committing to any coalition.' },
+  mireScout: { id: 'mireScout', name: 'Shadow the Blight', tone: 'info', text: 'Send scouts and bowmen through rough ground to watch the undead front from a safer distance.' },
+  rivalClaim: { id: 'rivalClaim', name: 'Press a Rival Claim', tone: 'danger', text: 'Treat Olundar as a rival front and look for exposed holdings despite the undead war.' }
+};
+
 export const MAP_LENSES = {
   normal: { id: 'normal', name: 'Normal', text: 'Standard terrain, fog, units, and buildings.' },
   blight: { id: 'blight', name: 'Blight', text: 'Highlight revealed grave-blight and known Deadwalker works.' },

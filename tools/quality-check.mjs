@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -119,6 +119,11 @@ check('content tables are internally consistent', () => {
     assert(order.id === id, `Field order ${id} has mismatched id.`);
     assert(order.name && order.text, `Field order ${id} needs player-facing text.`);
   }
+  for (const [id, aim] of Object.entries(WAR_AIMS)) {
+    assert(aim.id === id, `War aim ${id} has mismatched id.`);
+    assert(aim.name && aim.text && aim.tone, `War aim ${id} needs name, text, and tone.`);
+  }
+  for (const id of ['dawnBulwark', 'veyrRaid', 'mireScout', 'rivalClaim']) assert(WAR_AIMS[id], `Missing required war aim ${id}.`);
   for (const [id, lens] of Object.entries(MAP_LENSES)) {
     assert(lens.id === id, `Map lens ${id} has mismatched id.`);
     assert(lens.name && lens.text, `Map lens ${id} needs player-facing text.`);
@@ -350,6 +355,34 @@ check('pact field orders steer allied AI', () => {
   const afterSpear = harass.units.find((unit) => unit.id === spear.id);
   const afterDistance = Math.abs(afterSpear.x - bonePit.x) + Math.abs(afterSpear.y - bonePit.y);
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
+});
+
+check('living faction war aims guide pre-pact behavior', () => {
+  const ledgerState = createGame('quality-war-aim-ledger');
+  for (const id of ['dawn', 'veyr', 'mire']) ledgerState.factions[id].discovered = true;
+  ledgerState.factions.olundar.resources.gold = 0;
+  const entries = getDiplomacyLedger(ledgerState).entries;
+  assert(entries.find((entry) => entry.id === 'dawn').warAim.id === 'dawnBulwark', 'Dawn should expose its defensive war aim.');
+  assert(entries.find((entry) => entry.id === 'veyr').warAim.id === 'veyrRaid', 'Veyr should expose its raiding war aim.');
+  assert(entries.find((entry) => entry.id === 'mire').warAim.id === 'mireScout', 'Mire should expose its scouting war aim.');
+  assert(entries.find((entry) => entry.id === 'veyr').tags.some((tag) => tag.includes('Raid for Leverage')), 'Ledger tags should summarize pre-pact war aims.');
+
+  const state = createGame('quality-war-aim-ai');
+  state.factions.veyr.discovered = true;
+  state.factions.mire.discovered = true;
+  const veyrCavalry = state.units.find((unit) => unit.faction === 'veyr' && unit.type === 'cavalry');
+  const mireScout = state.units.find((unit) => unit.faction === 'mire' && unit.type === 'scout');
+  const bonePit = state.buildings.find((building) => building.faction === 'dead' && building.type === 'bonePit');
+  const veyrBefore = Math.abs(veyrCavalry.x - bonePit.x) + Math.abs(veyrCavalry.y - bonePit.y);
+  const mireBefore = Math.abs(mireScout.x - bonePit.x) + Math.abs(mireScout.y - bonePit.y);
+  endTurn(state);
+  const veyrAfter = state.units.find((unit) => unit.id === veyrCavalry.id);
+  const mireAfter = state.units.find((unit) => unit.id === mireScout.id);
+  const veyrDistance = Math.abs(veyrAfter.x - bonePit.x) + Math.abs(veyrAfter.y - bonePit.y);
+  const mireDistance = Math.abs(mireAfter.x - bonePit.x) + Math.abs(mireAfter.y - bonePit.y);
+  assert(veyrDistance < veyrBefore, 'Veyr should raid toward Deadwalker works before a pact.');
+  assert(mireDistance < mireBefore, 'Mire should scout toward the blight before a pact.');
+  assert(state.messages.some((message) => message.text.includes('rides for Deadwalker spoils')), 'Discovered war aims should create a chronicle notice.');
 });
 
 check('strategic map lenses expose planning layers', () => {
