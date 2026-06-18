@@ -1,5 +1,6 @@
 import {
   BUILDING_TYPES,
+  CRISIS_EVENTS,
   CURRENT_SAVE_VERSION,
   DIFFICULTY_PRESETS,
   DIPLOMACY_ACTIONS,
@@ -18,6 +19,29 @@ import {
 import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
 
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
+
+const CRISIS_OUTCOME_PREVIEWS = {
+  refugeeCaravan: {
+    shelter: 'Population, morale, and influence rise, but food and gold stores fall.',
+    escort: 'Discovered living factions gain trust, and Olundar gains influence.',
+    levy: 'A refugee spear guard joins near the capital, but morale is strained.'
+  },
+  famineStores: {
+    ration: 'Food stores recover quickly, but morale falls.',
+    buyGrain: 'Food and morale recover without population loss.',
+    frontierForage: 'Food improves and a scout musters to watch the frontier.'
+  },
+  cityRaid: {
+    nightWatch: 'Olundar holdings gain extra durability before the next assault.',
+    evacuate: 'Food and morale improve, but population falls.',
+    counterRaid: 'A spear guard musters near the capital and influence rises.'
+  },
+  emergencyCouncil: {
+    coalitionEnvoys: 'Discovered living factions gain trust, and morale rises.',
+    warLevy: 'A legionary musters near the capital, but home pressure costs morale.',
+    fortifyGates: 'Cities, outposts, towers, and walls gain extra durability.'
+  }
+};
 
 export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options = {}) {
   const campaign = normalizeCampaignConfig(seed, options);
@@ -54,6 +78,10 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       warAimNotices: {}
     },
     diplomacyLog: [],
+    crises: {
+      resolved: {},
+      history: []
+    },
     objectives: OBJECTIVES.slice(),
     messages: []
   };
@@ -80,6 +108,9 @@ function normalizeCampaignState(state) {
   if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
   if (!state.flags) state.flags = {};
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
+  if (!state.crises) state.crises = { resolved: {}, history: [] };
+  if (!state.crises.resolved) state.crises.resolved = {};
+  if (!Array.isArray(state.crises.history)) state.crises.history = [];
   if (!state.factions?.olundar?.fieldOrders) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
@@ -729,6 +760,207 @@ function siegeOperationSummary(state, operations) {
   if (state.flags.firstDeadwalkerSeen) return `Deadwalker pressure is confirmed. Next operation: ${next.label}.`;
   if (state.flags.firstAllySeen) return `The living world is in reach. Next operation: ${next.label}.`;
   return `Once the opening is stable, shift from survival to victory. Next operation: ${next.label}.`;
+}
+
+export function getCrisisCouncil(state) {
+  normalizeCampaignState(state);
+  const events = Object.values(CRISIS_EVENTS)
+    .filter((event) => crisisIsAvailable(state, event.id))
+    .map((event) => crisisEventView(state, event));
+  const history = state.crises.history
+    .filter((record) => state.turn - record.turn <= 4)
+    .slice(0, 3);
+  return {
+    title: 'Crisis Council',
+    summary: crisisCouncilSummary(events, history),
+    visible: state.status === 'playing' && (events.length > 0 || history.length > 0),
+    events,
+    history
+  };
+}
+
+export function resolveCrisis(state, crisisId, choiceId) {
+  normalizeCampaignState(state);
+  const event = CRISIS_EVENTS[crisisId];
+  if (!event) return { ok: false, reason: 'Unknown crisis.' };
+  if (state.crises.resolved[crisisId]) return { ok: false, reason: 'That crisis has already been settled.' };
+  if (!crisisIsAvailable(state, crisisId)) return { ok: false, reason: 'That crisis is not active.' };
+  const choice = event.choices.find((entry) => entry.id === choiceId);
+  if (!choice) return { ok: false, reason: 'Unknown crisis ruling.' };
+  const resources = state.factions.olundar.resources;
+  if (!canAfford(resources, choice.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(resources, choice.cost))}.` };
+
+  payCost(resources, choice.cost);
+  const outcome = applyCrisisOutcome(state, crisisId, choiceId);
+  state.crises.resolved[crisisId] = choiceId;
+  state.crises.history.unshift({
+    turn: state.turn,
+    crisisId,
+    crisisName: event.name,
+    choiceId,
+    choiceName: choice.name,
+    outcome: outcome.text,
+    tone: outcome.tone
+  });
+  state.crises.history = state.crises.history.slice(0, 8);
+  addMessage(state, `${event.name}: ${outcome.text}`, outcome.tone);
+  updateVisibility(state);
+  return { ok: true, reason: outcome.text, outcome };
+}
+
+function crisisCouncilSummary(events, history) {
+  if (events.length > 1) return `${events.length} rulings wait for Olundar's council. Spend scarce stores where the long war needs it most.`;
+  if (events.length === 1) return `${events[0].name} needs a ruling before the campaign front moves again.`;
+  if (history.length) return 'Recent rulings are still shaping the living front.';
+  return 'No emergency rulings require attention.';
+}
+
+function crisisEventView(state, event) {
+  const resources = state.factions.olundar.resources;
+  return {
+    id: event.id,
+    name: event.name,
+    tone: event.tone,
+    text: event.text,
+    choices: event.choices.map((choice) => {
+      const affordable = canAfford(resources, choice.cost);
+      return {
+        id: choice.id,
+        name: choice.name,
+        text: choice.text,
+        cost: choice.cost,
+        costText: formatCost(choice.cost),
+        preview: CRISIS_OUTCOME_PREVIEWS[event.id]?.[choice.id] || 'This ruling has immediate campaign consequences.',
+        disabled: !affordable,
+        disabledReason: affordable ? '' : `Need ${formatCost(missingCost(resources, choice.cost))}.`
+      };
+    })
+  };
+}
+
+function crisisIsAvailable(state, crisisId) {
+  if (state.status !== 'playing' || state.crises.resolved[crisisId]) return false;
+  const resources = state.factions.olundar.resources;
+  const discoveredLiving = discoveredLivingFactions(state).length;
+  if (crisisId === 'refugeeCaravan') return state.turn >= 5 && (state.flags.firstAllySeen || discoveredLiving > 0);
+  if (crisisId === 'famineStores') return state.turn >= 4 && (resources.food || 0) <= 35;
+  if (crisisId === 'cityRaid') return state.turn >= 6 && Boolean(state.flags.firstDeadwalkerSeen || knownDeadwalkerThreat(state));
+  if (crisisId === 'emergencyCouncil') return state.turn >= 8 && discoveredLiving >= 2;
+  return false;
+}
+
+function applyCrisisOutcome(state, crisisId, choiceId) {
+  if (crisisId === 'refugeeCaravan' && choiceId === 'shelter') {
+    adjustOlundarPopulation(state, 6);
+    adjustOlundarMorale(state, 1);
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    return { tone: 'good', text: 'Olundar shelters the caravan; new hands join the city and morale rises.' };
+  }
+  if (crisisId === 'refugeeCaravan' && choiceId === 'escort') {
+    const contacts = adjustKnownLivingRelations(state, 6);
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    return { tone: 'good', text: contacts ? 'Escorted refugees improve trust across the living front.' : 'The escort impresses border envoys and raises Olundar influence.' };
+  }
+  if (crisisId === 'refugeeCaravan' && choiceId === 'levy') {
+    adjustOlundarPopulation(state, 2);
+    const unit = spawnOlundarUnitAtCapital(state, 'spearGuard', 'Refugee Oath-Spear');
+    return { tone: unit ? 'good' : 'info', text: unit ? 'A refugee spear guard joins the line near Olundar Prime.' : 'The levy forms local reserves, but no open muster ground was found.' };
+  }
+  if (crisisId === 'famineStores' && choiceId === 'ration') {
+    gainResources(state.factions.olundar.resources, { food: 24 });
+    adjustOlundarMorale(state, -1);
+    return { tone: 'danger', text: 'Strict rationing preserves grain, but the city feels the strain.' };
+  }
+  if (crisisId === 'famineStores' && choiceId === 'buyGrain') {
+    gainResources(state.factions.olundar.resources, { food: 36 });
+    adjustOlundarMorale(state, 1);
+    return { tone: 'good', text: 'Purchased grain refills the stores and calms the streets.' };
+  }
+  if (crisisId === 'famineStores' && choiceId === 'frontierForage') {
+    gainResources(state.factions.olundar.resources, { food: 18 });
+    const unit = spawnOlundarUnitAtCapital(state, 'scout', 'Forage Runner');
+    return { tone: 'info', text: unit ? 'Foragers return with food and a runner who can scout the frontier.' : 'Foragers return with food, though no open muster ground was found.' };
+  }
+  if (crisisId === 'cityRaid' && choiceId === 'nightWatch') {
+    const fortified = reinforceOlundarHoldings(state, 10, 4);
+    return { tone: 'good', text: fortified ? 'Night watches harden Olundar holdings before the raid lands.' : 'Night watches organize reserves, but no holdings were available to reinforce.' };
+  }
+  if (crisisId === 'cityRaid' && choiceId === 'evacuate') {
+    adjustOlundarPopulation(state, -4);
+    gainResources(state.factions.olundar.resources, { food: 12 });
+    adjustOlundarMorale(state, 1);
+    return { tone: 'info', text: 'The outskirts empty into the walls; stores and morale recover at a population cost.' };
+  }
+  if (crisisId === 'cityRaid' && choiceId === 'counterRaid') {
+    const unit = spawnOlundarUnitAtCapital(state, 'spearGuard', 'Gate Counter-Raid');
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    return { tone: unit ? 'good' : 'info', text: unit ? 'A spear guard seizes the initiative and the city rallies behind them.' : 'The counter-raid becomes a reserve patrol, but no open muster ground was found.' };
+  }
+  if (crisisId === 'emergencyCouncil' && choiceId === 'coalitionEnvoys') {
+    const contacts = adjustKnownLivingRelations(state, 8);
+    adjustOlundarMorale(state, 1);
+    return { tone: 'good', text: contacts ? 'Envoys steady the living front and restore confidence at home.' : 'The envoys steady Olundar, though no contacted faction could answer yet.' };
+  }
+  if (crisisId === 'emergencyCouncil' && choiceId === 'warLevy') {
+    adjustOlundarPopulation(state, -2);
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    const unit = spawnOlundarUnitAtCapital(state, 'legionary', 'Emergency Legionary');
+    return { tone: unit ? 'good' : 'info', text: unit ? 'An emergency legionary musters near the capital for the coming war.' : 'The levy raises influence and reserves, but no open muster ground was found.' };
+  }
+  if (crisisId === 'emergencyCouncil' && choiceId === 'fortifyGates') {
+    const fortified = reinforceOlundarHoldings(state, 12, 6);
+    return { tone: 'good', text: fortified ? 'The council hardens gates, towers, and frontier walls for the siege season.' : 'The council prepares fortification plans, but no holdings were available to reinforce.' };
+  }
+  return { tone: 'info', text: 'The ruling is recorded.' };
+}
+
+function discoveredLivingFactions(state) {
+  return LIVING_DIPLOMACY_FACTIONS.filter((id) => state.factions[id]?.discovered);
+}
+
+function adjustKnownLivingRelations(state, amount) {
+  let count = 0;
+  for (const factionId of discoveredLivingFactions(state)) {
+    const actor = state.factions.olundar;
+    const target = state.factions[factionId];
+    actor.relations[factionId] = clampRelation((actor.relations[factionId] ?? 0) + amount);
+    target.relations.olundar = actor.relations[factionId];
+    count += 1;
+  }
+  return count;
+}
+
+function adjustOlundarMorale(state, amount) {
+  const resources = state.factions.olundar.resources;
+  resources.morale = Math.max(0, Math.min(12, (resources.morale || 0) + amount));
+  return resources.morale;
+}
+
+function adjustOlundarPopulation(state, amount) {
+  const faction = state.factions.olundar;
+  const housing = faction.housing || 1;
+  faction.population = Math.max(1, Math.min(housing, (faction.population || 1) + amount));
+  return faction.population;
+}
+
+function reinforceOlundarHoldings(state, hpGain, maxHpGain) {
+  let count = 0;
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0) continue;
+    if (!['city', 'outpost', 'watchtower', 'wall'].includes(building.type)) continue;
+    building.maxHp += maxHpGain;
+    building.hp = Math.min(building.maxHp, (building.hp || 0) + hpGain);
+    count += 1;
+  }
+  return count;
+}
+
+function spawnOlundarUnitAtCapital(state, unitType, name) {
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+    || state.buildings.find((building) => building.faction === 'olundar');
+  const origin = capital || { x: 7, y: 16 };
+  const spawn = findSpawnNear(state, origin.x, origin.y, 'olundar');
+  return spawn ? addUnit(state, unitType, 'olundar', spawn.x, spawn.y, { name }) : null;
 }
 
 function councilHeadline(state, knownDead) {

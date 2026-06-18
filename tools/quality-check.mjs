@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_EVENTS, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -17,6 +17,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getCampaignRecap,
+  getCrisisCouncil,
   getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
@@ -28,6 +29,7 @@ import {
   isTileSupplied,
   moveUnit,
   performDiplomacy,
+  resolveCrisis,
   serializeState,
   setFieldOrder,
   startConstruction,
@@ -124,6 +126,23 @@ check('content tables are internally consistent', () => {
     assert(aim.name && aim.text && aim.tone, `War aim ${id} needs name, text, and tone.`);
   }
   for (const id of ['dawnBulwark', 'veyrRaid', 'mireScout', 'rivalClaim']) assert(WAR_AIMS[id], `Missing required war aim ${id}.`);
+  for (const [id, event] of Object.entries(CRISIS_EVENTS)) {
+    assert(event.id === id, `Crisis event ${id} has mismatched id.`);
+    assert(event.name && event.text && event.tone, `Crisis event ${id} needs name, text, and tone.`);
+    assert(Array.isArray(event.choices) && event.choices.length >= 3, `Crisis event ${id} needs at least three choices.`);
+    const seenChoices = new Set();
+    for (const choice of event.choices) {
+      assert(choice.id && !seenChoices.has(choice.id), `Crisis event ${id} has duplicate or missing choice ids.`);
+      seenChoices.add(choice.id);
+      assert(choice.name && choice.text, `Crisis choice ${id}/${choice.id} needs name and text.`);
+      assert(choice.cost && typeof choice.cost === 'object', `Crisis choice ${id}/${choice.id} needs a cost object.`);
+      for (const [resource, amount] of Object.entries(choice.cost)) {
+        assert(['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].includes(resource), `Crisis choice ${id}/${choice.id} has unknown cost ${resource}.`);
+        assert(Number.isInteger(amount) && amount >= 0, `Crisis choice ${id}/${choice.id} has invalid ${resource} cost.`);
+      }
+    }
+  }
+  for (const id of ['refugeeCaravan', 'famineStores', 'cityRaid', 'emergencyCouncil']) assert(CRISIS_EVENTS[id], `Missing required crisis event ${id}.`);
   for (const [id, lens] of Object.entries(MAP_LENSES)) {
     assert(lens.id === id, `Map lens ${id} has mismatched id.`);
     assert(lens.name && lens.text, `Map lens ${id} needs player-facing text.`);
@@ -215,6 +234,76 @@ check('siege operations track midgame victory work', () => {
   assert(state.flags.deadStrongholdsDestroyed === 1, 'Destroyed strongholds should be counted.');
   assert(after.operations.find((operation) => operation.id === 'cleanse').done, 'Cleanse operation should complete after a stronghold falls.');
   assert(state.factions.olundar.resources.influence > beforeInfluence, 'Stronghold destruction should reward influence.');
+});
+
+check('crisis council triggers and resolves consequential rulings', () => {
+  const readyState = (seed) => {
+    const state = createGame(seed);
+    state.turn = 8;
+    state.flags.firstAllySeen = true;
+    state.flags.firstDeadwalkerSeen = true;
+    for (const id of ['dawn', 'veyr', 'mire']) state.factions[id].discovered = true;
+    state.factions.olundar.resources = {
+      ...state.factions.olundar.resources,
+      food: 28,
+      wood: 80,
+      stone: 40,
+      iron: 40,
+      gold: 80,
+      influence: 8,
+      morale: 6
+    };
+    return state;
+  };
+
+  const opening = createGame('quality-crisis-opening');
+  assert(!getCrisisCouncil(opening).visible, 'Crisis Council should not crowd the first-turn opening.');
+
+  const state = readyState('quality-crisis-visible');
+  const council = getCrisisCouncil(state);
+  assert(council.visible, 'Crisis Council should appear once midgame pressures are active.');
+  for (const id of ['refugeeCaravan', 'famineStores', 'cityRaid', 'emergencyCouncil']) {
+    const event = council.events.find((entry) => entry.id === id);
+    assert(event, `Crisis Council missing active ${id}.`);
+    assert(event.choices.length === 3 && event.choices.every((choice) => choice.preview && choice.costText), `Crisis ${id} choices need previews and cost text.`);
+  }
+
+  const beforeFood = state.factions.olundar.resources.food;
+  const beforeMorale = state.factions.olundar.resources.morale;
+  const grain = resolveCrisis(state, 'famineStores', 'buyGrain');
+  assert(grain.ok, grain.reason || 'Buy Grain ruling failed.');
+  assert(state.factions.olundar.resources.food > beforeFood, 'Buy Grain should materially improve food stores.');
+  assert(state.factions.olundar.resources.morale > beforeMorale, 'Buy Grain should improve morale.');
+  assert(!getCrisisCouncil(state).events.some((event) => event.id === 'famineStores'), 'Resolved crises should leave the active council list.');
+  assert(getCrisisCouncil(state).history[0].choiceName === 'Buy Grain', 'Resolved crises should enter recent ruling history.');
+  assert(!resolveCrisis(state, 'famineStores', 'ration').ok, 'Resolved crises should not be repeatable.');
+
+  const levyState = readyState('quality-crisis-levy');
+  const beforeUnits = levyState.units.length;
+  const beforeLevyMorale = levyState.factions.olundar.resources.morale;
+  const levy = resolveCrisis(levyState, 'refugeeCaravan', 'levy');
+  assert(levy.ok, levy.reason || 'Emergency Levy ruling failed.');
+  assert(levyState.units.length > beforeUnits && levyState.units.some((unit) => unit.name === 'Refugee Oath-Spear'), 'Emergency Levy should muster a named spear guard.');
+  assert(levyState.factions.olundar.resources.morale === beforeLevyMorale - 1, 'Emergency Levy should spend morale.');
+
+  const fortState = readyState('quality-crisis-fortify');
+  const city = fortState.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  const beforeMaxHp = city.maxHp;
+  const watch = resolveCrisis(fortState, 'cityRaid', 'nightWatch');
+  assert(watch.ok, watch.reason || 'Night Watch ruling failed.');
+  assert(city.maxHp > beforeMaxHp && city.hp === city.maxHp, 'Night Watch should improve holding durability.');
+
+  const envoysState = readyState('quality-crisis-envoys');
+  const beforeRelation = envoysState.factions.olundar.relations.dawn;
+  const envoys = resolveCrisis(envoysState, 'emergencyCouncil', 'coalitionEnvoys');
+  assert(envoys.ok, envoys.reason || 'Coalition Envoys ruling failed.');
+  assert(envoysState.factions.olundar.relations.dawn > beforeRelation && envoysState.factions.dawn.relations.olundar === envoysState.factions.olundar.relations.dawn, 'Coalition Envoys should improve reciprocal living-faction relations.');
+
+  const poorState = readyState('quality-crisis-poor');
+  poorState.factions.olundar.resources.wood = 0;
+  const raid = getCrisisCouncil(poorState).events.find((event) => event.id === 'cityRaid');
+  assert(raid.choices.find((choice) => choice.id === 'nightWatch').disabled, 'Unaffordable crisis choices should be disabled.');
+  assert(!resolveCrisis(poorState, 'cityRaid', 'nightWatch').ok, 'Unaffordable crisis choices should fail closed.');
 });
 
 check('named save slots preserve campaign metadata', () => {

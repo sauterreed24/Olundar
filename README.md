@@ -11,6 +11,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - A compact First Six Turns guide that teaches the opening scout, engineer, training, iron, diplomacy, and Deadwalker-front priorities from live campaign state.
 - Siege Operations that track midgame victory work: onagers, survival pacts, Deadwalker strongholds, Vorgath, and the Bone Portal.
+- Crisis Council events for refugee caravans, thin granaries, night raids, and emergency councils, with rulings that change resources, morale, population, troops, fortifications, or relations.
 - Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Diplomacy Ledger that keeps contacts, pacts, trade, aid, pressure, and rivalries visible over long campaigns.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
@@ -30,7 +31,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, living-faction war aims, allied field orders, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, living-faction war aims, allied field orders, crisis rulings, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -60,6 +61,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Click **Import save file** or **Import JSON** in the save manager to load an exported campaign on the current device.
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
 - Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, and alliance vision.
+- When the **Crisis Council** appears, choose one ruling per event; unaffordable choices are disabled and recent rulings stay visible for a few turns.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
@@ -119,6 +121,7 @@ olundar_game/
 - Diplomacy ledger entries track uncontacted civilizations, active pacts/trade, aid or pressure history, duplicate accord prevention, and rivalries.
 - Living-faction war aims must appear in diplomacy and steer pre-pact AI defense, raiding, or scouting.
 - Allied field orders must be pact-gated and steer allied AI toward reinforcement or Deadwalker harassment.
+- Crisis Council events stay out of the first-turn opening, then trigger from live famine, contact, Deadwalker, and coalition pressure; rulings must spend costs once and create real campaign consequences.
 - Strategic map lenses must expose revealed blight, roads, Olundar supply reach, and pact ally vision without breaking fog of war.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -133,5 +136,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add crisis events for refugees, famine, city raids, and emergency councils that create memorable midgame decisions.
-2. Add faction grievances and promises so diplomacy remembers pressure, aid, broken trust, and fulfilled battlefield commitments.
+1. Add faction grievances and promises so diplomacy remembers pressure, aid, broken trust, and fulfilled battlefield commitments.
+2. Add chained crisis aftermath so a hard ruling can echo into later faction demands, morale swings, or battlefield opportunities.

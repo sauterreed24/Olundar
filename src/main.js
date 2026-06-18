@@ -12,6 +12,7 @@ import {
   forecastUnitAttack,
   fortifyUnit,
   getCampaignRecap,
+  getCrisisCouncil,
   getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
@@ -19,6 +20,7 @@ import {
   getReadyOlundarUnits,
   getSiegeOperations,
   getWarCouncil,
+  resolveCrisis,
   trainingQueueLimit,
   trainingTurnsFor,
   moveUnit,
@@ -51,6 +53,7 @@ const objectiveList = document.querySelector('#objectiveList');
 const councilPanel = document.querySelector('#councilPanel');
 const guidePanel = document.querySelector('#guidePanel');
 const operationsPanel = document.querySelector('#operationsPanel');
+const crisisPanel = document.querySelector('#crisisPanel');
 const selectionPanel = document.querySelector('#selectionPanel');
 const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
@@ -103,6 +106,7 @@ function render() {
   renderCouncil();
   renderGuide();
   renderOperations();
+  renderCrisisCouncil();
   renderObjectives();
   renderSelection();
   renderActions();
@@ -216,6 +220,66 @@ function renderOperations() {
       `).join('')}
     </div>
   `;
+}
+
+function renderCrisisCouncil() {
+  const council = getCrisisCouncil(state);
+  crisisPanel.hidden = !council.visible;
+  if (!council.visible) {
+    crisisPanel.innerHTML = '';
+    return;
+  }
+
+  crisisPanel.innerHTML = `
+    <div class="crisis-head">
+      <h2>${escapeHtml(council.title)}</h2>
+      <p>${escapeHtml(council.summary)}</p>
+    </div>
+  `;
+
+  if (council.events.length) {
+    const list = document.createElement('div');
+    list.className = 'crisis-list';
+    for (const event of council.events) {
+      const card = document.createElement('article');
+      card.className = `crisis-card ${event.tone}`;
+      card.innerHTML = `
+        <div class="crisis-title">
+          <span>${escapeHtml(event.tone === 'danger' ? 'Urgent' : event.tone === 'good' ? 'Council' : 'Open')}</span>
+          <h3>${escapeHtml(event.name)}</h3>
+        </div>
+        <p>${escapeHtml(event.text)}</p>
+      `;
+
+      const choices = document.createElement('div');
+      choices.className = 'crisis-choices';
+      for (const choice of event.choices) {
+        const row = document.createElement('div');
+        row.className = 'crisis-choice';
+        const choiceButton = button(`${choice.name} - ${choice.costText}`, () => runAction(() => resolveCrisis(state, event.id, choice.id), 'ui'), choice.disabled, choice.disabledReason);
+        row.appendChild(choiceButton);
+        const detail = document.createElement('small');
+        detail.textContent = `${choice.text} ${choice.preview}`;
+        row.appendChild(detail);
+        choices.appendChild(row);
+      }
+      card.appendChild(choices);
+      list.appendChild(card);
+    }
+    crisisPanel.appendChild(list);
+  }
+
+  if (council.history.length) {
+    const history = document.createElement('div');
+    history.className = 'crisis-history';
+    history.innerHTML = `
+      <h3>Recent Rulings</h3>
+      ${council.history.map((record) => `
+        <p class="${escapeHtml(record.tone)}"><b>T${record.turn} ${escapeHtml(record.choiceName)}:</b> ${escapeHtml(record.outcome)}</p>
+      `).join('')}
+    `;
+    crisisPanel.appendChild(history);
+  }
 }
 
 function renderObjectives() {

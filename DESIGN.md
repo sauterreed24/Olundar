@@ -155,7 +155,7 @@ War aims show what each discovered civilization is already trying to do without 
 
 Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures.
 
-This should later evolve into grievances, promises, allied war plans, tribute, hostage diplomacy, and emergency councils.
+This should later evolve into grievances, promises, allied war plans, tribute, hostage diplomacy, and long-running commitments tied to crisis rulings.
 
 ## Deadwalker AI
 
@@ -174,7 +174,9 @@ This gives the player a visible long-term enemy growth curve instead of isolated
 
 The prototype keeps population abstract. Food surplus can grow population; shortages harm morale. Morale is a pressure meter rather than a tax spreadsheet. Shrines and stable supply lines are meant to keep the living civilization psychologically intact.
 
-Future versions can add optional policies: rationing, conscription, evacuation, festivals, emergency labor, and refugee integration.
+The Crisis Council turns that abstraction into memorable midgame decisions. Refugee caravans, thin granaries, night raid warnings, and emergency councils ask the player to spend scarce resources for population, morale, troops, fortifications, or diplomatic trust.
+
+Future versions can deepen these policies with festivals, emergency labor, oath debts, faction-specific refugee politics, and delayed consequences from harsh rulings.
 
 ## UI design goals
 
