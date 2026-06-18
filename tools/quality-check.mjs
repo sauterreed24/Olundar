@@ -480,6 +480,8 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
   const routeLens = getStrategicMapLens(routeState, 'missions');
   assert(routeLens.markers.some((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:')), 'Missions lens should name spawned mission sites.');
+  const routeMarker = routeLens.markers.find((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:'));
+  assert(routeMarker.site === 'Road camp' && routeMarker.type === 'escort' && routeMarker.chainStep === 1 && routeMarker.chainLimit === 2, 'Missions lens should expose site metadata for canvas mission art.');
   const scout = routeState.units.find((unit) => unit.faction === 'olundar' && ['scout', 'cavalry'].includes(unit.type));
   scout.hasActed = false;
   const beforeRouteResources = resourceTotal(routeState);
@@ -497,6 +499,8 @@ check('aftermath missions turn rulings into map objectives', () => {
   routeMissions = getAftermathMissions(routeState);
   assert(!routeMissions.active.some((mission) => mission.context.includes('Route 3/')), 'Two-step route chains should stop after the final waypoint.');
   assert(routeMissions.recent.some((mission) => mission.name === 'Secure the Safe Mile' && mission.context.includes('Safe-mile camp')), 'Completed route history should retain the spawned site context.');
+  const finalRouteLens = getStrategicMapLens(routeState, 'missions');
+  assert(finalRouteLens.markers.some((marker) => marker.kind === 'missionComplete' && marker.completed && marker.site === 'Safe-mile camp'), 'Completed route markers should retain site metadata for completed-site art.');
   const completedFollowUp = routeState.crises.missions.find((mission) => mission.id === followUp.id);
   assert(completedFollowUp.terrainRewardText && !completedFollowUp.resultText.includes('follow-up marker'), 'Final route waypoint should keep terrain rewards without spawning another step.');
 

@@ -1730,7 +1730,12 @@ export function getStrategicMapLens(state, lensId = 'normal') {
       kind,
       tone,
       visible: isVisible(state, item.x, item.y),
-      name: item.name || BUILDING_TYPES[item.type]?.name || UNIT_TYPES[item.type]?.name || kind
+      name: item.name || BUILDING_TYPES[item.type]?.name || UNIT_TYPES[item.type]?.name || kind,
+      site: item.site || '',
+      type: item.type || '',
+      completed: Boolean(item.completed),
+      chainStep: item.chainStep || 0,
+      chainLimit: item.chainLimit || 0
     });
   };
 
@@ -1768,7 +1773,12 @@ export function getStrategicMapLens(state, lensId = 'normal') {
       pushMarker({
         x: mission.x,
         y: mission.y,
-        name: mission.completedTurn ? `${mission.name} complete` : `${mission.site || missionSiteName(mission.type)}: ${mission.name}`
+        name: mission.completedTurn ? `${mission.name} complete` : `${mission.site || missionSiteName(mission.type)}: ${mission.name}`,
+        site: mission.site || missionSiteName(mission.type),
+        type: mission.type,
+        completed: Boolean(mission.completedTurn),
+        chainStep: mission.chainStep || 0,
+        chainLimit: mission.chainLimit || 0
       }, mission.completedTurn ? 'missionComplete' : 'missionTarget', tone);
     }
   }
