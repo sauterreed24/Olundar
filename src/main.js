@@ -3,16 +3,25 @@ import {
   attackBuilding,
   attackUnit,
   canAfford,
+  canBuildOn,
   createGame,
   deserializeState,
   endTurn,
   formatCost,
   fortifyUnit,
+  getEndTurnWarnings,
+  getObjectiveProgress,
+  getReadyOlundarUnits,
+  getWarCouncil,
+  trainingQueueLimit,
+  trainingTurnsFor,
   moveUnit,
   performDiplomacy,
   serializeState,
   startConstruction,
   startTraining,
+  upgradeBuilding,
+  upgradeCostFor,
   unitAt,
   buildingAt,
   isEnemy,
@@ -25,6 +34,7 @@ const canvas = document.querySelector('#gameCanvas');
 const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
 const objectiveList = document.querySelector('#objectiveList');
+const councilPanel = document.querySelector('#councilPanel');
 const selectionPanel = document.querySelector('#selectionPanel');
 const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
@@ -54,6 +64,7 @@ function resizeCanvas() {
 function render() {
   drawGame(canvas, state, hoverTile);
   renderTopBar();
+  renderCouncil();
   renderObjectives();
   renderSelection();
   renderActions();
@@ -66,24 +77,33 @@ function render() {
 function renderTopBar() {
   const resources = state.factions.olundar.resources;
   const order = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'];
-  resourceBar.innerHTML = order.map((key) => `<span class="resource"><b>${RESOURCE_NAMES[key]}</b> ${Math.floor(resources[key] || 0)}</span>`).join('');
+  resourceBar.innerHTML = [
+    `<span class="resource population"><b>Population</b> ${state.factions.olundar.population}/${state.factions.olundar.housing}</span>`,
+    ...order.map((key) => `<span class="resource"><b>${RESOURCE_NAMES[key]}</b> ${Math.floor(resources[key] || 0)}</span>`)
+  ].join('');
   turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+}
+
+function renderCouncil() {
+  const council = getWarCouncil(state);
+  councilPanel.innerHTML = `
+    <h2>${escapeHtml(council.headline)}</h2>
+    <div class="council-stats">
+      ${council.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
+    </div>
+    <div class="priority-list">
+      ${council.priorities.map((item) => `<p class="priority ${escapeHtml(item.tone)}">${escapeHtml(item.text)}</p>`).join('')}
+    </div>
+  `;
 }
 
 function renderObjectives() {
   objectiveList.innerHTML = '';
-  const revealedPortal = state.buildings.some((b) => b.type === 'portal' && state.revealed[b.y * MAP_WIDTH + b.x]);
-  const objectiveState = [
-    revealedPortal,
-    hasBuilding('barracks') && hasBuilding('farm') && hasBuilding('lumberCamp'),
-    Object.values(state.factions).filter((f) => !f.player && f.id !== 'dead' && f.discovered).length >= 2,
-    state.flags.bossSlain,
-    state.flags.portalDestroyed
-  ];
+  const objectiveState = getObjectiveProgress(state);
   state.objectives.forEach((objective, i) => {
     const li = document.createElement('li');
-    li.className = objectiveState[i] ? 'done' : '';
-    li.textContent = objective;
+    li.className = objectiveState[i].done ? 'done' : '';
+    li.innerHTML = `<span>${escapeHtml(objective)}</span><small>${escapeHtml(objectiveState[i].detail)}</small>`;
     objectiveList.appendChild(li);
   });
 }
@@ -144,27 +164,30 @@ function renderActions() {
 
   if (selectedBuilding) {
     const def = BUILDING_TYPES[selectedBuilding.type];
-    actionPanel.appendChild(paragraph(`${def.name}: ${selectedBuilding.turnsLeft > 0 ? `under construction, ${selectedBuilding.turnsLeft} turns left` : 'operational'}.`));
+    actionPanel.appendChild(paragraph(`${def.name}: ${selectedBuilding.turnsLeft > 0 ? `under construction, ${selectedBuilding.turnsLeft} turns left` : `tier ${(selectedBuilding.upgraded || 0) + 1}, operational`}.`));
     if (selectedBuilding.faction === 'olundar' && selectedBuilding.turnsLeft <= 0 && def.trains.length) {
       const grid = document.createElement('div');
       grid.className = 'button-grid';
       for (const unitType of def.trains) {
         const uDef = UNIT_TYPES[unitType];
-        const disabled = selectedBuilding.queue.length >= 3 || !canAfford(state.factions.olundar.resources, uDef.cost);
-        grid.appendChild(button(`${uDef.name} · ${formatCost(uDef.cost)} · ${uDef.trainTurns}t`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType)), disabled));
+        const turns = trainingTurnsFor(selectedBuilding, unitType);
+        const disabled = selectedBuilding.queue.length >= trainingQueueLimit(selectedBuilding) || !canAfford(state.factions.olundar.resources, uDef.cost);
+        grid.appendChild(button(`${uDef.name} · ${formatCost(uDef.cost)} · ${turns}t`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType)), disabled));
       }
       actionPanel.appendChild(subheading('Train'));
+      actionPanel.appendChild(paragraph(`Queue ${selectedBuilding.queue.length}/${trainingQueueLimit(selectedBuilding)}. Upgrades increase capacity and speed elite musters.`));
       actionPanel.appendChild(grid);
+    }
+    if (selectedBuilding.faction === 'olundar' && selectedBuilding.turnsLeft <= 0 && (selectedBuilding.upgraded || 0) < 2) {
+      const cost = upgradeCostFor(selectedBuilding);
+      actionPanel.appendChild(subheading('Upgrade'));
+      actionPanel.appendChild(button(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2} · ${formatCost(cost)}`, () => runAction(() => upgradeBuilding(state, selectedBuilding.id)), !canAfford(state.factions.olundar.resources, cost)));
     }
   }
 
   actionPanel.appendChild(subheading('Campaign'));
-  actionPanel.appendChild(button('End turn', () => {
-    state.mode = { type: 'select' };
-    endTurn(state);
-    toast('Turn resolved. The world moves.');
-    render();
-  }));
+  actionPanel.appendChild(button('Next ready unit', () => selectNextReadyUnit(), !getReadyOlundarUnits(state).length));
+  actionPanel.appendChild(button('End turn', () => requestEndTurn()));
   actionPanel.appendChild(button('Save', () => saveGame()));
   actionPanel.appendChild(button('Load', () => loadGame()));
   actionPanel.appendChild(button('New campaign', () => newCampaign()));
@@ -212,13 +235,19 @@ function renderLog() {
 
 function renderTilePanel() {
   const tile = hoverTile || lastTile;
-  tilePanel.innerHTML = describeTilePanel(state, tile.x, tile.y);
+  let body = describeTilePanel(state, tile.x, tile.y);
+  if (state.mode.type === 'build' && inMap(tile.x, tile.y)) {
+    const def = BUILDING_TYPES[state.mode.buildingType];
+    const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
+    body += `<div class="build-readout ${result.ok ? 'good' : 'bad'}"><strong>${escapeHtml(def.name)}:</strong> ${escapeHtml(result.ok ? 'Valid build site.' : result.reason)}</div>`;
+  }
+  tilePanel.innerHTML = body;
 }
 
 function renderMode() {
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
-    modeBanner.textContent = `Build mode: ${def.name}. Click the engineer’s tile or an adjacent valid tile. Esc cancels.`;
+    modeBanner.textContent = `Build mode: ${def.name}. Click the engineer's tile or an adjacent valid tile. Esc cancels.`;
     modeBanner.hidden = false;
   } else {
     modeBanner.hidden = true;
@@ -301,6 +330,34 @@ function handleResult(result) {
   if (!result) return;
   if (!result.ok && result.reason) toast(result.reason, 'bad');
   else if (result.reason) toast(result.reason);
+}
+
+function requestEndTurn(force = false) {
+  if (!force && state.pendingEndTurn === state.turn) force = true;
+  const warnings = getEndTurnWarnings(state);
+  if (!force && warnings.length) {
+    toast(`${warnings[0]} Press End Turn again to confirm.`, 'bad');
+    state.pendingEndTurn = state.turn;
+    render();
+    return;
+  }
+  state.pendingEndTurn = null;
+  state.mode = { type: 'select' };
+  endTurn(state);
+  toast('Turn resolved. The world moves.');
+  render();
+}
+
+function selectNextReadyUnit() {
+  const [unit] = getReadyOlundarUnits(state);
+  if (!unit) {
+    toast('No ready Olundaran units remain.');
+    return;
+  }
+  selectUnit(unit.id);
+  lastTile = { x: unit.x, y: unit.y };
+  toast(`${unit.name} is ready.`);
+  render();
 }
 
 function saveGame() {
@@ -415,9 +472,9 @@ window.addEventListener('keydown', (event) => {
     state.mode = { type: 'select' };
     render();
   } else if (event.key.toLowerCase() === 'e') {
-    endTurn(state);
-    toast('Turn resolved.');
-    render();
+    requestEndTurn(event.shiftKey);
+  } else if (event.key.toLowerCase() === 'n') {
+    selectNextReadyUnit();
   } else if (event.key.toLowerCase() === 's' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     saveGame();
@@ -428,10 +485,9 @@ window.addEventListener('keydown', (event) => {
 });
 
 document.querySelector('#endTurnTop').addEventListener('click', () => {
-  endTurn(state);
-  toast('Turn resolved.');
-  render();
+  requestEndTurn(state.pendingEndTurn === state.turn);
 });
+document.querySelector('#nextUnitTop').addEventListener('click', () => selectNextReadyUnit());
 document.querySelector('#newTop').addEventListener('click', () => newCampaign());
 document.querySelector('#saveTop').addEventListener('click', () => saveGame());
 document.querySelector('#loadTop').addEventListener('click', () => loadGame());

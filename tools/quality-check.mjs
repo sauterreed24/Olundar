@@ -10,10 +10,16 @@ import {
   createGame,
   endTurn,
   findPath,
+  getEndTurnWarnings,
+  getObjectiveProgress,
+  getReadyOlundarUnits,
+  getWarCouncil,
   moveUnit,
   startConstruction,
   startTraining,
+  trainingQueueLimit,
   tileAt,
+  upgradeBuilding,
   unitAt
 } from '../src/rules.js';
 
@@ -74,6 +80,20 @@ check('campaign generation creates playable essentials', () => {
   assert(state.visible.filter(Boolean).length > 20, 'Player has too little initial visibility.');
 });
 
+check('war council and objectives reflect early strategic pressure', () => {
+  const state = createGame('quality-council');
+  const council = getWarCouncil(state);
+  const progress = getObjectiveProgress(state);
+  const ready = getReadyOlundarUnits(state);
+  const warnings = getEndTurnWarnings(state);
+  assert(council.headline === 'First Orders', 'Initial council should guide first-turn play.');
+  assert(council.priorities.length > 0, 'Council needs actionable priorities.');
+  assert(progress.length === state.objectives.length, 'Objective progress must align with objectives.');
+  assert(progress[1].done === false, 'War economy objective should not be complete at campaign start.');
+  assert(ready.length >= 4, 'Starting army should expose ready units.');
+  assert(warnings.some((warning) => warning.includes('still ready')), 'End-turn warnings should catch idle units.');
+});
+
 check('strategic path exists from Olundar toward the portal front', () => {
   const state = createGame('quality-path');
   const scout = state.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
@@ -104,6 +124,22 @@ check('construction validates placement and completes', () => {
   endTurn(state);
   const road = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'road' && b.x === engineer.x && b.y === engineer.y);
   assert(road && road.turnsLeft === 0, 'Road did not complete after one turn.');
+});
+
+check('building upgrades improve long-term planning', () => {
+  const state = createGame('quality-upgrade');
+  const city = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const beforeGold = state.factions.olundar.resources.gold;
+  const beforeHousing = state.factions.olundar.housing;
+  const beforeHp = city.maxHp;
+  const beforeQueueLimit = trainingQueueLimit(city);
+  const result = upgradeBuilding(state, city.id);
+  assert(result.ok, result.reason || 'City upgrade failed.');
+  assert(city.upgraded === 1, 'Upgrade tier did not advance.');
+  assert(city.maxHp > beforeHp, 'Upgrade did not improve building durability.');
+  assert(trainingQueueLimit(city) > beforeQueueLimit, 'Upgrade did not increase training queue capacity.');
+  assert(state.factions.olundar.housing > beforeHousing, 'City upgrade did not increase housing.');
+  assert(state.factions.olundar.resources.gold < beforeGold, 'Upgrade did not spend resources.');
 });
 
 check('combat can damage enemies and protects portal before boss death', () => {

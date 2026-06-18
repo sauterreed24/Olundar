@@ -7,16 +7,18 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 ## What is playable now
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
+- A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
 - Player units: Pathfinder Scout, Shield Legionary, Spear Guard, Archer, Equite Cavalry, Field Engineer, and Onager Crew.
 - Buildings: City Center, Farms, Lumber Camps, Mines, Barracks, Archery Yard, Stable, Workshop, Watchtower, Walls, Roads, Shrine, and Outpost.
+- Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
 - Deadwalker civilization: Bone Portal, Bone Pits, Grave Forges, Necropolises, Bone Thralls, Corpse Archers, Grave Knights, and Vorgath the Hollow Crown.
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Local save/load and exportable JSON save files.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, pathing, training, construction, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -35,7 +37,9 @@ No package install is required because this prototype has no third-party runtime
 - Click a visible hostile unit or building in range to attack.
 - Select an engineer and choose a building order, then click the engineer’s tile or an adjacent valid tile.
 - Select a city or military building to train units.
-- Press `E` to end the turn.
+- Select an Olundaran building to upgrade it when resources allow.
+- Press `N` or click **Next Unit** to cycle to the next ready unit.
+- Press `E` to end the turn; if units are idle, press `E` again or use `Shift + E` to confirm.
 - Press `Esc` to cancel build mode.
 - Press `Ctrl/Cmd + S` to save locally.
 - Press `Ctrl/Cmd + L` to load locally.
@@ -73,9 +77,11 @@ olundar_game/
 - JavaScript syntax parse check.
 - Content table consistency.
 - Campaign essentials exist.
+- War Council and objective progress reflect early strategic pressure.
 - Strategic path from Olundar toward the portal front exists.
 - Training deducts resources and musters a unit.
 - Construction validates placement and completes.
+- Building upgrades spend resources and improve long-term planning.
 - Combat damages units and enforces the boss-before-portal rule.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.

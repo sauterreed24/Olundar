@@ -191,6 +191,128 @@ export function addMessage(state, text, tone = 'info') {
   state.messages = state.messages.slice(0, 80);
 }
 
+export function getReadyOlundarUnits(state) {
+  return state.units
+    .filter((unit) => unit.faction === 'olundar' && !unit.hasActed)
+    .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
+}
+
+function unitCommandPriority(unit) {
+  const def = getUnitDef(unit);
+  if (def.tags.includes('recon')) return 1;
+  if (def.tags.includes('builder')) return 2;
+  if (def.tags.includes('siege')) return 3;
+  if (def.tags.includes('ranged')) return 4;
+  return 5;
+}
+
+export function getObjectiveProgress(state) {
+  const discoveredLiving = Object.values(state.factions).filter((faction) => !faction.player && faction.id !== 'dead' && faction.discovered).length;
+  const revealedPortal = state.buildings.some((building) => building.type === 'portal' && state.revealed[building.y * MAP_WIDTH + building.x]);
+  const economyPieces = [
+    hasOperationalBuilding(state, 'farm'),
+    hasOperationalBuilding(state, 'lumberCamp'),
+    hasOperationalBuilding(state, 'mine'),
+    hasOperationalBuilding(state, 'barracks'),
+    hasOperationalBuilding(state, 'archeryYard') || state.units.filter((unit) => unit.faction === 'olundar' && unit.type === 'archer').length >= 2
+  ];
+  return [
+    {
+      done: revealedPortal,
+      detail: revealedPortal ? 'Portal revealed' : `${Math.round(revealedPercent(state))}% of the world mapped`
+    },
+    {
+      done: economyPieces.every(Boolean),
+      detail: `${economyPieces.filter(Boolean).length}/${economyPieces.length} war-economy pillars ready`
+    },
+    {
+      done: discoveredLiving >= 2,
+      detail: `${discoveredLiving}/3 living civilizations contacted`
+    },
+    {
+      done: state.flags.bossSlain,
+      detail: state.flags.bossSlain ? 'Vorgath is dead' : 'Boss still commands the portal'
+    },
+    {
+      done: state.flags.portalDestroyed,
+      detail: state.flags.portalDestroyed ? 'Portal destroyed' : 'Portal still active'
+    }
+  ];
+}
+
+export function getEndTurnWarnings(state) {
+  if (state.status !== 'playing') return [];
+  const warnings = [];
+  const ready = getReadyOlundarUnits(state);
+  if (ready.length) {
+    warnings.push(`${ready.length} Olundaran unit${ready.length === 1 ? ' is' : 's are'} still ready: ${ready.slice(0, 4).map((unit) => unit.name).join(', ')}${ready.length > 4 ? '...' : ''}.`);
+  }
+  if (state.mode.type === 'build') warnings.push('A build order is selected but not placed.');
+  return warnings;
+}
+
+export function getWarCouncil(state) {
+  const faction = state.factions.olundar;
+  const ready = getReadyOlundarUnits(state);
+  const discoveredLiving = Object.values(state.factions).filter((other) => !other.player && other.id !== 'dead' && other.discovered).length;
+  const knownDead = knownDeadwalkerThreat(state);
+  const priorities = [];
+
+  if (state.status === 'won') {
+    priorities.push({ tone: 'good', text: 'The Bone Portal is destroyed. Start a new campaign for a fresh strategic problem.' });
+  } else if (state.status === 'lost') {
+    priorities.push({ tone: 'danger', text: 'Olundar has fallen. Restart and scout earlier for allies, iron, and tower positions.' });
+  } else {
+    if (ready.length) priorities.push({ tone: 'good', text: `Issue orders to ${ready.length} ready unit${ready.length === 1 ? '' : 's'} before ending the turn.` });
+    if (!state.flags.firstAllySeen) priorities.push({ tone: 'info', text: 'Send the scout along the roads to locate living civilizations before diplomacy becomes urgent.' });
+    if (!hasOperationalBuilding(state, 'mine')) priorities.push({ tone: 'info', text: 'Secure iron with a Hill Mine. Legionaries, spears, and siege all depend on it.' });
+    if (!hasOperationalBuilding(state, 'archeryYard')) priorities.push({ tone: 'info', text: 'Build an Archery Yard before the first major Deadwalker push reaches your roads.' });
+    if (discoveredLiving > 0 && !Object.values(faction.pacts).some(Boolean)) priorities.push({ tone: 'info', text: 'Turn first contact into a Survival Pact for shared vision and emergency aid.' });
+    if (knownDead && !hasOperationalBuilding(state, 'workshop')) priorities.push({ tone: 'danger', text: 'Deadwalker infrastructure is known. Prepare a Siege Workshop and onagers before entering blight.' });
+    if ((faction.resources.morale || 0) <= 3) priorities.push({ tone: 'danger', text: 'Morale is close to collapse. Build a Sun Shrine or stabilize food and upkeep.' });
+    if (!priorities.length) priorities.push({ tone: 'good', text: 'Olundar is stable. Expand roads and towers toward the portal while training a balanced army.' });
+  }
+
+  return {
+    headline: councilHeadline(state, knownDead),
+    priorities: priorities.slice(0, 4),
+    stats: [
+      { label: 'Mapped', value: `${Math.round(revealedPercent(state))}%` },
+      { label: 'Ready units', value: ready.length },
+      { label: 'Army', value: state.units.filter((unit) => unit.faction === 'olundar').length },
+      { label: 'Allies found', value: `${discoveredLiving}/3` },
+      { label: 'Dead pressure', value: knownDead ? knownDead.label : 'Unknown' }
+    ]
+  };
+}
+
+function councilHeadline(state, knownDead) {
+  if (state.status === 'won') return 'Victory Council';
+  if (state.status === 'lost') return 'After-Action Council';
+  if ((state.factions.olundar.resources.morale || 0) <= 3) return 'Morale Crisis';
+  if (knownDead?.score >= 18) return 'Deadwalker Surge';
+  if (!state.flags.firstAllySeen) return 'First Orders';
+  if (!state.flags.firstDeadwalkerSeen) return 'Expansion Council';
+  return 'War Council';
+}
+
+function knownDeadwalkerThreat(state) {
+  const knownUnits = state.units.filter((unit) => unit.faction === 'dead' && isRevealed(state, unit.x, unit.y)).length;
+  const knownBuildings = state.buildings.filter((building) => building.faction === 'dead' && isRevealed(state, building.x, building.y)).length;
+  if (!knownUnits && !knownBuildings && !state.flags.firstDeadwalkerSeen) return null;
+  const score = knownUnits + knownBuildings * 3 + state.map.tiles.filter((tile) => tile.terrain === 'blight' && isRevealed(state, tile.x, tile.y)).length * 0.2;
+  const label = score >= 18 ? 'Severe' : score >= 8 ? 'Rising' : 'Sighted';
+  return { knownUnits, knownBuildings, score, label };
+}
+
+function revealedPercent(state) {
+  return (state.revealed.filter(Boolean).length / state.revealed.length) * 100;
+}
+
+function hasOperationalBuilding(state, type) {
+  return state.buildings.some((building) => building.faction === 'olundar' && building.type === type && building.turnsLeft <= 0);
+}
+
 export function tileAt(state, x, y) {
   if (!inBounds(x, y)) return null;
   return state.map.tiles[idx(x, y)];
@@ -253,7 +375,7 @@ export function updateVisibility(state) {
       const def = getBuildingDef(building);
       const tile = tileAt(state, building.x, building.y);
       const bonus = tile?.terrain === 'hills' ? 1 : 0;
-      visionSources.push({ x: building.x, y: building.y, sight: def.vision + bonus });
+      visionSources.push({ x: building.x, y: building.y, sight: def.vision + bonus + (building.upgraded || 0) });
     }
   }
   for (const source of visionSources) {
@@ -518,13 +640,66 @@ export function startTraining(state, buildingId, unitType) {
   if (building.turnsLeft > 0) return { ok: false, reason: 'This building is still under construction.' };
   const bDef = getBuildingDef(building);
   if (!bDef.trains.includes(unitType)) return { ok: false, reason: `${bDef.name} cannot train ${unitDef.name}.` };
-  if (building.queue.length >= 3) return { ok: false, reason: 'Training queue is full.' };
+  if (building.queue.length >= trainingQueueLimit(building)) return { ok: false, reason: 'Training queue is full.' };
   const resources = state.factions.olundar.resources;
   if (!canAfford(resources, unitDef.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(resources, unitDef.cost))}.` };
   payCost(resources, unitDef.cost);
-  building.queue.push({ unitType, turnsLeft: unitDef.trainTurns });
+  building.queue.push({ unitType, turnsLeft: trainingTurnsFor(building, unitType) });
   addMessage(state, `${unitDef.name} training begun at ${building.name}.`, 'info');
   return { ok: true };
+}
+
+export function upgradeBuilding(state, buildingId) {
+  const building = state.buildings.find((b) => b.id === buildingId);
+  if (!building) return { ok: false, reason: 'Building not found.' };
+  if (building.faction !== 'olundar') return { ok: false, reason: 'Only Olundaran buildings can be upgraded.' };
+  if (building.turnsLeft > 0) return { ok: false, reason: 'Finish construction before upgrading.' };
+  if ((building.upgraded || 0) >= 2) return { ok: false, reason: `${building.name} is already fully upgraded.` };
+  const cost = upgradeCostFor(building);
+  const resources = state.factions.olundar.resources;
+  if (!canAfford(resources, cost)) return { ok: false, reason: `Need ${formatCost(missingCost(resources, cost))}.` };
+  payCost(resources, cost);
+  building.upgraded = (building.upgraded || 0) + 1;
+  const hpBoost = Math.ceil(getBuildingDef(building).hp * 0.25);
+  building.maxHp += hpBoost;
+  building.hp = Math.min(building.maxHp, building.hp + hpBoost);
+  if (building.type === 'city') {
+    state.factions.olundar.housing += 10;
+    state.factions.olundar.resources.morale = Math.min(12, (state.factions.olundar.resources.morale || 0) + 1);
+  }
+  addMessage(state, `${building.name} upgraded to tier ${building.upgraded + 1}.`, 'good');
+  updateVisibility(state);
+  return { ok: true, reason: `${building.name} upgraded to tier ${building.upgraded + 1}.` };
+}
+
+export function upgradeCostFor(buildingOrType) {
+  const type = typeof buildingOrType === 'string' ? buildingOrType : buildingOrType.type;
+  const level = typeof buildingOrType === 'string' ? 0 : (buildingOrType.upgraded || 0);
+  const def = BUILDING_TYPES[type];
+  const base = Object.keys(def.cost || {}).length ? def.cost : fallbackUpgradeCost(type);
+  const multiplier = level + 1;
+  const cost = {};
+  for (const [resource, amount] of Object.entries(base)) {
+    cost[resource] = Math.max(2, Math.ceil(amount * (0.65 + multiplier * 0.35)));
+  }
+  if (!cost.gold) cost.gold = 6 + multiplier * 4;
+  return cost;
+}
+
+export function trainingQueueLimit(building) {
+  return 3 + (building.upgraded || 0);
+}
+
+export function trainingTurnsFor(building, unitType) {
+  const unitDef = UNIT_TYPES[unitType];
+  return Math.max(1, unitDef.trainTurns - Math.floor((building.upgraded || 0) / 2));
+}
+
+function fallbackUpgradeCost(type) {
+  if (type === 'city') return { wood: 24, stone: 16, gold: 18 };
+  if (type === 'road') return { stone: 4, gold: 4 };
+  if (type === 'wall' || type === 'watchtower') return { wood: 10, stone: 12, gold: 6 };
+  return { wood: 12, stone: 8, gold: 8 };
 }
 
 export function startConstruction(state, builderId, buildingType, x, y) {
@@ -544,7 +719,7 @@ export function startConstruction(state, builderId, buildingType, x, y) {
   builder.fortified = 0;
   addMessage(state, `${def.name} construction started at ${x},${y}.`, 'info');
   updateVisibility(state);
-  return { ok: true, building };
+  return { ok: true, building, reason: `${def.name} construction started.` };
 }
 
 export function canBuildOn(state, buildingType, x, y) {
@@ -708,6 +883,9 @@ function incomeForBuilding(state, building) {
     if (tile.terrain === 'ruins') income.gold = (income.gold || 0) + 3;
   }
   if (building.type === 'watchtower' && tile.terrain === 'hills') income.influence = (income.influence || 0) + 1;
+  for (const [resource, amount] of Object.entries(income)) {
+    income[resource] = amount + Math.ceil(amount * 0.35 * (building.upgraded || 0));
+  }
   return income;
 }
 

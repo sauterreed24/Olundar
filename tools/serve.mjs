@@ -32,7 +32,10 @@ const server = http.createServer((req, res) => {
     res.end('Not found');
     return;
   }
-  res.writeHead(200, { 'Content-Type': mime[path.extname(filePath)] || 'application/octet-stream' });
+  res.writeHead(200, {
+    'Content-Type': mime[path.extname(filePath)] || 'application/octet-stream',
+    'Cache-Control': 'no-store'
+  });
   createReadStream(filePath).pipe(res);
 });
 

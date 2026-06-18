@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan } from './map.js';
-import { buildingAt, findPath, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, findPath, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
   plains: '#8caf62',
@@ -48,6 +48,7 @@ export function drawGame(canvas, state, hoverTile = null) {
   drawBackdrop(ctx, canvas);
   drawTiles(ctx, state, layout);
   drawReachable(ctx, state, layout);
+  drawBuildSites(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
@@ -192,6 +193,27 @@ function drawReachable(ctx, state, layout) {
       const sy = layout.offsetY + y * layout.tileSize;
       ctx.fillStyle = 'rgba(255, 244, 176, 0.14)';
       ctx.fillRect(sx + 2, sy + 2, layout.tileSize - 4, layout.tileSize - 4);
+    }
+  }
+  ctx.restore();
+}
+
+function drawBuildSites(ctx, state, layout) {
+  if (state.mode.type !== 'build') return;
+  const builder = state.units.find((u) => u.id === state.mode.builderId);
+  if (!builder) return;
+  ctx.save();
+  for (let y = builder.y - 1; y <= builder.y + 1; y += 1) {
+    for (let x = builder.x - 1; x <= builder.x + 1; x += 1) {
+      if (Math.abs(builder.x - x) + Math.abs(builder.y - y) > 1 || !inMap(x, y)) continue;
+      const result = canBuildOn(state, state.mode.buildingType, x, y);
+      const sx = layout.offsetX + x * layout.tileSize;
+      const sy = layout.offsetY + y * layout.tileSize;
+      ctx.fillStyle = result.ok ? 'rgba(186, 245, 140, 0.2)' : 'rgba(255, 138, 138, 0.16)';
+      ctx.fillRect(sx + 2, sy + 2, layout.tileSize - 4, layout.tileSize - 4);
+      ctx.strokeStyle = result.ok ? '#baf58c' : '#ff8a8a';
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.06);
+      ctx.strokeRect(sx + 3, sy + 3, layout.tileSize - 6, layout.tileSize - 6);
     }
   }
   ctx.restore();
@@ -560,8 +582,8 @@ export function describeSelection(state) {
     const queue = building.queue?.length ? ` Queue: ${building.queue.map((item) => `${UNIT_TYPES[item.unitType].name} ${item.turnsLeft}t`).join(', ')}.` : '';
     return {
       title: `${building.name}`,
-      subtitle: `${FACTIONS[building.faction].name} · ${def.name}`,
-      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${building.turnsLeft} turns.` : ''}${queue}`,
+      subtitle: `${FACTIONS[building.faction].name} · ${def.name} · Tier ${(building.upgraded || 0) + 1}`,
+      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${building.turnsLeft} turns.` : ' Upgrades improve durability, vision, and strategic output.'}${queue}`,
       faction: building.faction,
       unit: null,
       building
