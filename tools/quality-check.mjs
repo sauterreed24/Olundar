@@ -14,6 +14,8 @@ import {
   createGame,
   endTurn,
   findPath,
+  forecastBuildingAttack,
+  forecastUnitAttack,
   getEndTurnWarnings,
   getFirstTurnsGuide,
   getObjectiveProgress,
@@ -401,6 +403,38 @@ check('combat can damage enemies and protects portal before boss death', () => {
   const result = attackBuilding(state, onager.id, portal.id);
   assert(result.ok, result.reason || 'Portal attack failed.');
   assert(state.status === 'playing' && portal.hp === 10, 'Portal should reform while boss lives.');
+});
+
+check('battle forecasts match combat without mutating state', () => {
+  const state = createGame('quality-forecast');
+  const legion = state.units.find((u) => u.faction === 'olundar' && u.type === 'legionary');
+  const thrall = state.units.find((u) => u.faction === 'dead' && u.type === 'boneThrall');
+  legion.x = thrall.x - 1;
+  legion.y = thrall.y;
+  legion.hasActed = false;
+  const beforeHp = thrall.hp;
+  const forecast = forecastUnitAttack(state, legion.id, thrall.id);
+  assert(forecast.ok, forecast.reason || 'Unit forecast failed.');
+  assert(thrall.hp === beforeHp && !legion.hasActed, 'Unit forecast should not mutate combat state.');
+  const hit = attackUnit(state, legion.id, thrall.id);
+  assert(hit.ok && hit.damage === forecast.damage, 'Unit forecast damage should match real attack.');
+  const targetAfter = state.units.find((unit) => unit.id === thrall.id);
+  assert((targetAfter?.hp || 0) === forecast.targetHpAfter, 'Unit forecast HP result should match real attack.');
+
+  const buildingState = createGame('quality-building-forecast');
+  const archer = buildingState.units.find((u) => u.faction === 'olundar' && u.type === 'archer');
+  const portal = buildingState.buildings.find((b) => b.faction === 'dead' && b.type === 'portal');
+  archer.x = portal.x;
+  archer.y = portal.y - 3;
+  archer.hasActed = false;
+  portal.hp = 1;
+  const buildingForecast = forecastBuildingAttack(buildingState, archer.id, portal.id);
+  assert(buildingForecast.ok, buildingForecast.reason || 'Building forecast failed.');
+  assert(buildingForecast.portalReforms, 'Portal forecast should warn about boss-locked reformation.');
+  assert(portal.hp === 1 && !archer.hasActed, 'Building forecast should not mutate combat state.');
+  const strike = attackBuilding(buildingState, archer.id, portal.id);
+  assert(strike.ok && strike.damage === buildingForecast.damage, 'Building forecast damage should match real attack.');
+  assert(portal.hp === buildingForecast.targetHpAfter, 'Building forecast HP result should match real attack.');
 });
 
 check('24-turn simulation remains stable', () => {

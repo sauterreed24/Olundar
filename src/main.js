@@ -8,6 +8,8 @@ import {
   deserializeState,
   endTurn,
   formatCost,
+  forecastBuildingAttack,
+  forecastUnitAttack,
   fortifyUnit,
   getEndTurnWarnings,
   getFirstTurnsGuide,
@@ -334,7 +336,52 @@ function renderTilePanel() {
     const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
     body += `<div class="build-readout ${result.ok ? 'good' : 'bad'}"><strong>${escapeHtml(def.name)}:</strong> ${escapeHtml(result.ok ? 'Valid build site.' : result.reason)}</div>`;
   }
+  body += battleForecastReadout(tile);
   tilePanel.innerHTML = body;
+}
+
+function battleForecastReadout(tile) {
+  if (!tile || !inMap(tile.x, tile.y) || !isVisible(state, tile.x, tile.y) || state.mode.type !== 'select') return '';
+  const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
+  if (!selectedUnit || selectedUnit.faction !== 'olundar') return '';
+  const visibleUnit = unitAt(state, tile.x, tile.y);
+  const visibleBuilding = buildingAt(state, tile.x, tile.y);
+  let forecast = null;
+  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
+    forecast = forecastUnitAttack(state, selectedUnit.id, visibleUnit.id);
+  } else if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
+    forecast = forecastBuildingAttack(state, selectedUnit.id, visibleBuilding.id);
+  }
+  if (!forecast) return '';
+  return formatBattleForecast(forecast);
+}
+
+function formatBattleForecast(forecast) {
+  const title = forecast.ok ? `Attack Forecast: ${forecast.targetName}` : 'Attack Forecast';
+  if (!forecast.ok) {
+    return `<div class="battle-forecast bad"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(forecast.reason)}</p></div>`;
+  }
+  const tone = forecast.portalReforms ? 'bad' : forecast.lethal ? 'good' : 'info';
+  const hpText = forecast.portalReforms
+    ? `${forecast.targetHpBefore} -> reforms to ${forecast.targetHpAfter}`
+    : `${forecast.targetHpBefore} -> ${forecast.targetHpAfter}`;
+  const detail = forecast.type === 'building' && forecast.siege
+    ? 'Siege bonus included.'
+    : forecast.type === 'unit' && (forecast.terrainDefense || forecast.fortified)
+      ? `Defense: ${forecast.armor + forecast.terrainDefense + forecast.fortified}`
+      : `Range: ${forecast.distance}/${forecast.range}`;
+  return `
+    <div class="battle-forecast ${tone}">
+      <strong>${escapeHtml(title)}</strong>
+      <div class="forecast-grid">
+        <span><b>${forecast.damage}</b>damage</span>
+        <span><b>${escapeHtml(hpText)}</b>target HP</span>
+        <span><b>${forecast.distance}/${forecast.range}</b>range</span>
+      </div>
+      <p>${escapeHtml(detail)}</p>
+      <small>${escapeHtml(forecast.note)}</small>
+    </div>
+  `;
 }
 
 function renderMode() {

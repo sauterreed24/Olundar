@@ -14,6 +14,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
+- Attack forecasts that show damage, range, target HP, terrain/fortify defense, siege bonuses, and portal reformation before the player commits.
 - Player units: Pathfinder Scout, Shield Legionary, Spear Guard, Archer, Equite Cavalry, Field Engineer, and Onager Crew.
 - Buildings: City Center, Farms, Lumber Camps, Mines, Barracks, Archery Yard, Stable, Workshop, Watchtower, Walls, Roads, Shrine, and Outpost.
 - Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
@@ -24,7 +25,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -41,6 +42,7 @@ Browsers that support installation will expose an **Install** button after the a
 ## Controls
 
 - Click an Olundaran unit, then click a tile to move.
+- Select an Olundaran unit and hover or click a visible hostile target to preview damage, range, and target HP.
 - Click a visible hostile unit or building in range to attack.
 - Select an engineer and choose a building order, then click the engineer’s tile or an adjacent valid tile.
 - Select a city or military building to train units.
@@ -110,11 +112,12 @@ olundar_game/
 - Training deducts resources and musters a unit.
 - Construction validates placement and completes.
 - Building upgrades spend resources and improve long-term planning.
+- Combat forecasts match real attack damage without mutating state.
 - Combat damages units and enforces the boss-before-portal rule.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.
 
 ## Suggested next production steps
 
-1. Add an in-game battle forecast before attacks so players can make sharper tactical choices.
-2. Add a compact campaign recap screen after victory, defeat, and imported save loads.
+1. Add a compact campaign recap screen after victory, defeat, and imported save loads.
+2. Add richer faction war aims so living civilizations bargain, raid, and defend more visibly.

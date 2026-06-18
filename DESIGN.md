@@ -93,6 +93,7 @@ The prototype uses a simple readable model:
 - Spears punish cavalry.
 - Shrines improve anti-undead fighting nearby.
 - Onagers deal extra structure damage.
+- Selecting an Olundaran unit and targeting a visible enemy previews damage, range, HP outcome, defensive modifiers, siege bonuses, and portal reformation risk.
 - The portal cannot be permanently destroyed until Vorgath is dead.
 
 ## Units

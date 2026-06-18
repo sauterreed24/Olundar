@@ -728,15 +728,48 @@ export function fortifyUnit(state, unitId) {
   return { ok: true };
 }
 
-export function attackUnit(state, attackerId, defenderId) {
+export function forecastUnitAttack(state, attackerId, defenderId) {
   const attacker = state.units.find((u) => u.id === attackerId);
   const defender = state.units.find((u) => u.id === defenderId);
   if (!attacker || !defender) return { ok: false, reason: 'Target not found.' };
   if (attacker.faction === 'olundar' && attacker.hasActed) return { ok: false, reason: `${attacker.name} has already acted.` };
   if (!isEnemy(state, attacker.faction, defender.faction)) return { ok: false, reason: 'That target is not hostile.' };
   const def = getUnitDef(attacker);
-  if (manhattan(attacker.x, attacker.y, defender.x, defender.y) > def.range) return { ok: false, reason: 'Target is out of range.' };
+  const distance = manhattan(attacker.x, attacker.y, defender.x, defender.y);
+  if (distance > def.range) return { ok: false, reason: 'Target is out of range.', distance, range: def.range };
+  const defenderDef = getUnitDef(defender);
+  const defenderTile = tileAt(state, defender.x, defender.y);
+  const terrainDefense = defenderTile ? TERRAIN[defenderTile.terrain].defense || 0 : 0;
   const damage = calculateUnitDamage(state, attacker, defender);
+  const targetHpBefore = defender.hp;
+  const targetHpAfter = Math.max(0, targetHpBefore - damage);
+  return {
+    ok: true,
+    type: 'unit',
+    attackerName: attacker.name,
+    targetName: defender.name,
+    targetFaction: defender.faction,
+    targetType: defender.type,
+    damage,
+    targetHpBefore,
+    targetHpAfter,
+    lethal: targetHpAfter <= 0,
+    distance,
+    range: def.range,
+    armor: defenderDef.armor,
+    terrain: defenderTile?.terrain || 'unknown',
+    terrainDefense,
+    fortified: defender.fortified || 0,
+    note: targetHpAfter <= 0 ? `${defender.name} is likely to fall.` : `${defender.name} survives on ${targetHpAfter} HP.`
+  };
+}
+
+export function attackUnit(state, attackerId, defenderId) {
+  const forecast = forecastUnitAttack(state, attackerId, defenderId);
+  if (!forecast.ok) return forecast;
+  const attacker = state.units.find((u) => u.id === attackerId);
+  const defender = state.units.find((u) => u.id === defenderId);
+  const damage = forecast.damage;
   defender.hp -= damage;
   attacker.hasActed = true;
   attacker.fortified = 0;
@@ -758,19 +791,46 @@ export function attackUnit(state, attackerId, defenderId) {
   return { ok: true, damage };
 }
 
-export function attackBuilding(state, attackerId, buildingId) {
+export function forecastBuildingAttack(state, attackerId, buildingId) {
   const attacker = state.units.find((u) => u.id === attackerId);
   const building = state.buildings.find((b) => b.id === buildingId);
   if (!attacker || !building) return { ok: false, reason: 'Target not found.' };
   if (attacker.faction === 'olundar' && attacker.hasActed) return { ok: false, reason: `${attacker.name} has already acted.` };
   if (!isEnemy(state, attacker.faction, building.faction)) return { ok: false, reason: 'That structure is not hostile.' };
   const def = getUnitDef(attacker);
-  if (manhattan(attacker.x, attacker.y, building.x, building.y) > def.range) return { ok: false, reason: 'Structure is out of range.' };
-  let damage = def.attack + Math.floor((attacker.xp || 0) / 2);
-  if (def.tags.includes('siege')) damage += 6;
-  if (building.type === 'portal' && !state.flags.bossSlain) {
-    damage = Math.max(1, Math.floor(damage / 3));
-  }
+  const distance = manhattan(attacker.x, attacker.y, building.x, building.y);
+  if (distance > def.range) return { ok: false, reason: 'Structure is out of range.', distance, range: def.range };
+  const damage = calculateBuildingDamage(state, attacker, building);
+  const targetHpBefore = building.hp;
+  const rawTargetHpAfter = targetHpBefore - damage;
+  const portalReforms = building.type === 'portal' && !state.flags.bossSlain && rawTargetHpAfter <= 0;
+  const targetHpAfter = portalReforms ? 10 : Math.max(0, rawTargetHpAfter);
+  return {
+    ok: true,
+    type: 'building',
+    attackerName: attacker.name,
+    targetName: building.name,
+    targetFaction: building.faction,
+    targetType: building.type,
+    damage,
+    targetHpBefore,
+    targetHpAfter,
+    rawTargetHpAfter,
+    lethal: rawTargetHpAfter <= 0 && !portalReforms,
+    portalReforms,
+    distance,
+    range: def.range,
+    siege: def.tags.includes('siege'),
+    note: portalReforms ? 'The portal reforms until Vorgath is slain.' : rawTargetHpAfter <= 0 ? `${building.name} will fall.` : `${building.name} remains at ${targetHpAfter} HP.`
+  };
+}
+
+export function attackBuilding(state, attackerId, buildingId) {
+  const forecast = forecastBuildingAttack(state, attackerId, buildingId);
+  if (!forecast.ok) return forecast;
+  const attacker = state.units.find((u) => u.id === attackerId);
+  const building = state.buildings.find((b) => b.id === buildingId);
+  const damage = forecast.damage;
   building.hp -= damage;
   attacker.hasActed = true;
   if (building.faction === 'dead' || attacker.faction === 'olundar' || building.faction === 'olundar') {
@@ -786,6 +846,16 @@ export function attackBuilding(state, attackerId, buildingId) {
   }
   updateVisibility(state);
   return { ok: true, damage };
+}
+
+function calculateBuildingDamage(state, attacker, building) {
+  const def = getUnitDef(attacker);
+  let damage = def.attack + Math.floor((attacker.xp || 0) / 2);
+  if (def.tags.includes('siege')) damage += 6;
+  if (building.type === 'portal' && !state.flags.bossSlain) {
+    damage = Math.max(1, Math.floor(damage / 3));
+  }
+  return damage;
 }
 
 function calculateUnitDamage(state, attacker, defender) {
