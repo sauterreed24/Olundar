@@ -31,6 +31,7 @@ import {
 } from './rules.js';
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
+import { audioIsEnabled, initAudioPreference, playAudioCue, toggleAudio } from './audio.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -52,12 +53,15 @@ const setupOverlay = document.querySelector('#setupOverlay');
 const campaignSetup = document.querySelector('#campaignSetup');
 const saveOverlay = document.querySelector('#saveOverlay');
 const saveManager = document.querySelector('#saveManager');
+const audioTop = document.querySelector('#audioTop');
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
+
+initAudioPreference();
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
@@ -94,7 +98,15 @@ function renderTopBar() {
     `<span class="resource population"><b>Population</b> ${state.factions.olundar.population}/${state.factions.olundar.housing}</span>`,
     ...order.map((key) => `<span class="resource"><b>${RESOURCE_NAMES[key]}</b> ${Math.floor(resources[key] || 0)}</span>`)
   ].join('');
+  renderAudioButton();
   turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+}
+
+function renderAudioButton() {
+  const isEnabled = audioIsEnabled();
+  audioTop.textContent = isEnabled ? 'Audio On' : 'Audio Off';
+  audioTop.setAttribute('aria-pressed', String(isEnabled));
+  audioTop.title = isEnabled ? 'Disable audio cues and ambient music' : 'Enable audio cues and ambient music';
 }
 
 function renderCouncil() {
@@ -211,7 +223,7 @@ function renderActions() {
   if (selectedUnit) {
     const def = UNIT_TYPES[selectedUnit.type];
     actionPanel.appendChild(paragraph(`${def.name}: ${selectedUnit.hasActed ? 'acted this turn' : 'ready'}.`));
-    actionPanel.appendChild(button('Fortify / Hold position', () => runAction(() => fortifyUnit(state, selectedUnit.id)), selectedUnit.hasActed || selectedUnit.faction !== 'olundar'));
+    actionPanel.appendChild(button('Fortify / Hold position', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), selectedUnit.hasActed || selectedUnit.faction !== 'olundar'));
     if (def.tags.includes('builder') && selectedUnit.faction === 'olundar') {
       const grid = document.createElement('div');
       grid.className = 'button-grid';
@@ -222,6 +234,7 @@ function renderActions() {
         const disabled = selectedUnit.hasActed || !canAfford(state.factions.olundar.resources, bDef.cost);
         grid.appendChild(button(label, () => {
           state.mode = { type: 'build', buildingType: type, builderId: selectedUnit.id };
+          playAudioCue('ui');
           toast(`Build mode: click ${bDef.name} on this tile or an adjacent tile.`);
           render();
         }, disabled));
@@ -241,7 +254,7 @@ function renderActions() {
         const uDef = UNIT_TYPES[unitType];
         const turns = trainingTurnsFor(selectedBuilding, unitType);
         const disabled = selectedBuilding.queue.length >= trainingQueueLimit(selectedBuilding) || !canAfford(state.factions.olundar.resources, uDef.cost);
-        grid.appendChild(button(`${uDef.name} · ${formatCost(uDef.cost)} · ${turns}t`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType)), disabled));
+        grid.appendChild(button(`${uDef.name} · ${formatCost(uDef.cost)} · ${turns}t`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType), 'train'), disabled));
       }
       actionPanel.appendChild(subheading('Train'));
       actionPanel.appendChild(paragraph(`Queue ${selectedBuilding.queue.length}/${trainingQueueLimit(selectedBuilding)}. Upgrades increase capacity and speed elite musters.`));
@@ -250,7 +263,7 @@ function renderActions() {
     if (selectedBuilding.faction === 'olundar' && selectedBuilding.turnsLeft <= 0 && (selectedBuilding.upgraded || 0) < 2) {
       const cost = upgradeCostFor(selectedBuilding);
       actionPanel.appendChild(subheading('Upgrade'));
-      actionPanel.appendChild(button(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2} · ${formatCost(cost)}`, () => runAction(() => upgradeBuilding(state, selectedBuilding.id)), !canAfford(state.factions.olundar.resources, cost)));
+      actionPanel.appendChild(button(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2} · ${formatCost(cost)}`, () => runAction(() => upgradeBuilding(state, selectedBuilding.id), 'build'), !canAfford(state.factions.olundar.resources, cost)));
     }
   }
 
@@ -282,7 +295,7 @@ function renderDiplomacy() {
     row.className = 'button-grid';
     for (const actionId of Object.keys(DIPLOMACY_ACTIONS)) {
       const action = DIPLOMACY_ACTIONS[actionId];
-      row.appendChild(button(`${action.name} · ${formatCost(action.cost)}`, () => runAction(() => performDiplomacy(state, id, actionId)), !canAfford(state.factions.olundar.resources, action.cost)));
+      row.appendChild(button(`${action.name} · ${formatCost(action.cost)}`, () => runAction(() => performDiplomacy(state, id, actionId), 'diplomacy'), !canAfford(state.factions.olundar.resources, action.cost)));
     }
     card.appendChild(row);
     diplomacyPanel.appendChild(card);
@@ -333,7 +346,7 @@ function canvasClicked(event) {
   if (state.mode.type === 'build') {
     const result = startConstruction(state, state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
     state.mode = { type: 'select' };
-    handleResult(result);
+    handleResult(result, 'build');
     render();
     return;
   }
@@ -343,31 +356,33 @@ function canvasClicked(event) {
   const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
 
   if (selectedUnit && visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
-    handleResult(attackUnit(state, selectedUnit.id, visibleUnit.id));
+    handleResult(attackUnit(state, selectedUnit.id, visibleUnit.id), 'attack');
     render();
     return;
   }
 
   if (selectedUnit && visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
-    handleResult(attackBuilding(state, selectedUnit.id, visibleBuilding.id));
+    handleResult(attackBuilding(state, selectedUnit.id, visibleBuilding.id), 'attack');
     render();
     return;
   }
 
   if (visibleUnit && visibleUnit.faction === 'olundar') {
     selectUnit(visibleUnit.id);
+    playAudioCue('select');
     render();
     return;
   }
 
   if (visibleBuilding && visibleBuilding.faction === 'olundar') {
     selectBuilding(visibleBuilding.id);
+    playAudioCue('select');
     render();
     return;
   }
 
   if (selectedUnit && selectedUnit.faction === 'olundar') {
-    handleResult(moveUnit(state, selectedUnit.id, tile.x, tile.y));
+    handleResult(moveUnit(state, selectedUnit.id, tile.x, tile.y), 'move');
     render();
     return;
   }
@@ -389,16 +404,22 @@ function selectBuilding(id) {
   state.mode = { type: 'select' };
 }
 
-function runAction(action) {
+function runAction(action, successCue = 'ui') {
   const result = action();
-  handleResult(result);
+  handleResult(result, successCue);
   render();
 }
 
-function handleResult(result) {
-  if (!result) return;
-  if (!result.ok && result.reason) toast(result.reason, 'bad');
-  else if (result.reason) toast(result.reason);
+function handleResult(result, successCue = null) {
+  if (!result) return false;
+  if (!result.ok) {
+    if (result.reason) toast(result.reason, 'bad');
+    playAudioCue('error');
+    return false;
+  }
+  if (result.reason) toast(result.reason);
+  if (successCue) playAudioCue(successCue);
+  return true;
 }
 
 function requestEndTurn(force = false) {
@@ -406,6 +427,7 @@ function requestEndTurn(force = false) {
   const warnings = getEndTurnWarnings(state);
   if (!force && warnings.length) {
     toast(`${warnings[0]} Press End Turn again to confirm.`, 'bad');
+    playAudioCue('warning');
     state.pendingEndTurn = state.turn;
     render();
     return;
@@ -414,6 +436,7 @@ function requestEndTurn(force = false) {
   state.mode = { type: 'select' };
   endTurn(state);
   toast('Turn resolved. The world moves.');
+  playAudioCue('turn');
   render();
 }
 
@@ -421,11 +444,13 @@ function selectNextReadyUnit() {
   const [unit] = getReadyOlundarUnits(state);
   if (!unit) {
     toast('No ready Olundaran units remain.');
+    playAudioCue('warning');
     return;
   }
   selectUnit(unit.id);
   lastTile = { x: unit.x, y: unit.y };
   toast(`${unit.name} is ready.`);
+  playAudioCue('select');
   render();
 }
 
@@ -446,6 +471,7 @@ function saveGame(name = null, slotId = activeSaveSlotId) {
   writeSaveSlots(upsertSaveSlot(currentSlots, slot));
   localStorage.setItem(SAVE_KEY, serialized);
   toast(`Saved ${slot.name}.`);
+  playAudioCue('save');
   return slot;
 }
 
@@ -455,9 +481,11 @@ function loadSerializedGame(raw, slot = null) {
     activeSaveSlotId = slot?.id || null;
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
+    playAudioCue('load');
     render();
   } catch (error) {
     toast(error.message || 'Save failed to load.', 'bad');
+    playAudioCue('error');
   }
 }
 
@@ -483,6 +511,7 @@ function newCampaign() {
 function openCampaignSetup() {
   renderCampaignSetup();
   setupOverlay.hidden = false;
+  playAudioCue('ui');
 }
 
 function closeCampaignSetup() {
@@ -492,6 +521,7 @@ function closeCampaignSetup() {
 function openSaveManager(mode = 'save') {
   renderSaveManager(mode);
   saveOverlay.hidden = false;
+  playAudioCue('ui');
 }
 
 function closeSaveManager() {
@@ -621,6 +651,7 @@ function startConfiguredCampaign(form) {
   lastTile = { x: 7, y: 16 };
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
+  playAudioCue('fanfare');
   render();
 }
 
@@ -634,6 +665,7 @@ function exportSave() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  playAudioCue('save');
 }
 
 function hasBuilding(type) {
@@ -730,6 +762,12 @@ document.querySelector('#endTurnTop').addEventListener('click', () => {
   requestEndTurn(state.pendingEndTurn === state.turn);
 });
 document.querySelector('#nextUnitTop').addEventListener('click', () => selectNextReadyUnit());
+audioTop.addEventListener('click', () => {
+  const isEnabled = toggleAudio();
+  renderAudioButton();
+  toast(isEnabled ? 'Audio enabled.' : 'Audio muted.');
+  if (isEnabled) playAudioCue('fanfare');
+});
 document.querySelector('#newTop').addEventListener('click', () => newCampaign());
 document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));

@@ -20,8 +20,9 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Deadwalker civilization: Bone Portal, Bone Pits, Grave Forges, Necropolises, Bone Thralls, Corpse Archers, Grave Knights, and Vorgath the Hollow Crown.
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Named local campaign save slots, legacy quick-save loading, and exportable JSON save files.
+- Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -48,6 +49,7 @@ No package install is required because this prototype has no third-party runtime
 - Click **Save** or **Load** to manage named campaign slots.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
+- Click **Audio Off/On** to opt into lightweight audio feedback.
 
 ## Main objective
 
@@ -65,6 +67,7 @@ olundar_game/
     sprites/olundar-sprite-sheet.svg
   src/
     content.js       # units, buildings, terrain, factions, costs, objectives
+    audio.js         # opt-in procedural cues and ambient audio
     map.js           # deterministic world generation and topology helpers
     rules.js         # game state, fog, movement, combat, economy, AI, diplomacy
     render.js        # canvas terrain, sprites, fog, minimap, UI descriptions
@@ -84,6 +87,7 @@ olundar_game/
 - Campaign essentials exist.
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
 - Named save slots sanitize names, preserve campaign metadata, sort by save time, update existing slots, and ignore corrupt storage.
+- Procedural audio cues stay browser-safe, distinct, and lightweight.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -97,5 +101,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add sound effects and light music using compressed mobile-friendly assets.
-2. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
+1. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
+2. Add a richer settings panel for audio volume, motion preference, and map scale once the PWA shell exists.

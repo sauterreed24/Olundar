@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import {
   addBuilding,
@@ -195,6 +196,13 @@ check('named save slots preserve campaign metadata', () => {
   assert(parsed.length === 2 && parsed[0].id === 'slot-a', 'Serialized save slots should roundtrip in sorted order.');
   assert(removeSaveSlot(parsed, 'slot-a').length === 1, 'Slot removal should drop the requested slot.');
   assert(parseSaveSlots('{broken').length === 0, 'Corrupt save slot storage should fail closed.');
+});
+
+check('audio cue registry stays lightweight and browser-safe', () => {
+  const summary = validateAudioCueRegistry(AUDIO_CUES);
+  assert(summary.count >= 10, 'Audio registry should cover core game feedback states.');
+  assert(summary.ids.includes('attack') && summary.ids.includes('turn') && summary.ids.includes('fanfare'), 'Audio registry is missing important gameplay cues.');
+  assert(summary.totalDuration < 3, 'Total procedural cue budget should stay lightweight.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {
