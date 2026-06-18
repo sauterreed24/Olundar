@@ -338,6 +338,86 @@ export function getWarCouncil(state) {
   };
 }
 
+export function getFirstTurnsGuide(state) {
+  normalizeCampaignState(state);
+  const mapped = Math.round(revealedPercent(state));
+  const discoveredLiving = Object.values(state.factions).filter((faction) => !faction.player && faction.id !== 'dead' && faction.discovered).length;
+  const trainingStarted = state.buildings.some((building) => building.faction === 'olundar' && building.queue?.length)
+    || state.messages.some((message) => message.text.includes('training begun') || message.text.includes('musters at'));
+  const constructionStarted = state.messages.some((message) => message.text.includes('construction started') || message.text.includes('completed'));
+  const mineStarted = state.buildings.some((building) => building.faction === 'olundar' && building.type === 'mine');
+  const knownDead = knownDeadwalkerThreat(state);
+  const steps = [
+    {
+      id: 'scout',
+      label: 'Move a scout beyond the capital',
+      done: mapped >= 10 || state.flags.firstAllySeen,
+      detail: `${mapped}% mapped. Roads, forests, and hills reveal the safest expansion lanes.`
+    },
+    {
+      id: 'engineer',
+      label: 'Spend the engineer action',
+      done: constructionStarted,
+      detail: 'Start a road, mine, tower, or economy site so the first turn creates momentum.'
+    },
+    {
+      id: 'training',
+      label: 'Queue one fresh unit',
+      done: trainingStarted,
+      detail: 'Use the City Center or Barracks before Deadwalker pressure starts to compound.'
+    },
+    {
+      id: 'iron',
+      label: 'Claim iron for the legions',
+      done: mineStarted,
+      detail: 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
+    },
+    {
+      id: 'contact',
+      label: 'Find a living civilization',
+      done: discoveredLiving > 0,
+      detail: `${discoveredLiving}/3 contacted. First contact opens trade, aid, and survival pacts.`
+    },
+    {
+      id: 'front',
+      label: 'Mark the Deadwalker front',
+      done: Boolean(knownDead),
+      detail: knownDead ? `${knownDead.label} pressure is now visible.` : 'Push east with towers or scouts before the portal war reaches Olundar.'
+    }
+  ];
+  const completed = steps.filter((step) => step.done).length;
+  const current = steps.find((step) => !step.done) || steps[steps.length - 1];
+  const early = state.turn <= 6;
+  return {
+    title: early ? 'First Six Turns' : 'War Rhythm',
+    phase: guidePhase(state, completed, steps.length),
+    summary: guideSummary(state, current),
+    currentId: current.id,
+    completed,
+    total: steps.length,
+    visible: state.status === 'playing' && (early || completed < steps.length),
+    steps
+  };
+}
+
+function guidePhase(state, completed, total) {
+  if (completed === total) return 'Opening plan complete';
+  if (state.turn <= 2) return 'Scout, build, queue';
+  if (state.turn <= 4) return 'Economy into defense';
+  if (state.turn <= 6) return 'Contact and warning line';
+  return 'Unfinished opening priorities';
+}
+
+function guideSummary(state, current) {
+  if (state.campaign?.difficultyId === 'hollowCrown') {
+    return `Hollow Crown pressure starts immediately. Next best order: ${current.label}.`;
+  }
+  if (state.campaign?.difficultyId === 'chronicle') {
+    return `Chronicle gives room to learn the map. Next best order: ${current.label}.`;
+  }
+  return `Keep every early action tied to survival. Next best order: ${current.label}.`;
+}
+
 function councilHeadline(state, knownDead) {
   if (state.status === 'won') return 'Victory Council';
   if (state.status === 'lost') return 'After-Action Council';

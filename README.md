@@ -9,6 +9,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
 - Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources and Deadwalker pressure.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
+- A compact First Six Turns guide that teaches the opening scout, engineer, training, iron, diplomacy, and Deadwalker-front priorities from live campaign state.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
@@ -19,7 +20,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Local save/load and exportable JSON save files.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -80,6 +81,7 @@ olundar_game/
 - Content table consistency.
 - Campaign essentials exist.
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
+- The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - War Council and objective progress reflect early strategic pressure.
 - Strategic path from Olundar toward the portal front exists.
 - Training deducts resources and musters a unit.
@@ -92,7 +94,6 @@ olundar_game/
 ## Suggested next production steps
 
 1. Convert the local save into named campaign slots.
-2. Add a tutorial overlay for the first 6 turns.
-3. Add siege-facing objectives: cleanse a necropolis, save an ally, build an onager, kill Vorgath.
-4. Add sound effects and light music using compressed mobile-friendly assets.
-5. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
+2. Add siege-facing objectives: cleanse a necropolis, save an ally, build an onager, kill Vorgath.
+3. Add sound effects and light music using compressed mobile-friendly assets.
+4. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.

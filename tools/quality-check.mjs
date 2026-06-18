@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import {
+  addBuilding,
   attackBuilding,
   attackUnit,
   canAfford,
@@ -11,6 +12,7 @@ import {
   endTurn,
   findPath,
   getEndTurnWarnings,
+  getFirstTurnsGuide,
   getObjectiveProgress,
   getReadyOlundarUnits,
   getWarCouncil,
@@ -105,6 +107,33 @@ check('war council and objectives reflect early strategic pressure', () => {
   assert(progress[1].done === false, 'War economy objective should not be complete at campaign start.');
   assert(ready.length >= 4, 'Starting army should expose ready units.');
   assert(warnings.some((warning) => warning.includes('still ready')), 'End-turn warnings should catch idle units.');
+});
+
+check('first-turn guide gives actionable live onboarding', () => {
+  const state = createGame('quality-guide');
+  const firstGuide = getFirstTurnsGuide(state);
+  assert(firstGuide.visible, 'First-turn guide should be visible at campaign start.');
+  assert(firstGuide.total === 6, 'Guide should teach the six opening priorities.');
+  assert(firstGuide.steps.some((step) => step.id === firstGuide.currentId && !step.done), 'Guide should identify a current unfinished priority.');
+  assert(firstGuide.steps.some((step) => step.id === 'engineer' && !step.done), 'Engineer step should not start complete.');
+
+  const engineer = state.units.find((u) => u.faction === 'olundar' && u.type === 'engineer');
+  const road = startConstruction(state, engineer.id, 'road', engineer.x, engineer.y);
+  assert(road.ok, road.reason || 'Guide setup road construction failed.');
+  const city = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const training = startTraining(state, city.id, 'scout');
+  assert(training.ok, training.reason || 'Guide setup training failed.');
+  addBuilding(state, 'mine', 'olundar', 9, 18, { complete: true });
+  state.flags.firstAllySeen = true;
+  state.flags.firstDeadwalkerSeen = true;
+  state.factions.dawn.discovered = true;
+
+  const laterGuide = getFirstTurnsGuide(state);
+  assert(laterGuide.steps.find((step) => step.id === 'engineer').done, 'Guide should recognize construction progress.');
+  assert(laterGuide.steps.find((step) => step.id === 'training').done, 'Guide should recognize queued training.');
+  assert(laterGuide.steps.find((step) => step.id === 'iron').done, 'Guide should recognize iron progress.');
+  assert(laterGuide.steps.find((step) => step.id === 'contact').done, 'Guide should recognize first contact.');
+  assert(laterGuide.steps.find((step) => step.id === 'front').done, 'Guide should recognize Deadwalker sighting.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {

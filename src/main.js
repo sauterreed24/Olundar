@@ -10,6 +10,7 @@ import {
   formatCost,
   fortifyUnit,
   getEndTurnWarnings,
+  getFirstTurnsGuide,
   getObjectiveProgress,
   getReadyOlundarUnits,
   getWarCouncil,
@@ -35,6 +36,7 @@ const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
 const objectiveList = document.querySelector('#objectiveList');
 const councilPanel = document.querySelector('#councilPanel');
+const guidePanel = document.querySelector('#guidePanel');
 const selectionPanel = document.querySelector('#selectionPanel');
 const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
@@ -67,6 +69,7 @@ function render() {
   drawGame(canvas, state, hoverTile);
   renderTopBar();
   renderCouncil();
+  renderGuide();
   renderObjectives();
   renderSelection();
   renderActions();
@@ -97,6 +100,34 @@ function renderCouncil() {
     <div class="priority-list">
       ${council.priorities.map((item) => `<p class="priority ${escapeHtml(item.tone)}">${escapeHtml(item.text)}</p>`).join('')}
     </div>
+  `;
+}
+
+function renderGuide() {
+  const guide = getFirstTurnsGuide(state);
+  guidePanel.hidden = !guide.visible;
+  if (!guide.visible) {
+    guidePanel.innerHTML = '';
+    return;
+  }
+  guidePanel.innerHTML = `
+    <div class="guide-head">
+      <div>
+        <h2>${escapeHtml(guide.title)}</h2>
+        <p>${escapeHtml(guide.phase)}</p>
+      </div>
+      <span>${guide.completed}/${guide.total}</span>
+    </div>
+    <p class="guide-summary">${escapeHtml(guide.summary)}</p>
+    <ol class="guide-steps">
+      ${guide.steps.map((step) => `
+        <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current' : ''}">
+          <span class="step-status">${step.done ? 'Done' : step.id === guide.currentId ? 'Next' : 'Open'}</span>
+          <strong>${escapeHtml(step.label)}</strong>
+          <small>${escapeHtml(step.detail)}</small>
+        </li>
+      `).join('')}
+    </ol>
   `;
 }
 
