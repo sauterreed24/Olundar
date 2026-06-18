@@ -151,6 +151,8 @@ Diplomacy is intentionally simple but consequential:
 
 The Diplomacy Ledger keeps current posture, pacts, trade, aid, pressure, field orders, and rivalry history visible so long campaigns do not hide important political consequences in the message log.
 
+Diplomatic Memory adds continuity beyond the recent log. Trade, pact offers, answered aid, pressure, rivalry, and fulfilled field orders become visible promises or grievances. This lets the player understand why advice changes and why a faction feels reliable, resentful, or politically fragile.
+
 War aims show what each discovered civilization is already trying to do without Olundar's orders. They make allies, opportunists, and suspicious scouts legible before the player has enough trust for a Survival Pact.
 
 Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures.

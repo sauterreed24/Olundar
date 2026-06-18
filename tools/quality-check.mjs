@@ -413,6 +413,53 @@ check('diplomacy ledger tracks contacts, accords, and grievances', () => {
   assert(veyr.recent[0].outcome.includes('Pressure'), 'Ledger should record pressure outcomes.');
 });
 
+check('diplomatic memory tracks promises, grievances, and fulfilled commitments', () => {
+  const state = createGame('quality-diplomatic-memory');
+  state.factions.dawn.discovered = true;
+  state.flags.firstAllySeen = true;
+  state.factions.olundar.resources.influence = 10;
+  state.factions.olundar.resources.gold = 100;
+  state.factions.olundar.resources.morale = 8;
+
+  const trade = performDiplomacy(state, 'dawn', 'trade');
+  assert(trade.ok, trade.reason || 'Trade setup failed.');
+  let dawn = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'dawn');
+  assert(dawn.memory.promises === 1, 'Trade should create a positive diplomatic memory.');
+  assert(dawn.memory.records[0].label === 'Trade Compact', 'Memory should retain the trade record.');
+  assert(dawn.tags.includes('Promises 1'), 'Ledger tags should expose promise memory.');
+  assert(getDiplomacyLedger(state).stats.find((stat) => stat.label === 'Promises').value >= 1, 'Ledger stats should total promises.');
+
+  const pressure = performDiplomacy(state, 'dawn', 'pressure');
+  assert(pressure.ok, pressure.reason || 'Pressure setup failed.');
+  dawn = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'dawn');
+  assert(dawn.memory.grievances >= 3, 'Pressure should create a grievance memory.');
+  assert(dawn.memory.records[0].type === 'grievance', 'Newest memory should describe the grievance.');
+  assert(dawn.tags.some((tag) => tag.startsWith('Grievances')), 'Ledger tags should expose grievance memory.');
+  assert(getDiplomacyLedger(state).stats.find((stat) => stat.label === 'Grievances').value >= 3, 'Ledger stats should total grievances.');
+
+  const legacy = createGame('quality-diplomatic-memory-legacy');
+  delete legacy.diplomacyMemory;
+  const normalized = getDiplomacyLedger(legacy);
+  assert(normalized.entries.every((entry) => entry.memory.promises === 0 && entry.memory.grievances === 0), 'Legacy saves should normalize empty diplomatic memory.');
+
+  const pact = createGame('quality-diplomatic-memory-fulfill');
+  pact.factions.dawn.discovered = true;
+  pact.flags.firstAllySeen = true;
+  pact.factions.olundar.resources.influence = 10;
+  pact.factions.olundar.relations.dawn = 40;
+  pact.factions.dawn.relations.olundar = 40;
+  const signed = performDiplomacy(pact, 'dawn', 'pact');
+  assert(signed.ok, signed.reason || 'Pact setup failed.');
+  const order = setFieldOrder(pact, 'dawn', 'reinforceCapital');
+  assert(order.ok, order.reason || 'Field order setup failed.');
+  pact.turn = 3;
+  endTurn(pact);
+  const pactDawn = getDiplomacyLedger(pact).entries.find((entry) => entry.id === 'dawn');
+  assert(pactDawn.memory.promises >= 5, 'Pact plus fulfilled reinforcement should build meaningful promise memory.');
+  assert(pactDawn.memory.records.some((record) => record.label === 'Capital Reinforced' && record.type === 'fulfilled'), 'Fulfilled field orders should be recorded.');
+  assert(pactDawn.advice.includes('Kept commitments'), 'Ledger advice should respond to strong positive memory.');
+});
+
 check('pact field orders steer allied AI', () => {
   const reinforce = createGame('quality-field-order-reinforce');
   reinforce.factions.dawn.discovered = true;

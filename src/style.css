@@ -1186,6 +1186,111 @@ button:disabled {
   font-size: 0.83rem;
 }
 
+.diplo-memory {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(136, 216, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(136, 216, 255, 0.045);
+}
+
+.diplo-memory.good {
+  border-color: rgba(186, 245, 140, 0.2);
+  background: rgba(186, 245, 140, 0.05);
+}
+
+.diplo-memory.danger {
+  border-color: rgba(255, 138, 138, 0.24);
+  background: rgba(255, 138, 138, 0.06);
+}
+
+.memory-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.memory-head strong {
+  color: #88d8ff;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.diplo-memory.good .memory-head strong {
+  color: var(--good);
+}
+
+.diplo-memory.danger .memory-head strong {
+  color: var(--bad);
+}
+
+.memory-head span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.memory-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.memory-stats span {
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.16);
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.memory-stats b {
+  display: block;
+  color: var(--text);
+  font-size: 0.96rem;
+  text-transform: none;
+}
+
+.diplo-memory p {
+  margin: 0 !important;
+  color: #ddd0ae;
+  font-size: 0.82rem;
+  line-height: 1.32;
+}
+
+.memory-records {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.memory-records p {
+  padding: 0.42rem 0.48rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.16);
+}
+
+.memory-records b {
+  color: #f9e6a8;
+}
+
+.memory-records p.fulfilled b,
+.memory-records p.promise b {
+  color: var(--good);
+}
+
+.memory-records p.grievance b {
+  color: var(--bad);
+}
+
 .field-orders {
   display: grid;
   gap: 0.42rem;

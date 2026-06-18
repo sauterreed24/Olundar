@@ -413,6 +413,24 @@ function renderDiplomacy() {
           <p>${escapeHtml(entry.warAim.name)} - ${escapeHtml(entry.warAim.text)}</p>
         </div>
       ` : ''}
+      ${entry.discovered && (entry.memory.promises || entry.memory.grievances || entry.memory.records.length) ? `
+        <div class="diplo-memory ${escapeHtml(entry.memory.tone)}">
+          <div class="memory-head">
+            <strong>Diplomatic Memory</strong>
+            <span>Balance ${entry.memory.balance >= 0 ? '+' : ''}${entry.memory.balance}</span>
+          </div>
+          <div class="memory-stats">
+            <span><b>${entry.memory.promises}</b>Promises</span>
+            <span><b>${entry.memory.grievances}</b>Grievances</span>
+          </div>
+          <p>${escapeHtml(entry.memory.summary)}</p>
+          ${entry.memory.records.length ? `
+            <div class="memory-records">
+              ${entry.memory.records.map((record) => `<p class="${escapeHtml(record.type)}"><b>T${record.turn} ${escapeHtml(record.label)}:</b> ${escapeHtml(record.detail)}</p>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
       ${entry.recent.length ? `
         <div class="diplo-recent">
           ${entry.recent.map((record) => `<p><b>T${record.turn} ${escapeHtml(record.outcome)}:</b> ${escapeHtml(record.detail)}</p>`).join('')}

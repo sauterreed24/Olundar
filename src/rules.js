@@ -19,6 +19,7 @@ import {
 import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
 
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
+const DIPLOMACY_MEMORY_MAX = 12;
 
 const CRISIS_OUTCOME_PREVIEWS = {
   refugeeCaravan: {
@@ -78,6 +79,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       warAimNotices: {}
     },
     diplomacyLog: [],
+    diplomacyMemory: createDiplomacyMemoryState(),
     crises: {
       resolved: {},
       history: []
@@ -106,6 +108,7 @@ function normalizeCampaignConfig(seedOrConfig, options = {}) {
 
 function normalizeCampaignState(state) {
   if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
+  normalizeDiplomacyMemory(state);
   if (!state.flags) state.flags = {};
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
   if (!state.crises) state.crises = { resolved: {}, history: [] };
@@ -124,6 +127,23 @@ function normalizeCampaignState(state) {
     difficultyName: fallback.difficulty.name,
     difficultyText: fallback.difficulty.text
   };
+}
+
+function createDiplomacyMemoryState() {
+  return Object.fromEntries(LIVING_DIPLOMACY_FACTIONS.map((id) => [id, { promises: 0, grievances: 0, records: [], fulfilledOrders: {} }]));
+}
+
+function normalizeDiplomacyMemory(state) {
+  if (!state.diplomacyMemory || typeof state.diplomacyMemory !== 'object') state.diplomacyMemory = {};
+  for (const id of LIVING_DIPLOMACY_FACTIONS) {
+    const memory = state.diplomacyMemory[id] || {};
+    state.diplomacyMemory[id] = {
+      promises: Math.max(0, Math.min(DIPLOMACY_MEMORY_MAX, Number(memory.promises) || 0)),
+      grievances: Math.max(0, Math.min(DIPLOMACY_MEMORY_MAX, Number(memory.grievances) || 0)),
+      records: Array.isArray(memory.records) ? memory.records.slice(0, 8) : [],
+      fulfilledOrders: memory.fulfilledOrders && typeof memory.fulfilledOrders === 'object' ? memory.fulfilledOrders : {}
+    };
+  }
 }
 
 function applyCampaignSetup(state, campaign) {
@@ -392,6 +412,8 @@ export function getDiplomacyLedger(state) {
   const pacts = entries.filter((entry) => entry.pact).length;
   const trades = entries.filter((entry) => entry.trade).length;
   const rivals = entries.filter((entry) => entry.atWar).length;
+  const promises = entries.reduce((total, entry) => total + entry.memory.promises, 0);
+  const grievances = entries.reduce((total, entry) => total + entry.memory.grievances, 0);
   return {
     title: 'Diplomacy Ledger',
     summary: diplomacyLedgerSummary(state, entries),
@@ -399,7 +421,9 @@ export function getDiplomacyLedger(state) {
       { label: 'Contacts', value: `${contacted}/3` },
       { label: 'Pacts', value: `${pacts}/3` },
       { label: 'Trade', value: trades },
-      { label: 'Rivals', value: rivals }
+      { label: 'Rivals', value: rivals },
+      { label: 'Promises', value: promises },
+      { label: 'Grievances', value: grievances }
     ],
     entries,
     recent: (state.diplomacyLog || []).slice(0, 5)
@@ -416,6 +440,7 @@ function diplomacyLedgerEntry(state, actor, id) {
   const fieldOrderId = pact ? actor.fieldOrders?.[id] || 'defendRoads' : null;
   const fieldOrder = fieldOrderId ? FIELD_ORDERS[fieldOrderId] : null;
   const warAim = discovered ? factionWarAim(state, id) : null;
+  const memory = diplomacyMemoryView(state, id);
   const posture = discovered ? diplomacyPosture(relation, atWar, pact) : { label: 'Uncontacted', tone: 'info' };
   const recent = (state.diplomacyLog || []).filter((record) => record.factionId === id).slice(0, 2);
   return {
@@ -432,8 +457,9 @@ function diplomacyLedgerEntry(state, actor, id) {
     atWar,
     fieldOrder,
     warAim,
-    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder, warAim),
-    advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim),
+    memory,
+    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder, warAim, memory),
+    advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim, memory),
     recent,
     actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar)),
     fieldOrders: Object.values(FIELD_ORDERS).map((order) => ({
@@ -478,21 +504,47 @@ function factionWarAim(state, factionId) {
   return null;
 }
 
-function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = null, warAim = null) {
+function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = null, warAim = null, memory = null) {
   if (!discovered) return ['Uncontacted'];
   const tags = [`Relation ${relation}`];
   if (pact) tags.push('Survival Pact');
   if (trade) tags.push('Trade');
   if (fieldOrder) tags.push(fieldOrder.name);
+  if (memory?.promises) tags.push(`Promises ${memory.promises}`);
+  if (memory?.grievances) tags.push(`Grievances ${memory.grievances}`);
   if (warAim && !pact) tags.push(`Aim: ${warAim.name}`);
   if (atWar) tags.push('At war');
   if (!pact && !trade && !atWar) tags.push('No accord');
   return tags;
 }
 
-function diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim = null) {
+function diplomacyMemoryView(state, factionId) {
+  const memory = ensureDiplomacyMemory(state, factionId);
+  const balance = memory.promises - memory.grievances;
+  return {
+    promises: memory.promises,
+    grievances: memory.grievances,
+    balance,
+    tone: memory.grievances > memory.promises ? 'danger' : memory.promises ? 'good' : 'info',
+    summary: diplomacyMemorySummary(memory),
+    records: memory.records.slice(0, 3)
+  };
+}
+
+function diplomacyMemorySummary(memory) {
+  if (memory.promises > memory.grievances + 2) return 'Oaths and fulfilled commitments are outweighing old grievances.';
+  if (memory.grievances > memory.promises + 1) return 'Unsettled grievances are now shaping every negotiation.';
+  if (memory.promises && !memory.grievances) return 'Early promises are on the record, but this front still needs proof under pressure.';
+  if (memory.grievances && !memory.promises) return 'Grievances are on the record, and no kept promise is balancing them yet.';
+  if (memory.promises || memory.grievances) return 'Trust and resentment are both present; future rulings can tip this front.';
+  return 'No major promises or grievances have been recorded yet.';
+}
+
+function diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim = null, memory = null) {
   if (!discovered) return `${state.factions[id].name} is still beyond current sight. Scout roads, towers, and frontier ruins to open talks.`;
   if (atWar) return 'This front is politically hostile. Defend first; aid, trade, and pacts are unavailable while rivalry is open.';
+  if ((memory?.grievances || 0) >= 5) return 'Grievances are stacking. Avoid pressure and spend influence on repair before another crisis turns them hostile.';
+  if ((memory?.promises || 0) >= (memory?.grievances || 0) + 3 && pact) return 'Kept commitments are giving this pact depth. Field orders and aid are more politically credible here.';
   if (!pact && relation >= 17) return 'Offer a Survival Pact now; the relation threshold is within reach and shared vision matters.';
   if (!trade && canAfford(state.factions.olundar.resources, DIPLOMACY_ACTIONS.trade.cost)) return 'Open trade to fund the war economy and keep relations warming.';
   if (!pact && warAim?.id === 'veyrRaid') return 'Veyr is already raiding for leverage. Trade can turn that ambition into useful supply lines.';
@@ -1599,15 +1651,18 @@ export function performDiplomacy(state, targetFaction, actionId) {
       target.pacts.olundar = true;
       addMessage(state, `${target.name} accepts a Survival Pact. Their scouts now share vision and may send aid.`, 'good');
       recordDiplomacy(state, targetFaction, actionId, 'Survival Pact signed', 'Shared vision and emergency aid are now available.', 'good');
+      recordDiplomaticMemory(state, targetFaction, 'promise', 'Survival Pact Oath', 'Olundar and this civilization publicly promised shared sight and emergency aid.', 2);
     } else {
       addMessage(state, `${target.name} respects the offer but wants more trust before a pact.`, 'info');
       recordDiplomacy(state, targetFaction, actionId, 'Pact deferred', 'Trust improved, but the pact threshold was not reached.', 'info');
+      recordDiplomaticMemory(state, targetFaction, 'promise', 'Pact Overture', 'Olundar offered a survival oath, even though trust was not high enough yet.', 1);
     }
   } else if (actionId === 'trade') {
     actor.trades[targetFaction] = true;
     target.trades.olundar = true;
     addMessage(state, `Trade opened with ${target.name}. Gold income improves.`, 'good');
     recordDiplomacy(state, targetFaction, actionId, 'Trade opened', 'Gold and food income improve while trust rises.', 'good');
+    recordDiplomaticMemory(state, targetFaction, 'promise', 'Trade Compact', 'Merchants now have a standing compact that makes future cooperation easier to defend.', 1);
   } else if (actionId === 'aid') {
     let aidOutcome = 'Aid refused';
     let aidDetail = 'The request cost influence and trust because relations were too uncertain.';
@@ -1626,8 +1681,10 @@ export function performDiplomacy(state, targetFaction, actionId) {
       aidOutcome = 'Aid answered';
       aidDetail = 'The request succeeded, but relations cooled after the favor.';
       aidTone = 'good';
+      recordDiplomaticMemory(state, targetFaction, 'fulfilled', 'Aid Answered', `${target.name} spent real stores or troops when Olundar asked for help.`, 2);
     } else {
       addMessage(state, `${target.name} refuses aid; relations are too uncertain.`, 'danger');
+      recordDiplomaticMemory(state, targetFaction, 'grievance', 'Aid Request Strained Talks', 'Olundar asked for war aid before there was enough trust to make the demand bearable.', 1);
     }
     actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) - 4);
     target.relations.olundar = actor.relations[targetFaction];
@@ -1640,8 +1697,10 @@ export function performDiplomacy(state, targetFaction, actionId) {
       target.atWar.olundar = true;
       addMessage(state, `${target.name} declares Olundar a rival even as the dead advance.`, 'danger');
       recordDiplomacy(state, targetFaction, actionId, 'Pressure caused rivalry', 'Supplies were taken, but open rivalry now blocks diplomacy.', 'danger');
+      recordDiplomaticMemory(state, targetFaction, 'grievance', 'Pressure Broke Trust', 'Olundar extracted supplies so harshly that this front became a rivalry.', 5);
     } else {
       recordDiplomacy(state, targetFaction, actionId, 'Pressure extracted supplies', 'Olundar gained food and gold at a serious trust cost.', 'danger');
+      recordDiplomaticMemory(state, targetFaction, 'grievance', 'Supplies Pressured', 'Olundar took food and gold under duress; future requests will carry this resentment.', 3);
     }
   }
   updateVisibility(state);
@@ -1660,6 +1719,7 @@ export function setFieldOrder(state, targetFaction, orderId) {
   actor.fieldOrders[targetFaction] = orderId;
   addMessage(state, `${target.name} will ${order.name.toLowerCase()} under the Survival Pact.`, 'good');
   recordDiplomacy(state, targetFaction, orderId, `Field order: ${order.name}`, order.text, 'good');
+  recordDiplomaticMemory(state, targetFaction, 'promise', `Pledged: ${order.name}`, `The pact now has a battlefield commitment: ${order.text}`, 1);
   return { ok: true, reason: `${target.name}: ${order.name}.` };
 }
 
@@ -1677,6 +1737,38 @@ function recordDiplomacy(state, factionId, actionId, outcome, detail, tone = 'in
     tone
   });
   state.diplomacyLog = state.diplomacyLog.slice(0, 40);
+}
+
+function ensureDiplomacyMemory(state, factionId) {
+  normalizeDiplomacyMemory(state);
+  return state.diplomacyMemory[factionId];
+}
+
+function recordDiplomaticMemory(state, factionId, type, label, detail, amount = 1) {
+  if (!LIVING_DIPLOMACY_FACTIONS.includes(factionId)) return null;
+  const memory = ensureDiplomacyMemory(state, factionId);
+  const delta = Math.max(0, amount);
+  if (type === 'grievance') {
+    memory.grievances = Math.min(DIPLOMACY_MEMORY_MAX, memory.grievances + delta);
+  } else if (type === 'promise' || type === 'fulfilled') {
+    memory.promises = Math.min(DIPLOMACY_MEMORY_MAX, memory.promises + delta);
+  }
+  memory.records.unshift({
+    turn: state.turn,
+    type,
+    label,
+    detail,
+    amount: delta
+  });
+  memory.records = memory.records.slice(0, 8);
+  return memory;
+}
+
+function recordFieldOrderFulfillment(state, factionId, orderId, label, detail, amount = 1) {
+  const memory = ensureDiplomacyMemory(state, factionId);
+  if (memory.fulfilledOrders[orderId]) return;
+  memory.fulfilledOrders[orderId] = state.turn;
+  recordDiplomaticMemory(state, factionId, 'fulfilled', label, detail, amount);
 }
 
 export function endTurn(state) {
@@ -1916,7 +2008,10 @@ function runLivingAiTurn(state, factionId) {
       const spawn = findSpawnNear(state, city.x, city.y, factionId);
       if (spawn) {
         addUnit(state, roster[state.turn % roster.length], factionId, spawn.x, spawn.y);
-        if (reinforceCity) addMessage(state, `${faction.name} reinforces Olundar Prime under pact orders.`, 'good');
+        if (reinforceCity) {
+          addMessage(state, `${faction.name} reinforces Olundar Prime under pact orders.`, 'good');
+          recordFieldOrderFulfillment(state, factionId, 'reinforceCapital', 'Capital Reinforced', `${faction.name} sent troops to Olundar Prime under pact orders.`, 2);
+        }
       }
     }
   }
@@ -1928,6 +2023,11 @@ function runLivingAiTurn(state, factionId) {
     const orderTarget = fieldOrderTarget(state, unit, fieldOrder);
     if (orderTarget) {
       aiMoveToward(state, unit, orderTarget.x, orderTarget.y);
+      if (fieldOrder === 'harassDeadworks') {
+        recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
+      } else if (fieldOrder === 'defendRoads') {
+        recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
+      }
       aiTryAttack(state, unit);
       continue;
     }
