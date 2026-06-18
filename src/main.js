@@ -245,7 +245,7 @@ function renderCrisisCouncil() {
       card.className = `crisis-card ${event.tone}`;
       card.innerHTML = `
         <div class="crisis-title">
-          <span>${escapeHtml(event.tone === 'danger' ? 'Urgent' : event.tone === 'good' ? 'Council' : 'Open')}</span>
+          <span>${escapeHtml(event.label || (event.tone === 'danger' ? 'Urgent' : event.tone === 'good' ? 'Council' : 'Open'))}</span>
           <h3>${escapeHtml(event.name)}</h3>
         </div>
         <p>${escapeHtml(event.text)}</p>

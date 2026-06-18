@@ -178,6 +178,8 @@ The prototype keeps population abstract. Food surplus can grow population; short
 
 The Crisis Council turns that abstraction into memorable midgame decisions. Refugee caravans, thin granaries, night raid warnings, and emergency councils ask the player to spend scarce resources for population, morale, troops, fortifications, or diplomatic trust.
 
+Chained crisis aftermaths make those decisions persist beyond the first click. A refugee levy can later create petitions, a famine ruling can become market unrest, a raid warning can leave roads to repair or raiders to hunt, and an emergency council can demand proof of public accords. These follow-ups reuse the council surface so the player gets long-term consequence without another management panel.
+
 Future versions can deepen these policies with festivals, emergency labor, oath debts, faction-specific refugee politics, and delayed consequences from harsh rulings.
 
 ## UI design goals

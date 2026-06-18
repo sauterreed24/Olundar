@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_EVENTS, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -143,6 +143,25 @@ check('content tables are internally consistent', () => {
     }
   }
   for (const id of ['refugeeCaravan', 'famineStores', 'cityRaid', 'emergencyCouncil']) assert(CRISIS_EVENTS[id], `Missing required crisis event ${id}.`);
+  for (const [id, event] of Object.entries(CRISIS_AFTERMATH_EVENTS)) {
+    assert(event.id === id, `Crisis aftermath ${id} has mismatched id.`);
+    assert(CRISIS_EVENTS[event.crisisId], `Crisis aftermath ${id} references missing crisis ${event.crisisId}.`);
+    assert(Number.isInteger(event.delay) && event.delay > 0, `Crisis aftermath ${id} needs a positive delay.`);
+    assert(event.name && event.text && event.tone && event.label, `Crisis aftermath ${id} needs name, text, tone, and label.`);
+    assert(Array.isArray(event.choices) && event.choices.length >= 3, `Crisis aftermath ${id} needs at least three choices.`);
+    const seenChoices = new Set();
+    for (const choice of event.choices) {
+      assert(choice.id && !seenChoices.has(choice.id), `Crisis aftermath ${id} has duplicate or missing choice ids.`);
+      seenChoices.add(choice.id);
+      assert(choice.name && choice.text && choice.preview, `Crisis aftermath choice ${id}/${choice.id} needs name, text, and preview.`);
+      assert(choice.cost && typeof choice.cost === 'object', `Crisis aftermath choice ${id}/${choice.id} needs a cost object.`);
+      for (const [resource, amount] of Object.entries(choice.cost)) {
+        assert(['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].includes(resource), `Crisis aftermath choice ${id}/${choice.id} has unknown cost ${resource}.`);
+        assert(Number.isInteger(amount) && amount >= 0, `Crisis aftermath choice ${id}/${choice.id} has invalid ${resource} cost.`);
+      }
+    }
+  }
+  for (const id of ['refugeeAftermath', 'granaryAftermath', 'raidAftermath', 'councilAftermath']) assert(CRISIS_AFTERMATH_EVENTS[id], `Missing required crisis aftermath ${id}.`);
   for (const [id, lens] of Object.entries(MAP_LENSES)) {
     assert(lens.id === id, `Map lens ${id} has mismatched id.`);
     assert(lens.name && lens.text, `Map lens ${id} needs player-facing text.`);
@@ -304,6 +323,68 @@ check('crisis council triggers and resolves consequential rulings', () => {
   const raid = getCrisisCouncil(poorState).events.find((event) => event.id === 'cityRaid');
   assert(raid.choices.find((choice) => choice.id === 'nightWatch').disabled, 'Unaffordable crisis choices should be disabled.');
   assert(!resolveCrisis(poorState, 'cityRaid', 'nightWatch').ok, 'Unaffordable crisis choices should fail closed.');
+});
+
+check('crisis aftermath creates delayed follow-up rulings', () => {
+  const readyState = (seed) => {
+    const state = createGame(seed);
+    state.turn = 8;
+    state.flags.firstAllySeen = true;
+    state.flags.firstDeadwalkerSeen = true;
+    for (const id of ['dawn', 'veyr', 'mire']) state.factions[id].discovered = true;
+    state.factions.olundar.resources = {
+      ...state.factions.olundar.resources,
+      food: 60,
+      wood: 80,
+      stone: 40,
+      iron: 40,
+      gold: 80,
+      influence: 8,
+      morale: 6
+    };
+    return state;
+  };
+
+  const legacy = readyState('quality-crisis-legacy');
+  delete legacy.crises.aftermath;
+  assert(getCrisisCouncil(legacy).visible, 'Old saves without aftermath state should normalize into a visible council.');
+
+  const refugeeState = readyState('quality-crisis-refugee-aftermath');
+  const levy = resolveCrisis(refugeeState, 'refugeeCaravan', 'levy');
+  assert(levy.ok, levy.reason || 'Emergency Levy setup failed.');
+  assert(refugeeState.crises.aftermath.queue.some((item) => item.eventId === 'refugeeAftermath' && item.dueTurn === refugeeState.turn + 2), 'Refugee ruling should schedule a delayed aftermath.');
+  assert(!getCrisisCouncil(refugeeState).events.some((event) => event.id === 'refugeeAftermath'), 'Aftermath should not appear on the same turn as the source crisis.');
+  refugeeState.turn += 2;
+  const refugeeCouncil = getCrisisCouncil(refugeeState);
+  const refugeeAftermath = refugeeCouncil.events.find((event) => event.id === 'refugeeAftermath');
+  assert(refugeeAftermath && refugeeAftermath.label === 'Aftermath', 'Refugee aftermath should appear as an aftermath card.');
+  assert(refugeeAftermath.text.includes('Emergency Levy'), 'Aftermath cards should explain the source ruling.');
+  const beforeMorale = refugeeState.factions.olundar.resources.morale;
+  const ignore = resolveCrisis(refugeeState, 'refugeeAftermath', 'ignorePetitions');
+  assert(ignore.ok, ignore.reason || 'Refugee aftermath ruling failed.');
+  assert(refugeeState.factions.olundar.resources.morale === beforeMorale - 1, 'Ignoring petitions should hurt morale.');
+  assert(!getCrisisCouncil(refugeeState).events.some((event) => event.id === 'refugeeAftermath'), 'Resolved aftermath should leave the active council list.');
+  assert(getDiplomacyLedger(refugeeState).entries.some((entry) => entry.memory?.grievances > 0), 'Aftermath grievances should reach the Diplomacy Ledger.');
+  assert(!resolveCrisis(refugeeState, 'refugeeAftermath', 'settleOaths').ok, 'Resolved aftermath should not be repeatable.');
+
+  const raidState = readyState('quality-crisis-raid-aftermath');
+  const counter = resolveCrisis(raidState, 'cityRaid', 'counterRaid');
+  assert(counter.ok, counter.reason || 'Counter-Raid setup failed.');
+  raidState.turn += 2;
+  const beforeUnits = raidState.units.length;
+  const hunt = resolveCrisis(raidState, 'raidAftermath', 'huntRaiders');
+  assert(hunt.ok, hunt.reason || 'Raid aftermath ruling failed.');
+  assert(raidState.units.length > beforeUnits && raidState.units.some((unit) => unit.name === 'Road Vengeance Patrol'), 'Hunting raiders should create a named battlefield opportunity.');
+
+  const councilState = readyState('quality-crisis-council-aftermath');
+  const beforeRelation = councilState.factions.olundar.relations.dawn;
+  const envoys = resolveCrisis(councilState, 'emergencyCouncil', 'coalitionEnvoys');
+  assert(envoys.ok, envoys.reason || 'Emergency Council setup failed.');
+  councilState.turn += 2;
+  const accords = resolveCrisis(councilState, 'councilAftermath', 'publishAccords');
+  assert(accords.ok, accords.reason || 'Council aftermath ruling failed.');
+  assert(councilState.factions.olundar.relations.dawn > beforeRelation, 'Published accords should improve known-faction relations.');
+  assert(getDiplomacyLedger(councilState).entries.some((entry) => entry.memory?.promises >= 2), 'Published accords should create visible promise memory.');
 });
 
 check('named save slots preserve campaign metadata', () => {

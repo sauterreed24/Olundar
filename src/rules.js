@@ -1,5 +1,6 @@
 import {
   BUILDING_TYPES,
+  CRISIS_AFTERMATH_EVENTS,
   CRISIS_EVENTS,
   CURRENT_SAVE_VERSION,
   DIFFICULTY_PRESETS,
@@ -82,7 +83,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
     diplomacyMemory: createDiplomacyMemoryState(),
     crises: {
       resolved: {},
-      history: []
+      history: [],
+      aftermath: { queue: [], resolved: {} }
     },
     objectives: OBJECTIVES.slice(),
     messages: []
@@ -114,6 +116,9 @@ function normalizeCampaignState(state) {
   if (!state.crises) state.crises = { resolved: {}, history: [] };
   if (!state.crises.resolved) state.crises.resolved = {};
   if (!Array.isArray(state.crises.history)) state.crises.history = [];
+  if (!state.crises.aftermath) state.crises.aftermath = { queue: [], resolved: {} };
+  if (!Array.isArray(state.crises.aftermath.queue)) state.crises.aftermath.queue = [];
+  if (!state.crises.aftermath.resolved) state.crises.aftermath.resolved = {};
   if (!state.factions?.olundar?.fieldOrders) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
@@ -816,9 +821,12 @@ function siegeOperationSummary(state, operations) {
 
 export function getCrisisCouncil(state) {
   normalizeCampaignState(state);
-  const events = Object.values(CRISIS_EVENTS)
-    .filter((event) => crisisIsAvailable(state, event.id))
-    .map((event) => crisisEventView(state, event));
+  const events = [
+    ...Object.values(CRISIS_EVENTS)
+      .filter((event) => crisisIsAvailable(state, event.id))
+      .map((event) => crisisEventView(state, event)),
+    ...activeCrisisAftermath(state).map((item) => crisisAftermathEventView(state, item))
+  ];
   const history = state.crises.history
     .filter((record) => state.turn - record.turn <= 4)
     .slice(0, 3);
@@ -834,7 +842,10 @@ export function getCrisisCouncil(state) {
 export function resolveCrisis(state, crisisId, choiceId) {
   normalizeCampaignState(state);
   const event = CRISIS_EVENTS[crisisId];
-  if (!event) return { ok: false, reason: 'Unknown crisis.' };
+  if (!event) {
+    const aftermathItem = activeCrisisAftermath(state).find((item) => item.eventId === crisisId);
+    return aftermathItem ? resolveCrisisAftermath(state, aftermathItem, choiceId) : { ok: false, reason: 'Unknown crisis.' };
+  }
   if (state.crises.resolved[crisisId]) return { ok: false, reason: 'That crisis has already been settled.' };
   if (!crisisIsAvailable(state, crisisId)) return { ok: false, reason: 'That crisis is not active.' };
   const choice = event.choices.find((entry) => entry.id === choiceId);
@@ -845,6 +856,7 @@ export function resolveCrisis(state, crisisId, choiceId) {
   payCost(resources, choice.cost);
   const outcome = applyCrisisOutcome(state, crisisId, choiceId);
   state.crises.resolved[crisisId] = choiceId;
+  scheduleCrisisAftermath(state, crisisId, choiceId);
   state.crises.history.unshift({
     turn: state.turn,
     crisisId,
@@ -867,12 +879,13 @@ function crisisCouncilSummary(events, history) {
   return 'No emergency rulings require attention.';
 }
 
-function crisisEventView(state, event) {
+function crisisEventView(state, event, options = {}) {
   const resources = state.factions.olundar.resources;
   return {
     id: event.id,
     name: event.name,
     tone: event.tone,
+    label: options.label || event.label || crisisLabel(event.tone),
     text: event.text,
     choices: event.choices.map((choice) => {
       const affordable = canAfford(resources, choice.cost);
@@ -882,12 +895,77 @@ function crisisEventView(state, event) {
         text: choice.text,
         cost: choice.cost,
         costText: formatCost(choice.cost),
-        preview: CRISIS_OUTCOME_PREVIEWS[event.id]?.[choice.id] || 'This ruling has immediate campaign consequences.',
+        preview: choice.preview || CRISIS_OUTCOME_PREVIEWS[event.id]?.[choice.id] || 'This ruling has immediate campaign consequences.',
         disabled: !affordable,
         disabledReason: affordable ? '' : `Need ${formatCost(missingCost(resources, choice.cost))}.`
       };
     })
   };
+}
+
+function crisisLabel(tone) {
+  if (tone === 'danger') return 'Urgent';
+  if (tone === 'good') return 'Council';
+  return 'Open';
+}
+
+function activeCrisisAftermath(state) {
+  return state.crises.aftermath.queue.filter((item) => {
+    const event = CRISIS_AFTERMATH_EVENTS[item.eventId];
+    return event && item.dueTurn <= state.turn && !state.crises.aftermath.resolved[item.eventId];
+  });
+}
+
+function crisisAftermathEventView(state, item) {
+  const event = CRISIS_AFTERMATH_EVENTS[item.eventId];
+  const source = CRISIS_EVENTS[item.crisisId];
+  const sourceChoice = source?.choices.find((choice) => choice.id === item.choiceId);
+  return crisisEventView(state, {
+    ...event,
+    text: `${event.text} Earlier ruling: ${sourceChoice?.name || item.choiceId}.`
+  }, { label: event.label || 'Aftermath' });
+}
+
+function scheduleCrisisAftermath(state, crisisId, choiceId) {
+  const event = Object.values(CRISIS_AFTERMATH_EVENTS).find((entry) => entry.crisisId === crisisId);
+  if (!event || state.crises.aftermath.resolved[event.id]) return;
+  const existing = state.crises.aftermath.queue.find((item) => item.eventId === event.id);
+  const item = {
+    eventId: event.id,
+    crisisId,
+    choiceId,
+    dueTurn: state.turn + event.delay
+  };
+  if (existing) Object.assign(existing, item);
+  else state.crises.aftermath.queue.push(item);
+}
+
+function resolveCrisisAftermath(state, item, choiceId) {
+  const event = CRISIS_AFTERMATH_EVENTS[item.eventId];
+  if (!event || state.crises.aftermath.resolved[item.eventId]) return { ok: false, reason: 'That aftermath has already been settled.' };
+  if (!activeCrisisAftermath(state).some((active) => active.eventId === item.eventId)) return { ok: false, reason: 'That aftermath is not active.' };
+  const choice = event.choices.find((entry) => entry.id === choiceId);
+  if (!choice) return { ok: false, reason: 'Unknown aftermath ruling.' };
+  const resources = state.factions.olundar.resources;
+  if (!canAfford(resources, choice.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(resources, choice.cost))}.` };
+
+  payCost(resources, choice.cost);
+  const outcome = applyCrisisAftermathOutcome(state, item, choiceId);
+  state.crises.aftermath.resolved[item.eventId] = choiceId;
+  state.crises.aftermath.queue = state.crises.aftermath.queue.filter((queued) => queued.eventId !== item.eventId);
+  state.crises.history.unshift({
+    turn: state.turn,
+    crisisId: item.eventId,
+    crisisName: event.name,
+    choiceId,
+    choiceName: choice.name,
+    outcome: outcome.text,
+    tone: outcome.tone
+  });
+  state.crises.history = state.crises.history.slice(0, 8);
+  addMessage(state, `${event.name}: ${outcome.text}`, outcome.tone);
+  updateVisibility(state);
+  return { ok: true, reason: outcome.text, outcome };
 }
 
 function crisisIsAvailable(state, crisisId) {
@@ -964,6 +1042,83 @@ function applyCrisisOutcome(state, crisisId, choiceId) {
     return { tone: 'good', text: fortified ? 'The council hardens gates, towers, and frontier walls for the siege season.' : 'The council prepares fortification plans, but no holdings were available to reinforce.' };
   }
   return { tone: 'info', text: 'The ruling is recorded.' };
+}
+
+function applyCrisisAftermathOutcome(state, item, choiceId) {
+  if (item.eventId === 'refugeeAftermath' && choiceId === 'settleOaths') {
+    adjustOlundarPopulation(state, 3);
+    adjustOlundarMorale(state, 1);
+    const contacts = recordKnownFactionMemory(state, 'promise', 'Refugees Settled', 'Olundar settled displaced families into homes and road crews instead of using them as leverage.', 1);
+    return { tone: 'good', text: contacts ? 'Settled refugee oaths raise morale and reassure known living courts.' : 'Settled refugee oaths raise morale inside Olundar.' };
+  }
+  if (item.eventId === 'refugeeAftermath' && choiceId === 'frontierFamilies') {
+    const unit = spawnOlundarUnitAtCapital(state, 'scout', 'Frontier Family Guide');
+    const contacts = adjustKnownLivingRelations(state, 3);
+    recordKnownFactionMemory(state, 'promise', 'Frontier Families Sponsored', 'Olundar sponsored displaced families as guides instead of abandoning them.', 1);
+    return { tone: unit ? 'good' : 'info', text: unit ? 'Frontier families send a guide to Olundar and improve trust on the living front.' : contacts ? 'Frontier families improve trust, though no open muster ground was found.' : 'Frontier families become border contacts, though no open muster ground was found.' };
+  }
+  if (item.eventId === 'refugeeAftermath' && choiceId === 'ignorePetitions') {
+    adjustOlundarMorale(state, -1);
+    const contacts = recordKnownFactionMemory(state, 'grievance', 'Refugee Petitions Ignored', 'Olundar left refugee petitions unanswered after the first emergency ruling.', 1);
+    return { tone: 'danger', text: contacts ? 'Ignored refugee petitions hurt morale and spread grievances among known factions.' : 'Ignored refugee petitions hurt morale inside Olundar.' };
+  }
+  if (item.eventId === 'granaryAftermath' && choiceId === 'openStores') {
+    adjustOlundarMorale(state, 2);
+    return { tone: 'good', text: 'Open festival stores calm the hunger panic and restore public confidence.' };
+  }
+  if (item.eventId === 'granaryAftermath' && choiceId === 'grainContract') {
+    const contacts = adjustKnownLivingRelations(state, 3);
+    recordKnownFactionMemory(state, 'promise', 'Grain Contract Signed', 'Olundar bound merchants and allies to a public grain contract after famine pressure.', 1);
+    return { tone: 'good', text: contacts ? 'The grain contract steadies markets and improves known-faction trust.' : 'The grain contract steadies Olundar markets.' };
+  }
+  if (item.eventId === 'granaryAftermath' && choiceId === 'hardLabor') {
+    gainResources(state.factions.olundar.resources, { wood: 18 });
+    adjustOlundarMorale(state, -1);
+    const contacts = recordKnownFactionMemory(state, 'grievance', 'Famine Labor Ordered', 'Olundar used hunger as leverage for emergency labor after famine pressure.', 1);
+    return { tone: 'danger', text: contacts ? 'Hard labor fills timber yards, but morale falls and grievances spread.' : 'Hard labor fills timber yards, but morale falls.' };
+  }
+  if (item.eventId === 'raidAftermath' && choiceId === 'repairStreets') {
+    const fortified = reinforceOlundarHoldings(state, 8, 3);
+    adjustOlundarMorale(state, 1);
+    return { tone: 'good', text: fortified ? 'Street repairs harden Olundar holdings and steady frightened households.' : 'Street repairs steady frightened households, though no holdings were available to reinforce.' };
+  }
+  if (item.eventId === 'raidAftermath' && choiceId === 'huntRaiders') {
+    const unit = spawnOlundarUnitAtCapital(state, 'cavalry', 'Road Vengeance Patrol');
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    return { tone: unit ? 'good' : 'info', text: unit ? 'A cavalry patrol hunts the road raiders and gives Olundar new influence.' : 'The hunt raises influence, but no open muster ground was found.' };
+  }
+  if (item.eventId === 'raidAftermath' && choiceId === 'blameOutskirts') {
+    adjustOlundarPopulation(state, -2);
+    adjustOlundarMorale(state, -1);
+    const contacts = recordKnownFactionMemory(state, 'grievance', 'Outskirts Blamed', 'Olundar blamed outer households for raid losses instead of repairing the damage.', 1);
+    return { tone: 'danger', text: contacts ? 'Blaming the outskirts preserves stores, but population, morale, and living-faction trust fall.' : 'Blaming the outskirts preserves stores, but population and morale fall.' };
+  }
+  if (item.eventId === 'councilAftermath' && choiceId === 'publishAccords') {
+    const contacts = adjustKnownLivingRelations(state, 5);
+    recordKnownFactionMemory(state, 'promise', 'Emergency Accords Published', 'Olundar publicly honored emergency-council commitments to the living front.', 2);
+    adjustOlundarMorale(state, 1);
+    return { tone: 'good', text: contacts ? 'Published accords raise morale and bind known factions closer to Olundar.' : 'Published accords raise morale, though no known faction can answer yet.' };
+  }
+  if (item.eventId === 'councilAftermath' && choiceId === 'drillVeterans') {
+    const unit = spawnOlundarUnitAtCapital(state, 'legionary', 'Council Veteran');
+    adjustOlundarMorale(state, 1);
+    return { tone: unit ? 'good' : 'info', text: unit ? 'Council urgency becomes a veteran legionary and steadier morale.' : 'Council urgency steadies morale, but no open muster ground was found.' };
+  }
+  if (item.eventId === 'councilAftermath' && choiceId === 'delayCommitments') {
+    const contacts = recordKnownFactionMemory(state, 'grievance', 'Emergency Commitments Delayed', 'Olundar delayed public commitments after the emergency council demanded proof.', 2);
+    adjustKnownLivingRelations(state, -3);
+    return { tone: 'danger', text: contacts ? 'Delayed commitments preserve options but sour known factions.' : 'Delayed commitments preserve options, but the council records the hesitation.' };
+  }
+  return { tone: 'info', text: 'The aftermath ruling is recorded.' };
+}
+
+function recordKnownFactionMemory(state, type, label, detail, amount = 1) {
+  let count = 0;
+  for (const factionId of discoveredLivingFactions(state)) {
+    recordDiplomaticMemory(state, factionId, type, label, detail, amount);
+    count += 1;
+  }
+  return count;
 }
 
 function discoveredLivingFactions(state) {
