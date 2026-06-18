@@ -27,6 +27,7 @@ import {
   trainingTurnsFor,
   moveUnit,
   performDiplomacy,
+  resolvePromiseDemand,
   serializeState,
   setFieldOrder,
   startConstruction,
@@ -472,8 +473,33 @@ function renderDiplomacy() {
           ${entry.recent.map((record) => `<p><b>T${record.turn} ${escapeHtml(record.outcome)}:</b> ${escapeHtml(record.detail)}</p>`).join('')}
         </div>
       ` : ''}
+      ${entry.demandHistory.length ? `
+        <div class="promise-demand-history">
+          ${entry.demandHistory.map((demand) => `<p class="${escapeHtml(demand.tone)}"><b>T${demand.turn} ${escapeHtml(demand.name)}:</b> ${escapeHtml(demand.text)}</p>`).join('')}
+        </div>
+      ` : ''}
     `;
     if (entry.discovered && state.status === 'playing') {
+      if (entry.demands.length) {
+        const demandBlock = document.createElement('div');
+        demandBlock.className = 'promise-demands';
+        demandBlock.innerHTML = '<strong>Promise Demands</strong>';
+        for (const demand of entry.demands) {
+          const item = document.createElement('div');
+          item.className = 'promise-demand';
+          item.innerHTML = `
+            <p><b>${escapeHtml(demand.name)}</b> ${escapeHtml(demand.text)}</p>
+            <small>${escapeHtml(demand.preview)}</small>
+          `;
+          const actions = document.createElement('div');
+          actions.className = 'button-grid demand-actions';
+          actions.appendChild(button(`Answer - ${demand.cost}`, () => runAction(() => resolvePromiseDemand(state, entry.id, demand.id, 'answer'), 'diplomacy'), demand.disabled, demand.disabledReason || demand.preview));
+          actions.appendChild(button('Ignore demand', () => runAction(() => resolvePromiseDemand(state, entry.id, demand.id, 'ignore'), 'diplomacy'), false, 'Record a grievance and cool relations without spending resources.'));
+          item.appendChild(actions);
+          demandBlock.appendChild(item);
+        }
+        card.appendChild(demandBlock);
+      }
       if (entry.pact) {
         const orderBlock = document.createElement('div');
         orderBlock.className = 'field-orders';

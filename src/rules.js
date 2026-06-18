@@ -79,7 +79,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       firstAllySeen: false,
       deadStrongholdsDestroyed: 0,
       warAimNotices: {},
-      factionPromises: {}
+      factionPromises: {},
+      promiseDemands: {}
     },
     diplomacyLog: [],
     diplomacyMemory: createDiplomacyMemoryState(),
@@ -117,6 +118,7 @@ function normalizeCampaignState(state) {
   if (!state.flags) state.flags = {};
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
   if (!state.flags.factionPromises) state.flags.factionPromises = {};
+  if (!state.flags.promiseDemands) state.flags.promiseDemands = {};
   if (!state.crises) state.crises = { resolved: {}, history: [] };
   if (!state.crises.resolved) state.crises.resolved = {};
   if (!Array.isArray(state.crises.history)) state.crises.history = [];
@@ -502,6 +504,10 @@ function diplomacyLedgerEntry(state, actor, id) {
   const memory = diplomacyMemoryView(state, id);
   const posture = discovered ? diplomacyPosture(relation, atWar, pact) : { label: 'Uncontacted', tone: 'info' };
   const recent = (state.diplomacyLog || []).filter((record) => record.factionId === id).slice(0, 2);
+  const demandViews = Object.values(DIPLOMATIC_PROMISES)
+    .filter((promise) => promise.factionId === id)
+    .map((promise) => diplomaticDemandView(state, promise, discovered, atWar))
+    .filter(Boolean);
   return {
     id,
     name: faction.name,
@@ -524,6 +530,8 @@ function diplomacyLedgerEntry(state, actor, id) {
     commitments: Object.values(DIPLOMATIC_PROMISES)
       .filter((promise) => promise.factionId === id)
       .map((promise) => diplomaticPromiseView(state, id, promise, discovered, atWar)),
+    demands: demandViews.filter((demand) => demand.active),
+    demandHistory: demandViews.filter((demand) => demand.completed),
     fieldOrders: Object.values(FIELD_ORDERS).map((order) => ({
       ...order,
       active: fieldOrder?.id === order.id,
@@ -654,6 +662,46 @@ function diplomaticPromiseView(state, factionId, promise, discovered, atWar) {
     fulfilled,
     disabled: Boolean(disabledReason),
     disabledReason
+  };
+}
+
+function diplomaticDemandView(state, promise, discovered, atWar) {
+  const demand = promise.demand;
+  const keptTurn = Number(state.flags.factionPromises?.[promise.id]) || 0;
+  if (!demand || !keptTurn) return null;
+  const response = state.flags.promiseDemands?.[demand.id];
+  if (response) {
+    if (state.turn - response.turn > 4) return null;
+    return {
+      id: demand.id,
+      promiseId: promise.id,
+      name: demand.name,
+      text: response.detail || demand.text,
+      cost: formatCost(demand.cost),
+      active: false,
+      completed: true,
+      status: response.status,
+      turn: response.turn,
+      tone: response.status === 'answered' ? 'good' : 'danger'
+    };
+  }
+  const dueTurn = keptTurn + demand.delay;
+  if (!discovered || atWar || state.turn < dueTurn) return null;
+  const resources = state.factions.olundar.resources;
+  const affordable = canAfford(resources, demand.cost);
+  return {
+    id: demand.id,
+    promiseId: promise.id,
+    name: demand.name,
+    text: demand.text,
+    preview: demand.preview,
+    cost: formatCost(demand.cost),
+    dueTurn,
+    active: true,
+    completed: false,
+    disabled: !affordable,
+    disabledReason: affordable ? '' : `Need ${formatCost(missingCost(resources, demand.cost))}.`,
+    tone: 'danger'
   };
 }
 
@@ -2117,6 +2165,83 @@ export function makeDiplomaticPromise(state, targetFaction, promiseId) {
   recordDiplomaticMemory(state, targetFaction, 'fulfilled', promise.name, outcome.memoryDetail, promise.memory);
   updateVisibility(state);
   return { ok: true, reason: outcome.text, outcome };
+}
+
+export function resolvePromiseDemand(state, targetFaction, demandId, choiceId) {
+  normalizeCampaignState(state);
+  const actor = state.factions.olundar;
+  const target = state.factions[targetFaction];
+  const promise = Object.values(DIPLOMATIC_PROMISES).find((entry) => entry.factionId === targetFaction && entry.demand?.id === demandId);
+  const demand = promise?.demand;
+  if (!target || !target.discovered || targetFaction === 'dead') return { ok: false, reason: 'That civilization is not available for promise demands.' };
+  if (!promise || !demand) return { ok: false, reason: 'Unknown promise demand.' };
+  if (actor.atWar?.[targetFaction] || target.atWar?.olundar) return { ok: false, reason: `${target.name} is openly hostile. Promise demands are unavailable.` };
+  const keptTurn = Number(state.flags.factionPromises?.[promise.id]) || 0;
+  if (!keptTurn) return { ok: false, reason: 'That promise has not been kept yet.' };
+  if (state.turn < keptTurn + demand.delay) return { ok: false, reason: 'That promise demand is not active yet.' };
+  if (state.flags.promiseDemands[demand.id]) return { ok: false, reason: 'That promise demand has already been resolved.' };
+
+  if (choiceId === 'answer') {
+    if (!canAfford(actor.resources, demand.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(actor.resources, demand.cost))}.` };
+    payCost(actor.resources, demand.cost);
+    actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) + demand.relation);
+    target.relations.olundar = actor.relations[targetFaction];
+    const outcome = applyPromiseDemandAnswer(state, demand);
+    const detail = outcome.detail;
+    state.flags.promiseDemands[demand.id] = { status: 'answered', turn: state.turn, detail };
+    addMessage(state, `${target.name}: ${outcome.text}`, 'good');
+    recordDiplomacy(state, targetFaction, demand.id, `Answered: ${demand.name}`, detail, 'good');
+    recordDiplomaticMemory(state, targetFaction, 'fulfilled', demand.name, outcome.memoryDetail, demand.memory);
+    updateVisibility(state);
+    return { ok: true, reason: outcome.text, outcome };
+  }
+
+  if (choiceId === 'ignore') {
+    actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) - 8);
+    target.relations.olundar = actor.relations[targetFaction];
+    const detail = `${target.name} records that Olundar ignored the follow-through demand behind ${promise.name}.`;
+    state.flags.promiseDemands[demand.id] = { status: 'ignored', turn: state.turn, detail };
+    addMessage(state, `${target.name} resents the ignored demand: ${demand.name}.`, 'danger');
+    recordDiplomacy(state, targetFaction, demand.id, `Ignored: ${demand.name}`, detail, 'danger');
+    recordDiplomaticMemory(state, targetFaction, 'grievance', `Ignored: ${demand.name}`, detail, demand.memory + 1);
+    updateVisibility(state);
+    return { ok: true, reason: detail, outcome: { tone: 'danger', text: detail } };
+  }
+
+  return { ok: false, reason: 'Unknown demand response.' };
+}
+
+function applyPromiseDemandAnswer(state, demand) {
+  if (demand.id === 'dawnWallWatch') {
+    const fortified = reinforceFactionHoldings(state, 'dawn', 8, 3);
+    return {
+      text: fortified ? 'Dawnward wall watches stay supplied and the hillforts harden again.' : 'Dawnward accepts the renewed wall watch, though no holdings remain to reinforce.',
+      detail: fortified ? `${fortified} Dawnward holding${fortified === 1 ? '' : 's'} gained fresh wall-watch support.` : 'The wall-watch demand was answered, but no Dawnward holding could be reinforced.',
+      memoryDetail: 'Olundar kept supplying the Dawnward wall guard after the first oath, proving the promise could survive pressure.'
+    };
+  }
+  if (demand.id === 'veyrRouteTolls') {
+    gainResources(state.factions.olundar.resources, { food: 18, iron: 5 });
+    return {
+      text: 'Veyr route tolls are paid and another war caravan reaches the living front.',
+      detail: 'The toll payment returned 18 food and 5 iron from Veyr caravan stores.',
+      memoryDetail: 'Olundar paid Veyr route tolls after funding the caravans, keeping the war road profitable enough to trust.'
+    };
+  }
+  if (demand.id === 'mireGuideStores') {
+    const unit = spawnOlundarUnitAtCapital(state, 'scout', 'Mire Oath-Path Scout');
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    return {
+      text: unit ? 'Mire guides are fed, and an oath-path scout joins Olundar with fresh route knowledge.' : 'Mire guides are fed and share fresh route knowledge, though no open muster ground was found.',
+      detail: unit ? 'A Mire Oath-Path Scout joined near Olundar Prime, and influence rose.' : 'The marsh guide demand was answered, and influence rose.',
+      memoryDetail: 'Olundar fed Mireclan guides after promising to respect marsh routes, proving the route oath was practical.'
+    };
+  }
+  return {
+    text: 'The promise demand is answered.',
+    detail: 'A promise demand was answered.',
+    memoryDetail: 'Olundar answered a promise demand.'
+  };
 }
 
 function applyDiplomaticPromiseOutcome(state, promise) {

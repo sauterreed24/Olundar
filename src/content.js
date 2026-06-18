@@ -365,7 +365,17 @@ export const DIPLOMATIC_PROMISES = {
     relation: 7,
     memory: 2,
     text: 'Send timber, engineers, and oath-guards to strengthen Dawnward walls before the dead reach them.',
-    preview: 'Dawnward holdings gain durability, relations improve, and the ledger records a kept wall oath.'
+    preview: 'Dawnward holdings gain durability, relations improve, and the ledger records a kept wall oath.',
+    demand: {
+      id: 'dawnWallWatch',
+      delay: 3,
+      name: 'Maintain the Wall Watch',
+      cost: { stone: 10, gold: 8 },
+      relation: 6,
+      memory: 2,
+      text: 'Dawnward captains ask Olundar to keep the promised wall guard supplied as raids gather below the hillforts.',
+      preview: 'Answering reinforces Dawnward holdings again; ignoring creates a wall-oath grievance.'
+    }
   },
   veyrCaravanFund: {
     id: 'veyrCaravanFund',
@@ -375,7 +385,17 @@ export const DIPLOMATIC_PROMISES = {
     relation: 7,
     memory: 2,
     text: 'Underwrite Veyr wagons, escorts, and road bribes so their merchants commit supply to the living front.',
-    preview: 'Olundar receives food and iron from the first convoy while Veyr records the funded route.'
+    preview: 'Olundar receives food and iron from the first convoy while Veyr records the funded route.',
+    demand: {
+      id: 'veyrRouteTolls',
+      delay: 3,
+      name: 'Pay the Route Tolls',
+      cost: { gold: 18, influence: 1 },
+      relation: 6,
+      memory: 2,
+      text: 'Veyr factors demand route tolls and escort bribes before the next war caravan risks the roads.',
+      preview: 'Answering brings another supply convoy; ignoring makes Veyr treat the promise as unpaid politics.'
+    }
   },
   mireMarshRoutes: {
     id: 'mireMarshRoutes',
@@ -385,7 +405,17 @@ export const DIPLOMATIC_PROMISES = {
     relation: 7,
     memory: 2,
     text: 'Feed Mireclan guides and swear to respect their marsh routes in exchange for safer scouting paths.',
-    preview: 'A Mire route guide joins near Olundar, relations improve, and the ledger records the route oath.'
+    preview: 'A Mire route guide joins near Olundar, relations improve, and the ledger records the route oath.',
+    demand: {
+      id: 'mireGuideStores',
+      delay: 3,
+      name: 'Feed the Marsh Guides',
+      cost: { food: 14, wood: 6 },
+      relation: 6,
+      memory: 2,
+      text: 'Mireclan guides ask for food and dry timber before they keep marking the blight-shadow routes.',
+      preview: 'Answering reveals practical route knowledge; ignoring creates a marsh-oath grievance.'
+    }
   }
 };
 
