@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -12,6 +12,7 @@ import {
   forecastUnitAttack,
   fortifyUnit,
   getCampaignRecap,
+  getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
   getObjectiveProgress,
@@ -297,6 +298,49 @@ function renderActions() {
 }
 
 function renderDiplomacy() {
+  const ledger = getDiplomacyLedger(state);
+  diplomacyPanel.innerHTML = `
+    <h2>${escapeHtml(ledger.title)}</h2>
+    <p class="ledger-summary">${escapeHtml(ledger.summary)}</p>
+    <div class="ledger-stats">
+      ${ledger.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
+    </div>
+  `;
+  const list = document.createElement('div');
+  list.className = 'diplo-ledger-list';
+  for (const entry of ledger.entries) {
+    const card = document.createElement('div');
+    card.className = `diplo-card ${entry.discovered ? 'known' : 'unknown'} ${entry.posture.tone}`;
+    card.innerHTML = `
+      <div class="diplo-head">
+        <h3>${entry.banner} ${escapeHtml(entry.name)}</h3>
+        <span class="${escapeHtml(entry.posture.tone)}">${escapeHtml(entry.posture.label)}</span>
+      </div>
+      <p>${escapeHtml(entry.discovered ? entry.text : `${entry.name} has not been contacted yet.`)}</p>
+      <div class="ledger-tags">
+        ${entry.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}
+      </div>
+      <p class="diplo-advice">${escapeHtml(entry.advice)}</p>
+      ${entry.recent.length ? `
+        <div class="diplo-recent">
+          ${entry.recent.map((record) => `<p><b>T${record.turn} ${escapeHtml(record.outcome)}:</b> ${escapeHtml(record.detail)}</p>`).join('')}
+        </div>
+      ` : ''}
+    `;
+    if (entry.discovered && state.status === 'playing') {
+      const row = document.createElement('div');
+      row.className = 'button-grid diplo-actions';
+      for (const action of entry.actions) {
+        row.appendChild(button(`${action.name} - ${action.cost}`, () => runAction(() => performDiplomacy(state, entry.id, action.id), 'diplomacy'), action.disabled, action.disabledReason || action.note));
+      }
+      card.appendChild(row);
+    }
+    list.appendChild(card);
+  }
+  diplomacyPanel.appendChild(list);
+}
+
+function renderLegacyDiplomacy() {
   diplomacyPanel.innerHTML = '<h2>Diplomacy</h2>';
   const discovered = ['dawn', 'veyr', 'mire'].filter((id) => state.factions[id].discovered);
   if (!discovered.length) {
@@ -894,11 +938,12 @@ function hasBuilding(type) {
   return state.buildings.some((b) => b.faction === 'olundar' && b.type === type && b.turnsLeft <= 0);
 }
 
-function button(label, onClick, disabled = false) {
+function button(label, onClick, disabled = false, title = '') {
   const el = document.createElement('button');
   el.type = 'button';
   el.textContent = label;
   el.disabled = disabled;
+  if (title) el.title = title;
   el.addEventListener('click', onClick);
   return el;
 }

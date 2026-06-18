@@ -14,6 +14,8 @@ import {
 } from './content.js';
 import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
 
+const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
+
 export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options = {}) {
   const campaign = normalizeCampaignConfig(seed, options);
   const state = {
@@ -47,6 +49,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       firstAllySeen: false,
       deadStrongholdsDestroyed: 0
     },
+    diplomacyLog: [],
     objectives: OBJECTIVES.slice(),
     messages: []
   };
@@ -70,6 +73,7 @@ function normalizeCampaignConfig(seedOrConfig, options = {}) {
 }
 
 function normalizeCampaignState(state) {
+  if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
   if (state.campaign?.scenarioId && state.campaign?.difficultyId) return;
   const fallback = normalizeCampaignConfig(state.seed || 'Olundar-Legacy');
   state.campaign = {
@@ -336,6 +340,119 @@ export function getWarCouncil(state) {
       { label: 'Allies found', value: `${discoveredLiving}/3` },
       { label: 'Dead pressure', value: knownDead ? knownDead.label : 'Unknown' }
     ]
+  };
+}
+
+export function getDiplomacyLedger(state) {
+  normalizeCampaignState(state);
+  const actor = state.factions.olundar;
+  const entries = LIVING_DIPLOMACY_FACTIONS.map((id) => diplomacyLedgerEntry(state, actor, id));
+  const contacted = entries.filter((entry) => entry.discovered).length;
+  const pacts = entries.filter((entry) => entry.pact).length;
+  const trades = entries.filter((entry) => entry.trade).length;
+  const rivals = entries.filter((entry) => entry.atWar).length;
+  return {
+    title: 'Diplomacy Ledger',
+    summary: diplomacyLedgerSummary(state, entries),
+    stats: [
+      { label: 'Contacts', value: `${contacted}/3` },
+      { label: 'Pacts', value: `${pacts}/3` },
+      { label: 'Trade', value: trades },
+      { label: 'Rivals', value: rivals }
+    ],
+    entries,
+    recent: (state.diplomacyLog || []).slice(0, 5)
+  };
+}
+
+function diplomacyLedgerEntry(state, actor, id) {
+  const faction = state.factions[id];
+  const relation = actor.relations[id] ?? 0;
+  const discovered = Boolean(faction.discovered);
+  const atWar = Boolean(actor.atWar?.[id] || faction.atWar?.olundar);
+  const pact = Boolean(actor.pacts?.[id]);
+  const trade = Boolean(actor.trades?.[id]);
+  const posture = discovered ? diplomacyPosture(relation, atWar, pact) : { label: 'Uncontacted', tone: 'info' };
+  const recent = (state.diplomacyLog || []).filter((record) => record.factionId === id).slice(0, 2);
+  return {
+    id,
+    name: faction.name,
+    banner: faction.banner,
+    temperament: faction.temperament,
+    text: faction.text,
+    discovered,
+    relation,
+    posture,
+    pact,
+    trade,
+    atWar,
+    tags: diplomacyTags(discovered, relation, pact, trade, atWar),
+    advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar),
+    recent,
+    actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar))
+  };
+}
+
+function diplomacyLedgerSummary(state, entries) {
+  const contacted = entries.filter((entry) => entry.discovered).length;
+  const pacts = entries.filter((entry) => entry.pact).length;
+  const rivals = entries.filter((entry) => entry.atWar).length;
+  if (!contacted) return 'No living civilizations have been contacted. Scout roads, hills, and ruins before the Deadwalker front closes in.';
+  if (rivals) return `${rivals} living civilization${rivals === 1 ? ' is' : 's are'} hostile. Keep the survival war focused before political damage spreads.`;
+  if (!pacts) return `${contacted}/3 civilizations contacted. Convert trust into at least one Survival Pact for shared sight and emergency aid.`;
+  const knownDead = knownDeadwalkerThreat(state);
+  if (knownDead) return `${pacts} pact${pacts === 1 ? '' : 's'} active while Deadwalker pressure is ${knownDead.label.toLowerCase()}. Use aid and trade before the siege push.`;
+  return `${contacted}/3 civilizations contacted and ${pacts} pact${pacts === 1 ? '' : 's'} active. Build a coalition before the portal war peaks.`;
+}
+
+function diplomacyPosture(relation, atWar, pact) {
+  if (atWar) return { label: 'Rival', tone: 'danger' };
+  if (pact) return { label: 'Bound ally', tone: 'good' };
+  if (relation >= 50) return { label: 'Trusted', tone: 'good' };
+  if (relation >= 35) return { label: 'Pact-ready', tone: 'good' };
+  if (relation >= 20) return { label: 'Friendly', tone: 'info' };
+  if (relation >= 0) return { label: 'Wary', tone: 'info' };
+  if (relation <= -35) return { label: 'Hostile', tone: 'danger' };
+  return { label: 'Strained', tone: 'danger' };
+}
+
+function diplomacyTags(discovered, relation, pact, trade, atWar) {
+  if (!discovered) return ['Uncontacted'];
+  const tags = [`Relation ${relation}`];
+  if (pact) tags.push('Survival Pact');
+  if (trade) tags.push('Trade');
+  if (atWar) tags.push('At war');
+  if (!pact && !trade && !atWar) tags.push('No accord');
+  return tags;
+}
+
+function diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar) {
+  if (!discovered) return `${state.factions[id].name} is still beyond current sight. Scout roads, towers, and frontier ruins to open talks.`;
+  if (atWar) return 'This front is politically hostile. Defend first; aid, trade, and pacts are unavailable while rivalry is open.';
+  if (!pact && relation >= 17) return 'Offer a Survival Pact now; the relation threshold is within reach and shared vision matters.';
+  if (!trade && canAfford(state.factions.olundar.resources, DIPLOMACY_ACTIONS.trade.cost)) return 'Open trade to fund the war economy and keep relations warming.';
+  if (relation < 20) return 'Build trust before requesting war aid; aid is likely refused below 20 relation.';
+  if (pact && knownDeadwalkerThreat(state)) return 'Use this pact for shared sight, then request aid when the siege front becomes urgent.';
+  return 'Keep pressure low and preserve influence for aid, pacts, or emergency diplomacy.';
+}
+
+function diplomacyActionView(state, factionId, actionId, relation, discovered, pact, trade, atWar) {
+  const action = DIPLOMACY_ACTIONS[actionId];
+  let disabledReason = '';
+  if (!discovered) disabledReason = 'Uncontacted.';
+  else if (atWar) disabledReason = 'At war.';
+  else if (actionId === 'pact' && pact) disabledReason = 'Pact active.';
+  else if (actionId === 'trade' && trade) disabledReason = 'Trade active.';
+  else if (!canAfford(state.factions.olundar.resources, action.cost)) disabledReason = `Need ${formatCost(missingCost(state.factions.olundar.resources, action.cost))}.`;
+  const note = actionId === 'aid' && relation < 20 && !disabledReason ? 'Likely refused below 20 relation.' : action.text;
+  return {
+    id: actionId,
+    name: action.name,
+    cost: formatCost(action.cost),
+    text: action.text,
+    note,
+    disabled: Boolean(disabledReason),
+    disabledReason
   };
 }
 
@@ -1118,11 +1235,15 @@ function nearSupply(state, x, y) {
 }
 
 export function performDiplomacy(state, targetFaction, actionId) {
+  normalizeCampaignState(state);
   const actor = state.factions.olundar;
   const target = state.factions[targetFaction];
   const action = DIPLOMACY_ACTIONS[actionId];
   if (!target || !target.discovered || targetFaction === 'dead') return { ok: false, reason: 'That civilization is not available for diplomacy.' };
   if (!action) return { ok: false, reason: 'Unknown diplomatic action.' };
+  if (actor.atWar?.[targetFaction] || target.atWar?.olundar) return { ok: false, reason: `${target.name} is openly hostile. Diplomacy is closed.` };
+  if (actionId === 'pact' && actor.pacts[targetFaction]) return { ok: false, reason: 'A Survival Pact is already active.' };
+  if (actionId === 'trade' && actor.trades[targetFaction]) return { ok: false, reason: 'Trade is already open.' };
   if (!canAfford(actor.resources, action.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(actor.resources, action.cost))}.` };
   payCost(actor.resources, action.cost);
   actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) + action.relation);
@@ -1132,14 +1253,20 @@ export function performDiplomacy(state, targetFaction, actionId) {
       actor.pacts[targetFaction] = true;
       target.pacts.olundar = true;
       addMessage(state, `${target.name} accepts a Survival Pact. Their scouts now share vision and may send aid.`, 'good');
+      recordDiplomacy(state, targetFaction, actionId, 'Survival Pact signed', 'Shared vision and emergency aid are now available.', 'good');
     } else {
       addMessage(state, `${target.name} respects the offer but wants more trust before a pact.`, 'info');
+      recordDiplomacy(state, targetFaction, actionId, 'Pact deferred', 'Trust improved, but the pact threshold was not reached.', 'info');
     }
   } else if (actionId === 'trade') {
     actor.trades[targetFaction] = true;
     target.trades.olundar = true;
     addMessage(state, `Trade opened with ${target.name}. Gold income improves.`, 'good');
+    recordDiplomacy(state, targetFaction, actionId, 'Trade opened', 'Gold and food income improve while trust rises.', 'good');
   } else if (actionId === 'aid') {
+    let aidOutcome = 'Aid refused';
+    let aidDetail = 'The request cost influence and trust because relations were too uncertain.';
+    let aidTone = 'danger';
     if ((actor.relations[targetFaction] ?? 0) >= 20) {
       if (targetFaction === 'dawn') {
         const spawn = findSpawnNear(state, 7, 16, 'olundar');
@@ -1151,10 +1278,15 @@ export function performDiplomacy(state, targetFaction, actionId) {
         if (spawn) addUnit(state, 'scout', 'olundar', spawn.x, spawn.y, { name: 'Mireclan Guide' });
       }
       addMessage(state, `${target.name} answers with emergency aid.`, 'good');
+      aidOutcome = 'Aid answered';
+      aidDetail = 'The request succeeded, but relations cooled after the favor.';
+      aidTone = 'good';
     } else {
       addMessage(state, `${target.name} refuses aid; relations are too uncertain.`, 'danger');
     }
     actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) - 4);
+    target.relations.olundar = actor.relations[targetFaction];
+    recordDiplomacy(state, targetFaction, actionId, aidOutcome, aidDetail, aidTone);
   } else if (actionId === 'pressure') {
     gainResources(actor.resources, { gold: 18, food: 12 });
     addMessage(state, `Olundar pressures ${target.name} for supplies. It works, but trust suffers.`, 'danger');
@@ -1162,10 +1294,29 @@ export function performDiplomacy(state, targetFaction, actionId) {
       actor.atWar[targetFaction] = true;
       target.atWar.olundar = true;
       addMessage(state, `${target.name} declares Olundar a rival even as the dead advance.`, 'danger');
+      recordDiplomacy(state, targetFaction, actionId, 'Pressure caused rivalry', 'Supplies were taken, but open rivalry now blocks diplomacy.', 'danger');
+    } else {
+      recordDiplomacy(state, targetFaction, actionId, 'Pressure extracted supplies', 'Olundar gained food and gold at a serious trust cost.', 'danger');
     }
   }
   updateVisibility(state);
   return { ok: true };
+}
+
+function recordDiplomacy(state, factionId, actionId, outcome, detail, tone = 'info') {
+  normalizeCampaignState(state);
+  state.diplomacyLog.unshift({
+    turn: state.turn,
+    factionId,
+    factionName: state.factions[factionId]?.name || factionId,
+    actionId,
+    actionName: DIPLOMACY_ACTIONS[actionId]?.name || actionId,
+    outcome,
+    detail,
+    relation: state.factions.olundar.relations[factionId] ?? 0,
+    tone
+  });
+  state.diplomacyLog = state.diplomacyLog.slice(0, 40);
 }
 
 export function endTurn(state) {

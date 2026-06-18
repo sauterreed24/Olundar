@@ -149,6 +149,8 @@ Diplomacy is intentionally simple but consequential:
 - **Request War Aid:** can produce units or supplies if relation is good enough.
 - **Pressure Them:** grants quick resources but can turn civilizations hostile.
 
+The Diplomacy Ledger keeps current posture, pacts, trade, aid, pressure, and rivalry history visible so long campaigns do not hide important political consequences in the message log.
+
 This should later evolve into grievances, promises, allied war plans, tribute, hostage diplomacy, and emergency councils.
 
 ## Deadwalker AI

@@ -17,6 +17,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getCampaignRecap,
+  getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
   getObjectiveProgress,
@@ -24,6 +25,7 @@ import {
   getSiegeOperations,
   getWarCouncil,
   moveUnit,
+  performDiplomacy,
   serializeState,
   startConstruction,
   startTraining,
@@ -272,6 +274,36 @@ check('campaign recaps summarize imports and outcomes', () => {
   const defeat = getCampaignRecap(lost);
   assert(defeat.title === 'Defeat Recap' && defeat.tone === 'danger', 'Defeat recap should be clearly marked.');
   assert(defeat.nextSteps.some((step) => step.includes('Scout earlier')), 'Defeat recap should provide practical after-action advice.');
+});
+
+check('diplomacy ledger tracks contacts, accords, and grievances', () => {
+  const state = createGame('quality-diplomacy-ledger');
+  const hidden = getDiplomacyLedger(state);
+  assert(hidden.entries.length === 3, 'Ledger should track all living civilizations.');
+  assert(hidden.stats.find((stat) => stat.label === 'Contacts').value === '0/3', 'Ledger should count undiscovered contacts.');
+  assert(hidden.entries.every((entry) => !entry.discovered && entry.tags.includes('Uncontacted') && entry.posture.label === 'Uncontacted'), 'Undiscovered factions should be visible as uncontacted.');
+
+  state.factions.dawn.discovered = true;
+  state.flags.firstAllySeen = true;
+  const open = getDiplomacyLedger(state);
+  const dawn = open.entries.find((entry) => entry.id === 'dawn');
+  assert(dawn.discovered && dawn.actions.some((action) => action.id === 'trade' && !action.disabled), 'Discovered factions should expose available actions.');
+
+  const trade = performDiplomacy(state, 'dawn', 'trade');
+  assert(trade.ok, trade.reason || 'Trade action failed.');
+  const traded = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'dawn');
+  assert(traded.trade, 'Ledger should show opened trade.');
+  assert(traded.recent[0].outcome === 'Trade opened', 'Ledger should retain recent diplomatic records.');
+  assert(!performDiplomacy(state, 'dawn', 'trade').ok, 'Duplicate trade should be blocked.');
+
+  state.factions.veyr.discovered = true;
+  state.factions.olundar.relations.veyr = -40;
+  state.factions.veyr.relations.olundar = -40;
+  const pressure = performDiplomacy(state, 'veyr', 'pressure');
+  assert(pressure.ok, pressure.reason || 'Pressure action failed.');
+  const veyr = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'veyr');
+  assert(veyr.atWar && veyr.posture.label === 'Rival', 'Ledger should expose pressure-created rivalries.');
+  assert(veyr.recent[0].outcome.includes('Pressure'), 'Ledger should record pressure outcomes.');
 });
 
 check('audio cue registry stays lightweight and browser-safe', () => {
