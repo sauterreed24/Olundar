@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan } from './map.js';
-import { buildingAt, canBuildOn, findPath, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
   plains: '#8caf62',
@@ -14,6 +14,12 @@ const TERRAIN_COLORS = {
 };
 
 const FACTION_COLORS = Object.fromEntries(Object.values(FACTIONS).map((faction) => [faction.id, faction.color]));
+const LENS_COLORS = {
+  dead: '#9cf38a',
+  roads: '#ffd76b',
+  supply: '#baf58c',
+  alliance: '#88d8ff'
+};
 
 export function getLayout(canvas) {
   const tileSize = Math.floor(Math.min(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT));
@@ -41,19 +47,20 @@ export function pointToTile(canvas, clientX, clientY) {
   };
 }
 
-export function drawGame(canvas, state, hoverTile = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal') {
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackdrop(ctx, canvas);
   drawTiles(ctx, state, layout);
+  drawStrategicLens(ctx, state, layout, lensId);
   drawReachable(ctx, state, layout);
   drawBuildSites(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
-  drawMiniMap(ctx, state, layout);
+  drawMiniMap(ctx, state, layout, lensId);
   drawStatusRibbon(ctx, state, layout);
 }
 
@@ -177,6 +184,50 @@ function drawBlightVeins(ctx, x, y, s, blight, visible) {
   ctx.moveTo(x + s * 0.48, y + s * 0.54);
   ctx.lineTo(x + s * 0.83, y + s * 0.44);
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawStrategicLens(ctx, state, layout, lensId) {
+  const lens = getStrategicMapLens(state, lensId);
+  if (lens.id === 'normal') return;
+  ctx.save();
+  for (const tile of lens.tiles) {
+    const x = layout.offsetX + tile.x * layout.tileSize;
+    const y = layout.offsetY + tile.y * layout.tileSize;
+    const color = lensColor(tile.tone);
+    const alpha = tile.visible ? 0.24 : 0.14;
+    ctx.globalAlpha = alpha * (tile.strength || 1);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 1, y + 1, layout.tileSize - 2, layout.tileSize - 2);
+    if (tile.kind === 'road') {
+      ctx.globalAlpha = tile.visible ? 0.9 : 0.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(x + layout.tileSize * 0.12, y + layout.tileSize * 0.5);
+      ctx.lineTo(x + layout.tileSize * 0.88, y + layout.tileSize * 0.5);
+      ctx.stroke();
+    } else if (tile.kind === 'allianceVision') {
+      ctx.globalAlpha = tile.visible ? 0.6 : 0.34;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.04);
+      ctx.strokeRect(x + 3, y + 3, layout.tileSize - 6, layout.tileSize - 6);
+    }
+  }
+  ctx.globalAlpha = 1;
+  for (const marker of lens.markers) {
+    const x = layout.offsetX + marker.x * layout.tileSize;
+    const y = layout.offsetY + marker.y * layout.tileSize;
+    const color = lensColor(marker.tone);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(2, layout.tileSize * 0.07);
+    ctx.globalAlpha = marker.visible ? 0.95 : 0.5;
+    ctx.strokeRect(x + 3, y + 3, layout.tileSize - 6, layout.tileSize - 6);
+    ctx.beginPath();
+    ctx.arc(x + layout.tileSize * 0.5, y + layout.tileSize * 0.18, Math.max(2, layout.tileSize * 0.09), 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -525,7 +576,7 @@ function drawSelection(ctx, state, layout, hoverTile) {
   }
 }
 
-function drawMiniMap(ctx, state, layout) {
+function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const scale = Math.max(2, Math.floor(layout.tileSize * 0.22));
   const w = MAP_WIDTH * scale;
   const h = MAP_HEIGHT * scale;
@@ -539,6 +590,13 @@ function drawMiniMap(ctx, state, layout) {
     if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#333943';
     ctx.fillStyle = color;
     ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
+  }
+  const lens = getStrategicMapLens(state, lensId);
+  if (lens.id !== 'normal') {
+    for (const tile of lens.tiles) {
+      ctx.fillStyle = lensColor(tile.tone);
+      ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
+    }
   }
   for (const building of state.buildings) {
     if (!isRevealed(state, building.x, building.y)) continue;
@@ -644,6 +702,10 @@ function ellipse(ctx, x, y, rx, ry) {
   ctx.beginPath();
   ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function lensColor(tone) {
+  return FACTION_COLORS[tone] || LENS_COLORS[tone] || LENS_COLORS.alliance;
 }
 
 function shade(hex, amount) {

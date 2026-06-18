@@ -6,6 +6,7 @@ import {
   FACTIONS,
   FIELD_ORDERS,
   MAP_HEIGHT,
+  MAP_LENSES,
   MAP_WIDTH,
   OBJECTIVES,
   SCENARIOS,
@@ -783,15 +784,82 @@ export function isRevealed(state, x, y) {
   return inBounds(x, y) && state.revealed[idx(x, y)];
 }
 
-export function updateVisibility(state) {
-  state.visible = Array(MAP_WIDTH * MAP_HEIGHT).fill(false);
+export function getStrategicMapLens(state, lensId = 'normal') {
+  normalizeCampaignState(state);
+  const id = MAP_LENSES[lensId] ? lensId : 'normal';
+  const lens = MAP_LENSES[id];
+  const tiles = [];
+  const markers = [];
+  if (id === 'normal') return { ...lens, tiles, markers };
+
+  const seenTiles = new Set();
+  const pushTile = (tile, kind, tone, strength = 1) => {
+    if (!isRevealed(state, tile.x, tile.y)) return;
+    const key = `${tile.x},${tile.y},${kind},${tone}`;
+    if (seenTiles.has(key)) return;
+    seenTiles.add(key);
+    tiles.push({
+      x: tile.x,
+      y: tile.y,
+      kind,
+      tone,
+      strength,
+      visible: isVisible(state, tile.x, tile.y)
+    });
+  };
+  const pushMarker = (item, kind, tone) => {
+    if (!isRevealed(state, item.x, item.y)) return;
+    markers.push({
+      x: item.x,
+      y: item.y,
+      kind,
+      tone,
+      visible: isVisible(state, item.x, item.y),
+      name: item.name || BUILDING_TYPES[item.type]?.name || UNIT_TYPES[item.type]?.name || kind
+    });
+  };
+
+  if (id === 'blight') {
+    for (const tile of state.map.tiles) {
+      if (tile.terrain === 'blight' || tile.blight > 0) pushTile(tile, 'blight', 'dead', Math.max(0.35, Math.min(1, (tile.blight || 4) / 9)));
+    }
+    for (const building of state.buildings.filter((item) => item.faction === 'dead')) pushMarker(building, 'deadwork', 'dead');
+    for (const unit of state.units.filter((item) => item.faction === 'dead')) pushMarker(unit, 'deadwalker', 'dead');
+  } else if (id === 'roads') {
+    for (const tile of state.map.tiles) {
+      if (tile.road) pushTile(tile, 'road', 'roads', 1);
+    }
+    for (const building of state.buildings.filter((item) => item.faction === 'olundar' && ['city', 'outpost', 'road'].includes(item.type))) pushMarker(building, 'logistics', 'roads');
+  } else if (id === 'supply') {
+    for (const tile of state.map.tiles) {
+      if (TERRAIN[tile.terrain].passable && tile.terrain !== 'blight' && isTileSupplied(state, tile.x, tile.y)) pushTile(tile, 'supply', 'supply', 1);
+    }
+    for (const building of state.buildings.filter((item) => item.faction === 'olundar' && ['city', 'outpost', 'road'].includes(item.type))) pushMarker(building, 'supplyNode', 'supply');
+  } else if (id === 'alliance') {
+    const sources = visionSourcesFor(state).filter((source) => source.faction !== 'olundar');
+    for (const tile of state.map.tiles) {
+      const source = sources.find((item) => manhattan(item.x, item.y, tile.x, tile.y) <= item.sight);
+      if (source) pushTile(tile, 'allianceVision', source.faction, 1);
+    }
+    for (const unit of state.units.filter((item) => item.faction !== 'olundar' && isAllyForVision(state, item.faction))) pushMarker(unit, 'allyUnit', itemTone(unit));
+    for (const building of state.buildings.filter((item) => item.faction !== 'olundar' && isAllyForVision(state, item.faction))) pushMarker(building, 'allyHolding', itemTone(building));
+  }
+
+  return { ...lens, tiles, markers };
+}
+
+function itemTone(item) {
+  return item.faction || 'alliance';
+}
+
+function visionSourcesFor(state) {
   const visionSources = [];
   for (const unit of state.units) {
     if (isAllyForVision(state, unit.faction)) {
       const def = getUnitDef(unit);
       const tile = tileAt(state, unit.x, unit.y);
       const bonus = tile ? Math.max(-1, TERRAIN[tile.terrain].sight || 0) : 0;
-      visionSources.push({ x: unit.x, y: unit.y, sight: Math.max(1, def.sight + bonus) });
+      visionSources.push({ x: unit.x, y: unit.y, sight: Math.max(1, def.sight + bonus), faction: unit.faction, kind: 'unit', name: unit.name });
     }
   }
   for (const building of state.buildings) {
@@ -799,9 +867,15 @@ export function updateVisibility(state) {
       const def = getBuildingDef(building);
       const tile = tileAt(state, building.x, building.y);
       const bonus = tile?.terrain === 'hills' ? 1 : 0;
-      visionSources.push({ x: building.x, y: building.y, sight: def.vision + bonus + (building.upgraded || 0) });
+      visionSources.push({ x: building.x, y: building.y, sight: def.vision + bonus + (building.upgraded || 0), faction: building.faction, kind: 'building', name: building.name });
     }
   }
+  return visionSources;
+}
+
+export function updateVisibility(state) {
+  state.visible = Array(MAP_WIDTH * MAP_HEIGHT).fill(false);
+  const visionSources = visionSourcesFor(state);
   for (const source of visionSources) {
     revealRadius(state, source.x, source.y, source.sight);
   }
@@ -1243,6 +1317,10 @@ export function canBuildOn(state, buildingType, x, y) {
 
 function adjacentTerrain(state, x, y, terrain) {
   return neighbors4(x, y).some((n) => tileAt(state, n.x, n.y).terrain === terrain);
+}
+
+export function isTileSupplied(state, x, y) {
+  return inBounds(x, y) && nearSupply(state, x, y);
 }
 
 function nearSupply(state, x, y) {

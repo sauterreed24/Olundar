@@ -524,6 +524,49 @@ button:disabled {
   overflow: hidden;
 }
 
+.map-lens-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.48rem 0.65rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(5, 7, 11, 0.88);
+}
+
+.lens-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lens-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.3rem;
+  width: min(100%, 36rem);
+}
+
+.lens-buttons button {
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.34rem 0.42rem;
+  border-color: rgba(240, 200, 102, 0.28);
+  border-radius: 7px;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+.lens-buttons button[aria-pressed="true"] {
+  border-color: rgba(186, 245, 140, 0.7);
+  background: linear-gradient(180deg, rgba(61, 83, 50, 0.95), rgba(30, 41, 31, 0.9));
+  color: #f6ffd8;
+  box-shadow: 0 0 0 1px rgba(186, 245, 140, 0.18) inset;
+}
+
 #gameCanvas {
   display: block;
   width: 100%;
@@ -1196,6 +1239,10 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .lens-buttons {
+    width: 100%;
+  }
+
   .council-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1231,6 +1278,16 @@ button:disabled {
 
   .resourcebar {
     padding: 0.45rem 0.65rem;
+  }
+
+  .map-lens-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.38rem;
+  }
+
+  .lens-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .council-stats {

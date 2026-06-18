@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -44,6 +44,7 @@ import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, n
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const canvas = document.querySelector('#gameCanvas');
+const mapLensBar = document.querySelector('#mapLensBar');
 const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
 const objectiveList = document.querySelector('#objectiveList');
@@ -75,6 +76,7 @@ let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
 let playerSettings = readSettings();
 let lastAutoRecapKey = null;
+let activeMapLens = 'normal';
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -95,8 +97,9 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile);
+  drawGame(canvas, state, hoverTile, activeMapLens);
   renderTopBar();
+  renderMapLensBar();
   renderCouncil();
   renderGuide();
   renderOperations();
@@ -126,6 +129,24 @@ function renderAudioButton() {
   audioTop.textContent = isEnabled ? 'Audio On' : 'Audio Off';
   audioTop.setAttribute('aria-pressed', String(isEnabled));
   audioTop.title = isEnabled ? 'Disable audio cues and ambient music' : 'Enable audio cues and ambient music';
+}
+
+function renderMapLensBar() {
+  if (!mapLensBar) return;
+  mapLensBar.innerHTML = '<span class="lens-label">Map lens</span>';
+  const group = document.createElement('div');
+  group.className = 'lens-buttons';
+  for (const lens of Object.values(MAP_LENSES)) {
+    const lensButton = button(lens.name, () => {
+      activeMapLens = lens.id;
+      toast(`${lens.name} lens.`);
+      render();
+    }, false, lens.text);
+    lensButton.setAttribute('aria-pressed', String(activeMapLens === lens.id));
+    if (activeMapLens === lens.id) lensButton.classList.add('active');
+    group.appendChild(lensButton);
+  }
+  mapLensBar.appendChild(group);
 }
 
 function renderCouncil() {
@@ -1005,7 +1026,7 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   renderTilePanel();
-  drawGame(canvas, state, hoverTile);
+  drawGame(canvas, state, hoverTile, activeMapLens);
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;

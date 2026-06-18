@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -23,7 +23,9 @@ import {
   getObjectiveProgress,
   getReadyOlundarUnits,
   getSiegeOperations,
+  getStrategicMapLens,
   getWarCouncil,
+  isTileSupplied,
   moveUnit,
   performDiplomacy,
   serializeState,
@@ -33,6 +35,7 @@ import {
   trainingQueueLimit,
   tileAt,
   upgradeBuilding,
+  updateVisibility,
   unitAt
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
@@ -116,6 +119,11 @@ check('content tables are internally consistent', () => {
     assert(order.id === id, `Field order ${id} has mismatched id.`);
     assert(order.name && order.text, `Field order ${id} needs player-facing text.`);
   }
+  for (const [id, lens] of Object.entries(MAP_LENSES)) {
+    assert(lens.id === id, `Map lens ${id} has mismatched id.`);
+    assert(lens.name && lens.text, `Map lens ${id} needs player-facing text.`);
+  }
+  for (const id of ['normal', 'blight', 'roads', 'supply', 'alliance']) assert(MAP_LENSES[id], `Missing required map lens ${id}.`);
 });
 
 check('campaign generation creates playable essentials', () => {
@@ -342,6 +350,40 @@ check('pact field orders steer allied AI', () => {
   const afterSpear = harass.units.find((unit) => unit.id === spear.id);
   const afterDistance = Math.abs(afterSpear.x - bonePit.x) + Math.abs(afterSpear.y - bonePit.y);
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
+});
+
+check('strategic map lenses expose planning layers', () => {
+  const state = createGame('quality-strategic-lens');
+  const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  assert(city && isTileSupplied(state, city.x, city.y), 'Capital should seed supply reach.');
+
+  const roads = getStrategicMapLens(state, 'roads');
+  assert(roads.tiles.some((tile) => tile.kind === 'road'), 'Road lens should highlight revealed road tiles.');
+  assert(roads.markers.some((marker) => marker.kind === 'logistics'), 'Road lens should mark logistics nodes.');
+
+  const supply = getStrategicMapLens(state, 'supply');
+  assert(supply.tiles.some((tile) => tile.kind === 'supply' && tile.x === city.x && tile.y === city.y), 'Supply lens should include the capital tile.');
+  assert(supply.markers.some((marker) => marker.kind === 'supplyNode'), 'Supply lens should mark supply nodes.');
+
+  const bonePit = state.buildings.find((building) => building.faction === 'dead' && building.type === 'bonePit');
+  const boneIndex = bonePit.y * MAP_WIDTH + bonePit.x;
+  state.revealed[boneIndex] = true;
+  state.visible[boneIndex] = true;
+  const boneTile = tileAt(state, bonePit.x, bonePit.y);
+  boneTile.blight = 7;
+  boneTile.terrain = 'blight';
+  const blight = getStrategicMapLens(state, 'blight');
+  assert(blight.tiles.some((tile) => tile.kind === 'blight' && tile.x === bonePit.x && tile.y === bonePit.y), 'Blight lens should highlight revealed blight.');
+  assert(blight.markers.some((marker) => marker.kind === 'deadwork'), 'Blight lens should mark known Deadwalker structures.');
+
+  state.factions.dawn.discovered = true;
+  state.factions.olundar.pacts.dawn = true;
+  state.factions.dawn.pacts.olundar = true;
+  updateVisibility(state);
+  const alliance = getStrategicMapLens(state, 'alliance');
+  assert(alliance.tiles.some((tile) => tile.kind === 'allianceVision' && tile.tone === 'dawn'), 'Alliance lens should show Survival Pact vision.');
+  assert(alliance.markers.some((marker) => marker.kind === 'allyHolding' || marker.kind === 'allyUnit'), 'Alliance lens should mark pact ally positions.');
+  assert(getStrategicMapLens(state, 'unknown').id === 'normal', 'Unknown map lens ids should fall back to normal.');
 });
 
 check('audio cue registry stays lightweight and browser-safe', () => {

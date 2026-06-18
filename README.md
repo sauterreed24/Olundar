@@ -14,6 +14,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Diplomacy Ledger that keeps contacts, pacts, trade, aid, pressure, and rivalries visible over long campaigns.
 - Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
+- Compact strategic map lenses for blight, roads, supply reach, and Survival Pact vision.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
@@ -28,7 +29,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, allied field orders, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, allied field orders, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -57,6 +58,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Click **Save** or **Load** to manage named campaign slots.
 - Click **Import save file** or **Import JSON** in the save manager to load an exported campaign on the current device.
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
+- Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, and alliance vision.
 - The Diplomacy Ledger shows relation posture, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
@@ -115,6 +117,7 @@ olundar_game/
 - Campaign recaps summarize active imports, victories, defeats, objective milestones, and after-action advice from live state.
 - Diplomacy ledger entries track uncontacted civilizations, active pacts/trade, aid or pressure history, duplicate accord prevention, and rivalries.
 - Allied field orders must be pact-gated and steer allied AI toward reinforcement or Deadwalker harassment.
+- Strategic map lenses must expose revealed blight, roads, Olundar supply reach, and pact ally vision without breaking fog of war.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
 - Strategic path from Olundar toward the portal front exists.
@@ -129,4 +132,4 @@ olundar_game/
 ## Suggested next production steps
 
 1. Add richer faction war aims so living civilizations bargain, raid, and defend more visibly even before a pact.
-2. Add a compact strategic map filter for blight, roads, supply, and alliance vision.
+2. Add crisis events for refugees, famine, city raids, and emergency councils that create memorable midgame decisions.

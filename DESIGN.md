@@ -16,7 +16,7 @@ The intended difficulty is moderate: challenging enough that poor scouting or po
 
 ### 1. Explore the unknown
 
-The map begins under fog of war. The player only sees terrain, units, and buildings inside active vision. Previously explored areas remain dimmed but do not show current enemy positions. Scouts, watchtowers, hills, outposts, and allied survival pacts all matter because information is survival.
+The map begins under fog of war. The player only sees terrain, units, and buildings inside active vision. Previously explored areas remain dimmed but do not show current enemy positions. Scouts, watchtowers, hills, outposts, and allied survival pacts all matter because information is survival. Strategic map lenses help players read revealed blight, roads, supply reach, and pact vision without exposing hidden territory.
 
 ### 2. Build plans, not chores
 
@@ -179,6 +179,7 @@ Future versions can add optional policies: rationing, conscription, evacuation, 
 - Readable on laptops and phones.
 - Canvas map with large silhouettes and high-contrast fog.
 - Side panel for selected units/buildings, orders, tile data, objectives, diplomacy, and log.
+- Compact map lens controls for terrain, blight, roads, supply, and alliance vision.
 - Campaign recap overlay for imported saves, victories, and defeats so players can quickly understand what happened and what to do next.
 - No hidden mandatory hotkeys.
 - Local save, export, and JSON save import from the first prototype.

@@ -362,6 +362,14 @@ export const FIELD_ORDERS = {
   harassDeadworks: { id: 'harassDeadworks', name: 'Harass Deadworks', text: 'Push toward revealed Deadwalker structures and pressure their expansion.' }
 };
 
+export const MAP_LENSES = {
+  normal: { id: 'normal', name: 'Normal', text: 'Standard terrain, fog, units, and buildings.' },
+  blight: { id: 'blight', name: 'Blight', text: 'Highlight revealed grave-blight and known Deadwalker works.' },
+  roads: { id: 'roads', name: 'Roads', text: 'Trace revealed military roads and logistics corridors.' },
+  supply: { id: 'supply', name: 'Supply', text: 'Show revealed tiles inside Olundar city, outpost, and road supply reach.' },
+  alliance: { id: 'alliance', name: 'Alliance', text: 'Show Survival Pact vision and allied positions.' }
+};
+
 export const OBJECTIVES = [
   'Reveal the eastern wasteland where the Deadwalker portal is hidden.',
   'Build a war economy: farms, wood, iron, barracks, and archers.',
