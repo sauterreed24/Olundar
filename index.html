@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Olundar: Deadwalker Strategy Prototype</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="sun">☀</span>
+        <div>
+          <h1>Olundar</h1>
+          <p>Exploration · Survival · War Strategy</p>
+        </div>
+      </div>
+      <div class="turnbox">
+        <strong id="turnLabel">Turn 1</strong>
+        <div class="top-actions">
+          <button id="endTurnTop" type="button">End Turn</button>
+          <button id="saveTop" type="button">Save</button>
+          <button id="loadTop" type="button">Load</button>
+          <button id="newTop" type="button">New</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="resourceBar" class="resourcebar" aria-live="polite"></div>
+    <div id="modeBanner" class="mode-banner" hidden></div>
+
+    <main class="layout">
+      <section class="map-shell" aria-label="Olundar world map">
+        <canvas id="gameCanvas" width="1280" height="860"></canvas>
+        <div class="map-help">
+          <span>Click unit → click tile to move</span>
+          <span>Click enemy in range to attack</span>
+          <span>E ends turn · Esc cancels build</span>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section id="selectionPanel" class="panel"></section>
+        <section id="actionPanel" class="panel"></section>
+        <section id="tilePanel" class="panel"></section>
+        <section class="panel">
+          <h2>Objectives</h2>
+          <ol id="objectiveList" class="objectives"></ol>
+        </section>
+        <section id="diplomacyPanel" class="panel"></section>
+        <section id="logPanel" class="panel chronicle"></section>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

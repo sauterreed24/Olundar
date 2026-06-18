@@ -1,0 +1,14 @@
+{
+  "name": "olundar-deadwalker-strategy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A lightweight turn-based exploration, survival, and war strategy prototype set in Olundar.",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "quality:check": "node tools/quality-check.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

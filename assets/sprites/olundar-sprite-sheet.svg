@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="840" viewBox="0 0 1200 840" role="img" aria-labelledby="title desc">
+  <title id="title">Olundar prototype sprite sheet</title>
+  <desc id="desc">Handcrafted vector reference sprites for Olundaran units, Deadwalkers, buildings, and terrain.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#000" flood-opacity="0.45" />
+    </filter>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff1a2" />
+      <stop offset="1" stop-color="#f0c866" />
+    </linearGradient>
+    <linearGradient id="blight" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1b1024" />
+      <stop offset="1" stop-color="#9cf38a" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="840" fill="#0b0f16" />
+  <text x="48" y="58" fill="#f0c866" font-size="34" font-family="Georgia, serif" font-weight="700">Olundar Sprite & Terrain Reference</text>
+  <text x="48" y="92" fill="#bdb49c" font-size="18" font-family="system-ui, sans-serif">Lightweight vector style used by the canvas renderer: readable silhouettes, Roman-era kit, and undead glow.</text>
+
+  <g transform="translate(48 130)">
+    <text fill="#f5ecd2" font-size="24" font-family="Georgia, serif">Olundaran Units</text>
+    <g transform="translate(0 34)" filter="url(#shadow)">
+      <g transform="translate(0 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="34" r="15" fill="#d2c2a0" />
+        <path d="M60 14 L34 55 H86 Z" fill="#2b3a2f" />
+        <rect x="46" y="56" width="28" height="32" fill="#f0c866" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Scout</text>
+      </g>
+      <g transform="translate(138 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="32" r="14" fill="#d2c2a0" />
+        <rect x="46" y="49" width="28" height="34" fill="#f0c866" />
+        <path d="M34 48 L24 74 L36 96 L50 74 Z" fill="#c7ccd1" />
+        <line x1="84" y1="22" x2="84" y2="96" stroke="#2b2218" stroke-width="5" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Legionary</text>
+      </g>
+      <g transform="translate(276 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="32" r="14" fill="#d2c2a0" />
+        <rect x="46" y="49" width="28" height="34" fill="#f0c866" />
+        <path d="M84 28 C105 44 105 72 84 88" fill="none" stroke="#4b2f1d" stroke-width="5" />
+        <line x1="84" y1="28" x2="84" y2="88" stroke="#f5ebcb" stroke-width="2" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Archer</text>
+      </g>
+      <g transform="translate(414 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="32" r="14" fill="#d2c2a0" />
+        <rect x="46" y="49" width="28" height="34" fill="#f0c866" />
+        <line x1="80" y1="48" x2="96" y2="30" stroke="#322318" stroke-width="6" />
+        <rect x="88" y="22" width="22" height="10" fill="#a9a9a9" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Engineer</text>
+      </g>
+      <g transform="translate(552 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <rect x="28" y="56" width="56" height="22" fill="#5b3a24" />
+        <circle cx="86" cy="50" r="14" fill="#5b3a24" />
+        <rect x="52" y="34" width="24" height="28" fill="#f0c866" />
+        <line x1="70" y1="24" x2="88" y2="88" stroke="#322318" stroke-width="5" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Cavalry</text>
+      </g>
+      <g transform="translate(690 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#f0c866" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <rect x="28" y="56" width="60" height="22" fill="#5b3a24" />
+        <line x1="48" y1="58" x2="85" y2="28" stroke="#2b1d12" stroke-width="7" />
+        <circle cx="42" cy="88" r="10" fill="#f0c866" />
+        <circle cx="82" cy="88" r="10" fill="#f0c866" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Onager</text>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(48 340)">
+    <text fill="#f5ecd2" font-size="24" font-family="Georgia, serif">Deadwalkers</text>
+    <g transform="translate(0 34)" filter="url(#shadow)">
+      <g transform="translate(0 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#9cf38a" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="34" r="16" fill="#e6e5d5" />
+        <circle cx="54" cy="32" r="3" fill="#111" /><circle cx="66" cy="32" r="3" fill="#111" />
+        <rect x="46" y="52" width="28" height="32" fill="#d8d8c8" />
+        <line x1="84" y1="28" x2="92" y2="92" stroke="#9cf38a" stroke-width="4" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Bone Thrall</text>
+      </g>
+      <g transform="translate(138 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#9cf38a" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="34" r="16" fill="#e6e5d5" />
+        <circle cx="54" cy="32" r="3" fill="#111" /><circle cx="66" cy="32" r="3" fill="#111" />
+        <rect x="46" y="52" width="28" height="32" fill="#d8d8c8" />
+        <path d="M84 32 C104 48 104 72 84 88" fill="none" stroke="#9cf38a" stroke-width="4" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Corpse Archer</text>
+      </g>
+      <g transform="translate(276 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#9cf38a" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <circle cx="60" cy="34" r="16" fill="#e6e5d5" />
+        <circle cx="54" cy="32" r="3" fill="#111" /><circle cx="66" cy="32" r="3" fill="#111" />
+        <rect x="43" y="52" width="34" height="36" fill="#2c3335" />
+        <line x1="84" y1="28" x2="92" y2="92" stroke="#9cf38a" stroke-width="5" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Grave Knight</text>
+      </g>
+      <g transform="translate(414 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#9cf38a" stroke-opacity="0.25" />
+        <ellipse cx="60" cy="88" rx="38" ry="12" fill="#050608" opacity="0.6" />
+        <path d="M38 25 L50 8 L60 25 L72 8 L84 25 Z" fill="#9cf38a" />
+        <circle cx="60" cy="38" r="17" fill="#e6e5d5" />
+        <circle cx="54" cy="36" r="3" fill="#111" /><circle cx="66" cy="36" r="3" fill="#111" />
+        <rect x="42" y="58" width="36" height="32" fill="#2c3335" />
+        <text x="60" y="105" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Vorgath</text>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(48 550)">
+    <text fill="#f5ecd2" font-size="24" font-family="Georgia, serif">Buildings & Terrain</text>
+    <g transform="translate(0 34)" filter="url(#shadow)">
+      <g transform="translate(0 0)">
+        <rect width="120" height="120" rx="18" fill="#8caf62" />
+        <rect x="24" y="58" width="72" height="40" fill="#f0c866" />
+        <path d="M18 58 L60 32 L102 58 Z" fill="#6b4d38" />
+        <text x="60" y="112" text-anchor="middle" fill="#151c29" font-size="14" font-family="system-ui">City</text>
+      </g>
+      <g transform="translate(138 0)">
+        <rect width="120" height="120" rx="18" fill="#386c45" />
+        <path d="M35 70 L55 34 L75 70 Z" fill="#1f5b36" />
+        <path d="M58 76 L78 40 L98 76 Z" fill="#1f5b36" />
+        <rect x="46" y="70" width="10" height="22" fill="#50331e" />
+        <text x="60" y="112" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Forest</text>
+      </g>
+      <g transform="translate(276 0)">
+        <rect width="120" height="120" rx="18" fill="#9a875a" />
+        <path d="M18 82 C32 44 52 44 66 82" fill="none" stroke="#5e4d33" stroke-width="8" />
+        <path d="M52 84 C70 38 94 42 106 84" fill="none" stroke="#5e4d33" stroke-width="8" />
+        <text x="60" y="112" text-anchor="middle" fill="#151c29" font-size="14" font-family="system-ui">Hills</text>
+      </g>
+      <g transform="translate(414 0)">
+        <rect width="120" height="120" rx="18" fill="#407fb4" />
+        <path d="M10 70 C34 36 76 92 110 52" fill="none" stroke="#b6e0ff" stroke-width="8" />
+        <text x="60" y="112" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">River</text>
+      </g>
+      <g transform="translate(552 0)">
+        <rect width="120" height="120" rx="18" fill="#54515e" />
+        <path d="M20 22 L58 58 L36 100 M58 58 L100 46" fill="none" stroke="#9cf38a" stroke-width="5" opacity="0.55" />
+        <circle cx="60" cy="60" r="24" fill="#9cf38a" opacity="0.13" />
+        <text x="60" y="112" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Blight</text>
+      </g>
+      <g transform="translate(690 0)">
+        <rect width="120" height="120" rx="18" fill="#151c29" stroke="#9cf38a" stroke-opacity="0.35" />
+        <ellipse cx="60" cy="60" rx="32" ry="42" fill="url(#blight)" opacity="0.95" />
+        <path d="M60 28 C34 58 44 84 60 92 C82 78 92 54 60 28 Z" fill="#10121a" opacity="0.7" />
+        <text x="60" y="112" text-anchor="middle" fill="#f5ecd2" font-size="14" font-family="system-ui">Portal</text>
+      </g>
+    </g>
+  </g>
+</svg>
