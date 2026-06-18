@@ -157,7 +157,9 @@ War aims show what each discovered civilization is already trying to do without 
 
 Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures.
 
-This should later evolve into grievances, promises, allied war plans, tribute, hostage diplomacy, and long-running commitments tied to crisis rulings.
+Faction promises add a more personal layer before diplomacy becomes generic. Dawnward asks for wall guards and reinforced hillforts, Veyr responds to funded caravans and practical supply profit, and Mireclan trusts food, respect, and marsh-route scouting. Each promise costs Olundar real resources and creates visible memory so the ledger shows the political price of building a coalition.
+
+This should later evolve into promise follow-through demands, allied war plans, tribute, hostage diplomacy, and long-running commitments tied to crisis rulings.
 
 ## Deadwalker AI
 

@@ -20,6 +20,7 @@ import {
   getReadyOlundarUnits,
   getSiegeOperations,
   getWarCouncil,
+  makeDiplomaticPromise,
   resolveCrisis,
   trainingQueueLimit,
   trainingTurnsFor,
@@ -449,6 +450,18 @@ function renderDiplomacy() {
         }
         orderBlock.appendChild(orderRow);
         card.appendChild(orderBlock);
+      }
+      if (entry.commitments.length) {
+        const promiseBlock = document.createElement('div');
+        promiseBlock.className = 'faction-promises';
+        promiseBlock.innerHTML = '<strong>Faction Promises</strong><p>Spend resources on a civilization-specific commitment that leaves a visible diplomatic memory.</p>';
+        const promiseRow = document.createElement('div');
+        promiseRow.className = 'button-grid promise-actions';
+        for (const promise of entry.commitments) {
+          promiseRow.appendChild(button(promise.fulfilled ? `${promise.name} kept` : `${promise.name} - ${promise.cost}`, () => runAction(() => makeDiplomaticPromise(state, entry.id, promise.id), 'diplomacy'), promise.disabled, promise.disabledReason || promise.preview));
+        }
+        promiseBlock.appendChild(promiseRow);
+        card.appendChild(promiseBlock);
       }
       const row = document.createElement('div');
       row.className = 'button-grid diplo-actions';

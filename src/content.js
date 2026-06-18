@@ -356,6 +356,39 @@ export const DIPLOMACY_ACTIONS = {
   pressure: { name: 'Pressure Them', cost: { morale: 1 }, relation: -18, text: 'Try to extract resources quickly at a diplomatic cost.' }
 };
 
+export const DIPLOMATIC_PROMISES = {
+  dawnWallGuard: {
+    id: 'dawnWallGuard',
+    factionId: 'dawn',
+    name: 'Promise Wall Guard',
+    cost: { wood: 14, influence: 1 },
+    relation: 7,
+    memory: 2,
+    text: 'Send timber, engineers, and oath-guards to strengthen Dawnward walls before the dead reach them.',
+    preview: 'Dawnward holdings gain durability, relations improve, and the ledger records a kept wall oath.'
+  },
+  veyrCaravanFund: {
+    id: 'veyrCaravanFund',
+    factionId: 'veyr',
+    name: 'Fund War Caravans',
+    cost: { gold: 22, wood: 6 },
+    relation: 7,
+    memory: 2,
+    text: 'Underwrite Veyr wagons, escorts, and road bribes so their merchants commit supply to the living front.',
+    preview: 'Olundar receives food and iron from the first convoy while Veyr records the funded route.'
+  },
+  mireMarshRoutes: {
+    id: 'mireMarshRoutes',
+    factionId: 'mire',
+    name: 'Scout Marsh Routes',
+    cost: { food: 10, influence: 1 },
+    relation: 7,
+    memory: 2,
+    text: 'Feed Mireclan guides and swear to respect their marsh routes in exchange for safer scouting paths.',
+    preview: 'A Mire route guide joins near Olundar, relations improve, and the ledger records the route oath.'
+  }
+};
+
 export const FIELD_ORDERS = {
   defendRoads: { id: 'defendRoads', name: 'Defend Roads', text: 'Patrol Olundar roads, outposts, and city approaches before pursuing distant targets.' },
   reinforceCapital: { id: 'reinforceCapital', name: 'Reinforce Capital', text: 'Muster pact aid near Olundar Prime when possible.' },

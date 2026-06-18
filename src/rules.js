@@ -5,6 +5,7 @@ import {
   CURRENT_SAVE_VERSION,
   DIFFICULTY_PRESETS,
   DIPLOMACY_ACTIONS,
+  DIPLOMATIC_PROMISES,
   FACTIONS,
   FIELD_ORDERS,
   MAP_HEIGHT,
@@ -77,7 +78,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       firstDeadwalkerSeen: false,
       firstAllySeen: false,
       deadStrongholdsDestroyed: 0,
-      warAimNotices: {}
+      warAimNotices: {},
+      factionPromises: {}
     },
     diplomacyLog: [],
     diplomacyMemory: createDiplomacyMemoryState(),
@@ -113,6 +115,7 @@ function normalizeCampaignState(state) {
   normalizeDiplomacyMemory(state);
   if (!state.flags) state.flags = {};
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
+  if (!state.flags.factionPromises) state.flags.factionPromises = {};
   if (!state.crises) state.crises = { resolved: {}, history: [] };
   if (!state.crises.resolved) state.crises.resolved = {};
   if (!Array.isArray(state.crises.history)) state.crises.history = [];
@@ -467,6 +470,9 @@ function diplomacyLedgerEntry(state, actor, id) {
     advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim, memory),
     recent,
     actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar)),
+    commitments: Object.values(DIPLOMATIC_PROMISES)
+      .filter((promise) => promise.factionId === id)
+      .map((promise) => diplomaticPromiseView(state, id, promise, discovered, atWar)),
     fieldOrders: Object.values(FIELD_ORDERS).map((order) => ({
       ...order,
       active: fieldOrder?.id === order.id,
@@ -515,6 +521,7 @@ function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = nu
   if (pact) tags.push('Survival Pact');
   if (trade) tags.push('Trade');
   if (fieldOrder) tags.push(fieldOrder.name);
+  if (Object.values(DIPLOMATIC_PROMISES).some((promise) => promise.factionId && memory?.records.some((record) => record.label === promise.name))) tags.push('Faction promise');
   if (memory?.promises) tags.push(`Promises ${memory.promises}`);
   if (memory?.grievances) tags.push(`Grievances ${memory.grievances}`);
   if (warAim && !pact) tags.push(`Aim: ${warAim.name}`);
@@ -575,6 +582,25 @@ function diplomacyActionView(state, factionId, actionId, relation, discovered, p
     cost: formatCost(action.cost),
     text: action.text,
     note,
+    disabled: Boolean(disabledReason),
+    disabledReason
+  };
+}
+
+function diplomaticPromiseView(state, factionId, promise, discovered, atWar) {
+  const fulfilled = Boolean(state.flags.factionPromises?.[promise.id]);
+  let disabledReason = '';
+  if (!discovered) disabledReason = 'Uncontacted.';
+  else if (atWar) disabledReason = 'At war.';
+  else if (fulfilled) disabledReason = 'Promise already kept.';
+  else if (!canAfford(state.factions.olundar.resources, promise.cost)) disabledReason = `Need ${formatCost(missingCost(state.factions.olundar.resources, promise.cost))}.`;
+  return {
+    id: promise.id,
+    name: promise.name,
+    text: promise.text,
+    preview: promise.preview,
+    cost: formatCost(promise.cost),
+    fulfilled,
     disabled: Boolean(disabledReason),
     disabledReason
   };
@@ -1151,10 +1177,14 @@ function adjustOlundarPopulation(state, amount) {
 }
 
 function reinforceOlundarHoldings(state, hpGain, maxHpGain) {
+  return reinforceFactionHoldings(state, 'olundar', hpGain, maxHpGain);
+}
+
+function reinforceFactionHoldings(state, factionId, hpGain, maxHpGain) {
   let count = 0;
   for (const building of state.buildings) {
-    if (building.faction !== 'olundar' || building.turnsLeft > 0) continue;
-    if (!['city', 'outpost', 'watchtower', 'wall'].includes(building.type)) continue;
+    if (building.faction !== factionId || building.turnsLeft > 0) continue;
+    if (!['city', 'outpost', 'watchtower', 'wall', 'barracks'].includes(building.type)) continue;
     building.maxHp += maxHpGain;
     building.hp = Math.min(building.maxHp, (building.hp || 0) + hpGain);
     count += 1;
@@ -1862,6 +1892,65 @@ export function performDiplomacy(state, targetFaction, actionId) {
   return { ok: true };
 }
 
+export function makeDiplomaticPromise(state, targetFaction, promiseId) {
+  normalizeCampaignState(state);
+  const actor = state.factions.olundar;
+  const target = state.factions[targetFaction];
+  const promise = DIPLOMATIC_PROMISES[promiseId];
+  if (!target || !target.discovered || targetFaction === 'dead') return { ok: false, reason: 'That civilization is not available for promises.' };
+  if (!promise || promise.factionId !== targetFaction) return { ok: false, reason: 'Unknown faction promise.' };
+  if (actor.atWar?.[targetFaction] || target.atWar?.olundar) return { ok: false, reason: `${target.name} is openly hostile. Promises are unavailable.` };
+  if (state.flags.factionPromises[promiseId]) return { ok: false, reason: 'That promise has already been kept.' };
+  if (!canAfford(actor.resources, promise.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(actor.resources, promise.cost))}.` };
+
+  payCost(actor.resources, promise.cost);
+  actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) + promise.relation);
+  target.relations.olundar = actor.relations[targetFaction];
+  const outcome = applyDiplomaticPromiseOutcome(state, promise);
+  state.flags.factionPromises[promiseId] = state.turn;
+  addMessage(state, `${target.name}: ${outcome.text}`, outcome.tone);
+  recordDiplomacy(state, targetFaction, promiseId, promise.name, outcome.detail, outcome.tone);
+  recordDiplomaticMemory(state, targetFaction, 'fulfilled', promise.name, outcome.memoryDetail, promise.memory);
+  updateVisibility(state);
+  return { ok: true, reason: outcome.text, outcome };
+}
+
+function applyDiplomaticPromiseOutcome(state, promise) {
+  if (promise.id === 'dawnWallGuard') {
+    const fortified = reinforceFactionHoldings(state, 'dawn', 10, 4);
+    return {
+      tone: 'good',
+      text: fortified ? 'Dawnward walls and hillfort posts are reinforced under Olundar oath.' : 'Dawnward engineers accept the oath, though no holdings remain to reinforce.',
+      detail: fortified ? `${fortified} Dawnward holding${fortified === 1 ? '' : 's'} gained durability from Olundar timber and engineers.` : 'Olundar promised wall guards, but no Dawnward holding could be reinforced.',
+      memoryDetail: 'Olundar spent timber, influence, and engineers to protect Dawnward walls before asking for deeper trust.'
+    };
+  }
+  if (promise.id === 'veyrCaravanFund') {
+    gainResources(state.factions.olundar.resources, { food: 16, iron: 6 });
+    return {
+      tone: 'good',
+      text: 'Veyr war caravans roll under Olundar funding and return with food and iron.',
+      detail: 'The funded caravan route delivered 16 food and 6 iron while improving Veyr trust.',
+      memoryDetail: 'Olundar funded Veyr caravans instead of treating the Dominion only as a purse.'
+    };
+  }
+  if (promise.id === 'mireMarshRoutes') {
+    const unit = spawnOlundarUnitAtCapital(state, 'scout', 'Mire Marsh-Route Guide');
+    return {
+      tone: unit ? 'good' : 'info',
+      text: unit ? 'A Mire route guide joins Olundar to scout marsh paths and blight-shadow roads.' : 'Mireclan marks the marsh routes, though no open muster ground was found.',
+      detail: unit ? 'A named scout mustered near Olundar Prime with Mireclan route knowledge.' : 'Mireclan accepted the route oath, but no scout could be placed.',
+      memoryDetail: 'Olundar fed Mireclan guides and promised to respect marsh routes in future operations.'
+    };
+  }
+  return {
+    tone: 'info',
+    text: 'The faction promise is recorded.',
+    detail: 'A faction-specific promise was recorded.',
+    memoryDetail: 'Olundar recorded a faction-specific promise.'
+  };
+}
+
 export function setFieldOrder(state, targetFaction, orderId) {
   normalizeCampaignState(state);
   const actor = state.factions.olundar;
@@ -1885,7 +1974,7 @@ function recordDiplomacy(state, factionId, actionId, outcome, detail, tone = 'in
     factionId,
     factionName: state.factions[factionId]?.name || factionId,
     actionId,
-    actionName: DIPLOMACY_ACTIONS[actionId]?.name || FIELD_ORDERS[actionId]?.name || actionId,
+    actionName: DIPLOMACY_ACTIONS[actionId]?.name || DIPLOMATIC_PROMISES[actionId]?.name || FIELD_ORDERS[actionId]?.name || actionId,
     outcome,
     detail,
     relation: state.factions.olundar.relations[factionId] ?? 0,

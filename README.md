@@ -16,6 +16,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Diplomacy Ledger that keeps contacts, pacts, trade, aid, pressure, and rivalries visible over long campaigns.
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
+- Faction-specific promises for Dawnward wall guards, Veyr war caravans, and Mireclan marsh routes, each with distinct costs and effects.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
 - Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
 - Compact strategic map lenses for blight, roads, supply reach, and Survival Pact vision.
@@ -33,7 +34,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, living-faction war aims, allied field orders, crisis rulings and aftermaths, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises, living-faction war aims, allied field orders, crisis rulings and aftermaths, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -66,6 +67,7 @@ Browsers that support installation will expose an **Install** button after the a
 - When the **Crisis Council** appears, choose one ruling per event; some rulings create delayed aftermath cards a few turns later, unaffordable choices are disabled, and recent rulings stay visible for a few turns.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
+- Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
 - Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
@@ -123,6 +125,7 @@ olundar_game/
 - Campaign recaps summarize active imports, victories, defeats, objective milestones, and after-action advice from live state.
 - Diplomacy ledger entries track uncontacted civilizations, active pacts/trade, aid or pressure history, duplicate accord prevention, and rivalries.
 - Diplomatic memory must survive old saves, summarize promises and grievances, and record fulfilled field-order commitments.
+- Faction-specific promises must be one-time, affordable-only commitments with distinct Dawnward, Veyr, and Mireclan campaign effects.
 - Living-faction war aims must appear in diplomacy and steer pre-pact AI defense, raiding, or scouting.
 - Allied field orders must be pact-gated and steer allied AI toward reinforcement or Deadwalker harassment.
 - Crisis Council events stay out of the first-turn opening, then trigger from live famine, contact, Deadwalker, and coalition pressure; rulings must spend costs once, create real campaign consequences, and schedule delayed aftermaths that resolve only once.
@@ -140,5 +143,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add faction-specific promises, such as protecting Dawnward walls, funding Veyr caravans, or scouting Mireclan marsh routes.
-2. Let aftermath rulings alter map objectives, such as escort routes, repair zones, or raider camps.
+1. Let aftermath rulings alter map objectives, such as escort routes, repair zones, or raider camps.
+2. Add faction promise follow-through demands if Olundar later ignores Dawnward walls, Veyr routes, or Mireclan marsh scouts.

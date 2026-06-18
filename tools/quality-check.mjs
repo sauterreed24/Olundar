@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -27,6 +27,7 @@ import {
   getStrategicMapLens,
   getWarCouncil,
   isTileSupplied,
+  makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
   resolveCrisis,
@@ -121,6 +122,19 @@ check('content tables are internally consistent', () => {
     assert(order.id === id, `Field order ${id} has mismatched id.`);
     assert(order.name && order.text, `Field order ${id} needs player-facing text.`);
   }
+  for (const [id, promise] of Object.entries(DIPLOMATIC_PROMISES)) {
+    assert(promise.id === id, `Diplomatic promise ${id} has mismatched id.`);
+    assert(['dawn', 'veyr', 'mire'].includes(promise.factionId), `Diplomatic promise ${id} has invalid faction.`);
+    assert(promise.name && promise.text && promise.preview, `Diplomatic promise ${id} needs name, text, and preview.`);
+    assert(Number.isInteger(promise.relation) && promise.relation > 0, `Diplomatic promise ${id} needs positive relation.`);
+    assert(Number.isInteger(promise.memory) && promise.memory > 0, `Diplomatic promise ${id} needs positive memory.`);
+    assert(promise.cost && typeof promise.cost === 'object', `Diplomatic promise ${id} needs a cost object.`);
+    for (const [resource, amount] of Object.entries(promise.cost)) {
+      assert(['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].includes(resource), `Diplomatic promise ${id} has unknown cost ${resource}.`);
+      assert(Number.isInteger(amount) && amount >= 0, `Diplomatic promise ${id} has invalid ${resource} cost.`);
+    }
+  }
+  for (const id of ['dawnWallGuard', 'veyrCaravanFund', 'mireMarshRoutes']) assert(DIPLOMATIC_PROMISES[id], `Missing required diplomatic promise ${id}.`);
   for (const [id, aim] of Object.entries(WAR_AIMS)) {
     assert(aim.id === id, `War aim ${id} has mismatched id.`);
     assert(aim.name && aim.text && aim.tone, `War aim ${id} needs name, text, and tone.`);
@@ -539,6 +553,66 @@ check('diplomatic memory tracks promises, grievances, and fulfilled commitments'
   assert(pactDawn.memory.promises >= 5, 'Pact plus fulfilled reinforcement should build meaningful promise memory.');
   assert(pactDawn.memory.records.some((record) => record.label === 'Capital Reinforced' && record.type === 'fulfilled'), 'Fulfilled field orders should be recorded.');
   assert(pactDawn.advice.includes('Kept commitments'), 'Ledger advice should respond to strong positive memory.');
+});
+
+check('faction-specific promises create distinct diplomatic commitments', () => {
+  const readyState = (seed) => {
+    const state = createGame(seed);
+    for (const id of ['dawn', 'veyr', 'mire']) state.factions[id].discovered = true;
+    state.flags.firstAllySeen = true;
+    state.factions.olundar.resources = {
+      ...state.factions.olundar.resources,
+      food: 80,
+      wood: 90,
+      stone: 30,
+      iron: 30,
+      gold: 90,
+      influence: 6,
+      morale: 7
+    };
+    return state;
+  };
+
+  const dawnState = readyState('quality-dawn-promise');
+  const dawnCity = dawnState.buildings.find((building) => building.faction === 'dawn' && building.type === 'city');
+  const beforeDawnRelation = dawnState.factions.olundar.relations.dawn;
+  const beforeDawnMaxHp = dawnCity.maxHp;
+  const dawn = makeDiplomaticPromise(dawnState, 'dawn', 'dawnWallGuard');
+  assert(dawn.ok, dawn.reason || 'Dawn wall promise failed.');
+  assert(dawnState.flags.factionPromises.dawnWallGuard === dawnState.turn, 'Dawn promise should be marked kept on the current turn.');
+  assert(dawnCity.maxHp > beforeDawnMaxHp && dawnCity.hp > beforeDawnMaxHp, 'Dawn wall promise should reinforce Dawn holdings.');
+  assert(dawnState.factions.olundar.relations.dawn > beforeDawnRelation, 'Dawn promise should improve relations.');
+  assert(getDiplomacyLedger(dawnState).entries.find((entry) => entry.id === 'dawn').memory.records[0].label === 'Promise Wall Guard', 'Dawn promise should enter diplomatic memory.');
+  assert(!makeDiplomaticPromise(dawnState, 'dawn', 'dawnWallGuard').ok, 'Faction promises should not be repeatable.');
+
+  const veyrState = readyState('quality-veyr-promise');
+  const beforeFood = veyrState.factions.olundar.resources.food;
+  const beforeIron = veyrState.factions.olundar.resources.iron;
+  const beforeGold = veyrState.factions.olundar.resources.gold;
+  const veyr = makeDiplomaticPromise(veyrState, 'veyr', 'veyrCaravanFund');
+  assert(veyr.ok, veyr.reason || 'Veyr caravan promise failed.');
+  assert(veyrState.factions.olundar.resources.food === beforeFood + 16, 'Veyr caravan promise should deliver food.');
+  assert(veyrState.factions.olundar.resources.iron === beforeIron + 6, 'Veyr caravan promise should deliver iron.');
+  assert(veyrState.factions.olundar.resources.gold === beforeGold - 22, 'Veyr caravan promise should spend gold.');
+
+  const mireState = readyState('quality-mire-promise');
+  const beforeUnits = mireState.units.length;
+  const mire = makeDiplomaticPromise(mireState, 'mire', 'mireMarshRoutes');
+  assert(mire.ok, mire.reason || 'Mire marsh promise failed.');
+  assert(mireState.units.length > beforeUnits && mireState.units.some((unit) => unit.name === 'Mire Marsh-Route Guide'), 'Mire marsh promise should create a named scout guide.');
+  const mireEntry = getDiplomacyLedger(mireState).entries.find((entry) => entry.id === 'mire');
+  assert(mireEntry.commitments.find((promise) => promise.id === 'mireMarshRoutes').fulfilled, 'Ledger should mark kept faction promises.');
+
+  const poorState = readyState('quality-promise-poor');
+  poorState.factions.olundar.resources.gold = 0;
+  const veyrEntry = getDiplomacyLedger(poorState).entries.find((entry) => entry.id === 'veyr');
+  assert(veyrEntry.commitments.find((promise) => promise.id === 'veyrCaravanFund').disabled, 'Unaffordable faction promises should be disabled.');
+  assert(!makeDiplomaticPromise(poorState, 'veyr', 'veyrCaravanFund').ok, 'Unaffordable faction promises should fail closed.');
+
+  const legacy = readyState('quality-promise-legacy');
+  delete legacy.flags.factionPromises;
+  const ledger = getDiplomacyLedger(legacy);
+  assert(ledger.entries.every((entry) => entry.commitments.every((promise) => !promise.fulfilled)), 'Legacy saves should normalize empty faction promises.');
 });
 
 check('pact field orders steer allied AI', () => {

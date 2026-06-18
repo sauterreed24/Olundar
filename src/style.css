@@ -1291,7 +1291,8 @@ button:disabled {
   color: var(--bad);
 }
 
-.field-orders {
+.field-orders,
+.faction-promises {
   display: grid;
   gap: 0.42rem;
   margin-top: 0.55rem;
@@ -1301,13 +1302,15 @@ button:disabled {
   background: rgba(186, 245, 140, 0.055);
 }
 
-.field-orders strong {
+.field-orders strong,
+.faction-promises strong {
   color: var(--good);
   font-size: 0.78rem;
   text-transform: uppercase;
 }
 
-.field-orders p {
+.field-orders p,
+.faction-promises p {
   margin: 0 !important;
   color: #ddd0ae;
   font-size: 0.84rem;
@@ -1326,6 +1329,10 @@ button:disabled {
 }
 
 .diplo-actions {
+  margin-bottom: 0;
+}
+
+.promise-actions {
   margin-bottom: 0;
 }
 
