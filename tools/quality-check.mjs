@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUILDING_TYPES, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from '../src/content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -68,6 +68,19 @@ check('content tables are internally consistent', () => {
     assert(typeof terrain.move === 'number', `Terrain ${id} missing movement.`);
     assert(typeof terrain.passable === 'boolean', `Terrain ${id} passable must be boolean.`);
   }
+  for (const [id, difficulty] of Object.entries(DIFFICULTY_PRESETS)) {
+    assert(difficulty.id === id, `Difficulty ${id} has mismatched id.`);
+    assert(difficulty.name && difficulty.text, `Difficulty ${id} needs player-facing text.`);
+    for (const key of ['startTurn', 'thrallEvery', 'archerEvery', 'knightEvery', 'outpostEvery']) {
+      assert(Number.isInteger(difficulty.deadwalker[key]) && difficulty.deadwalker[key] > 0, `Difficulty ${id} has invalid ${key}.`);
+    }
+  }
+  for (const [id, scenario] of Object.entries(SCENARIOS)) {
+    assert(scenario.id === id, `Scenario ${id} has mismatched id.`);
+    assert(scenario.name && scenario.seed && scenario.text, `Scenario ${id} needs name, seed, and text.`);
+    assert(DIFFICULTY_PRESETS[scenario.difficultyId], `Scenario ${id} references missing difficulty.`);
+    for (const unit of scenario.units || []) assert(UNIT_TYPES[unit.type], `Scenario ${id} starts with missing unit ${unit.type}.`);
+  }
 });
 
 check('campaign generation creates playable essentials', () => {
@@ -92,6 +105,28 @@ check('war council and objectives reflect early strategic pressure', () => {
   assert(progress[1].done === false, 'War economy objective should not be complete at campaign start.');
   assert(ready.length >= 4, 'Starting army should expose ready units.');
   assert(warnings.some((warning) => warning.includes('still ready')), 'End-turn warnings should catch idle units.');
+});
+
+check('scenario and difficulty presets change campaign shape', () => {
+  const founding = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-scenario' });
+  const dawnroad = createGame({ scenarioId: 'dawnroad', difficultyId: 'standard', seed: 'quality-scenario' });
+  const chronicle = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-scenario' });
+  const hollow = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
+
+  assert(dawnroad.campaign.scenarioName === SCENARIOS.dawnroad.name, 'Scenario name is not preserved in campaign metadata.');
+  assert(dawnroad.units.some((u) => u.name === 'Road Oath-Spear'), 'Dawnward Road scenario should add its sworn spear.');
+  assert(dawnroad.factions.olundar.resources.influence > founding.factions.olundar.resources.influence, 'Scenario resource changes did not apply.');
+  assert(chronicle.factions.olundar.resources.food > founding.factions.olundar.resources.food, 'Chronicle should give more opening resources.');
+  assert(hollow.factions.olundar.resources.morale < founding.factions.olundar.resources.morale, 'Hollow Crown should start with lower morale.');
+
+  const chronicleDeadBefore = chronicle.units.filter((u) => u.faction === 'dead').length;
+  const hollowDeadBefore = hollow.units.filter((u) => u.faction === 'dead').length;
+  endTurn(chronicle);
+  endTurn(hollow);
+  const chronicleNewDead = chronicle.units.filter((u) => u.faction === 'dead').length - chronicleDeadBefore;
+  const hollowNewDead = hollow.units.filter((u) => u.faction === 'dead').length - hollowDeadBefore;
+  assert(chronicleNewDead === 0, 'Chronicle should delay the first Deadwalker spawn.');
+  assert(hollowNewDead > 0, 'Hollow Crown should spawn Deadwalkers immediately.');
 });
 
 check('strategic path exists from Olundar toward the portal front', () => {

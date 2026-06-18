@@ -7,6 +7,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 ## What is playable now
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
+- Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources and Deadwalker pressure.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
@@ -18,7 +19,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Local save/load and exportable JSON save files.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -40,6 +41,7 @@ No package install is required because this prototype has no third-party runtime
 - Select an Olundaran building to upgrade it when resources allow.
 - Press `N` or click **Next Unit** to cycle to the next ready unit.
 - Press `E` to end the turn; if units are idle, press `E` again or use `Shift + E` to confirm.
+- Click **New** to choose a scenario, difficulty, and seed.
 - Press `Esc` to cancel build mode.
 - Press `Ctrl/Cmd + S` to save locally.
 - Press `Ctrl/Cmd + L` to load locally.
@@ -77,6 +79,7 @@ olundar_game/
 - JavaScript syntax parse check.
 - Content table consistency.
 - Campaign essentials exist.
+- Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
 - War Council and objective progress reflect early strategic pressure.
 - Strategic path from Olundar toward the portal front exists.
 - Training deducts resources and musters a unit.
@@ -88,9 +91,8 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add a scenario-selection screen with multiple seeds, map sizes, and difficulty presets.
-2. Convert the local save into named campaign slots.
-3. Add a tutorial overlay for the first 6 turns.
-4. Add siege-facing objectives: cleanse a necropolis, save an ally, build an onager, kill Vorgath.
-5. Add sound effects and light music using compressed mobile-friendly assets.
-6. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
+1. Convert the local save into named campaign slots.
+2. Add a tutorial overlay for the first 6 turns.
+3. Add siege-facing objectives: cleanse a necropolis, save an ally, build an onager, kill Vorgath.
+4. Add sound effects and light music using compressed mobile-friendly assets.
+5. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.

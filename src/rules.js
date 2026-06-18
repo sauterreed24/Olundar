@@ -1,25 +1,36 @@
 import {
   BUILDING_TYPES,
   CURRENT_SAVE_VERSION,
+  DIFFICULTY_PRESETS,
   DIPLOMACY_ACTIONS,
   FACTIONS,
   MAP_HEIGHT,
   MAP_WIDTH,
   OBJECTIVES,
+  SCENARIOS,
   STARTING_RESOURCES,
   TERRAIN,
   UNIT_TYPES
 } from './content.js';
 import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
 
-export function createGame(seed = `Olundar-${new Date().getFullYear()}`) {
+export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options = {}) {
+  const campaign = normalizeCampaignConfig(seed, options);
   const state = {
     version: CURRENT_SAVE_VERSION,
-    seed,
+    seed: campaign.seed,
+    campaign: {
+      seed: campaign.seed,
+      scenarioId: campaign.scenario.id,
+      scenarioName: campaign.scenario.name,
+      difficultyId: campaign.difficulty.id,
+      difficultyName: campaign.difficulty.name,
+      difficultyText: campaign.difficulty.text
+    },
     turn: 1,
     status: 'playing',
     winner: null,
-    map: generateWorld(seed),
+    map: generateWorld(campaign.seed),
     nextNumericId: 1,
     factions: createFactions(),
     units: [],
@@ -40,9 +51,44 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`) {
   };
 
   placeInitialWorld(state);
+  applyCampaignSetup(state, campaign);
   updateVisibility(state);
-  addMessage(state, 'Olundar stands at the edge of a dying age. Explore, arm the legions, and find the Deadwalker portal.');
+  addMessage(state, `${campaign.scenario.name} begins on ${campaign.difficulty.name}. Explore, arm the legions, and find the Deadwalker portal.`);
   return state;
+}
+
+function normalizeCampaignConfig(seedOrConfig, options = {}) {
+  const raw = typeof seedOrConfig === 'object' && seedOrConfig !== null ? { ...seedOrConfig } : { seed: seedOrConfig, ...options };
+  const scenario = SCENARIOS[raw.scenarioId] || SCENARIOS.founding;
+  const difficulty = DIFFICULTY_PRESETS[raw.difficultyId || scenario.difficultyId] || DIFFICULTY_PRESETS.standard;
+  return {
+    seed: raw.seed || scenario.seed || `Olundar-${new Date().getFullYear()}`,
+    scenario,
+    difficulty
+  };
+}
+
+function normalizeCampaignState(state) {
+  if (state.campaign?.scenarioId && state.campaign?.difficultyId) return;
+  const fallback = normalizeCampaignConfig(state.seed || 'Olundar-Legacy');
+  state.campaign = {
+    seed: state.seed || fallback.seed,
+    scenarioId: fallback.scenario.id,
+    scenarioName: fallback.scenario.name,
+    difficultyId: fallback.difficulty.id,
+    difficultyName: fallback.difficulty.name,
+    difficultyText: fallback.difficulty.text
+  };
+}
+
+function applyCampaignSetup(state, campaign) {
+  gainResources(state.factions.olundar.resources, campaign.difficulty.resourceDelta || {});
+  gainResources(state.factions.olundar.resources, campaign.scenario.resourceDelta || {});
+  for (const key of Object.keys(state.factions.olundar.resources)) {
+    state.factions.olundar.resources[key] = Math.max(0, state.factions.olundar.resources[key] || 0);
+  }
+  state.factions.olundar.resources.morale = Math.max(1, Math.min(12, state.factions.olundar.resources.morale || 1));
+  for (const unit of campaign.scenario.units || []) addUnit(state, unit.type, unit.faction || 'olundar', unit.x, unit.y, { name: unit.name });
 }
 
 function createFactions() {
@@ -252,6 +298,7 @@ export function getEndTurnWarnings(state) {
 }
 
 export function getWarCouncil(state) {
+  normalizeCampaignState(state);
   const faction = state.factions.olundar;
   const ready = getReadyOlundarUnits(state);
   const discoveredLiving = Object.values(state.factions).filter((other) => !other.player && other.id !== 'dead' && other.discovered).length;
@@ -275,6 +322,11 @@ export function getWarCouncil(state) {
 
   return {
     headline: councilHeadline(state, knownDead),
+    campaign: {
+      scenarioName: state.campaign.scenarioName,
+      difficultyName: state.campaign.difficultyName,
+      difficultyText: state.campaign.difficultyText
+    },
     priorities: priorities.slice(0, 4),
     stats: [
       { label: 'Mapped', value: `${Math.round(revealedPercent(state))}%` },
@@ -961,10 +1013,11 @@ function runNonPlayerTurns(state) {
 
 function runDeadwalkerTurn(state) {
   const deadBuildings = state.buildings.filter((b) => b.faction === 'dead' && b.turnsLeft <= 0);
-  if (state.turn % 2 === 0) spawnUndeadFrom(state, 'portal', 'boneThrall');
-  if (state.turn % 4 === 0) spawnUndeadFrom(state, 'portal', 'corpseArcher');
-  if (state.turn % 6 === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
-  if (state.turn % 5 === 0) growDeadwalkerOutpost(state);
+  const pressure = deadwalkerPressureFor(state);
+  if (state.turn >= pressure.startTurn && state.turn % pressure.thrallEvery === 0) spawnUndeadFrom(state, 'portal', 'boneThrall');
+  if (state.turn >= pressure.startTurn && state.turn % pressure.archerEvery === 0) spawnUndeadFrom(state, 'portal', 'corpseArcher');
+  if (state.turn >= pressure.startTurn && state.turn % pressure.knightEvery === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
+  if (state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
 
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
   for (const unit of deadUnits) {
@@ -984,6 +1037,11 @@ function runDeadwalkerTurn(state) {
       if (target.ref.hp <= 0) destroyBuilding(state, target.ref.id, 'dead');
     }
   }
+}
+
+function deadwalkerPressureFor(state) {
+  normalizeCampaignState(state);
+  return DIFFICULTY_PRESETS[state.campaign.difficultyId]?.deadwalker || DIFFICULTY_PRESETS.standard.deadwalker;
 }
 
 function spawnUndeadFrom(state, buildingType, unitType) {
@@ -1198,6 +1256,7 @@ export function serializeState(state) {
 export function deserializeState(json) {
   const state = JSON.parse(json);
   if (state.version !== CURRENT_SAVE_VERSION) throw new Error('Save file version is not compatible with this prototype.');
+  normalizeCampaignState(state);
   updateVisibility(state);
   return state;
 }

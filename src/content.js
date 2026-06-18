@@ -2,6 +2,72 @@ export const MAP_WIDTH = 44;
 export const MAP_HEIGHT = 30;
 export const CURRENT_SAVE_VERSION = 1;
 
+export const DIFFICULTY_PRESETS = {
+  chronicle: {
+    id: 'chronicle',
+    name: 'Chronicle',
+    text: 'A gentler campaign for learning the map, diplomacy, and siege arc.',
+    resourceDelta: { food: 30, wood: 24, stone: 12, iron: 8, gold: 24, influence: 2, morale: 2 },
+    deadwalker: { startTurn: 4, thrallEvery: 3, archerEvery: 5, knightEvery: 8, outpostEvery: 8 }
+  },
+  standard: {
+    id: 'standard',
+    name: 'Standard',
+    text: 'Moderate pressure: poor scouting hurts, but recovery remains possible.',
+    resourceDelta: {},
+    deadwalker: { startTurn: 2, thrallEvery: 2, archerEvery: 4, knightEvery: 6, outpostEvery: 5 }
+  },
+  legion: {
+    id: 'legion',
+    name: 'Legion',
+    text: 'Sharper pressure for players who already understand scouting and economy timing.',
+    resourceDelta: { food: -10, wood: -8, gold: -8, morale: -1 },
+    deadwalker: { startTurn: 2, thrallEvery: 2, archerEvery: 3, knightEvery: 5, outpostEvery: 4 }
+  },
+  hollowCrown: {
+    id: 'hollowCrown',
+    name: 'Hollow Crown',
+    text: 'The Deadwalkers surge early. Every road, tower, and pact must matter.',
+    resourceDelta: { food: -16, wood: -12, stone: -4, iron: -4, gold: -12, morale: -2 },
+    deadwalker: { startTurn: 1, thrallEvery: 1, archerEvery: 3, knightEvery: 4, outpostEvery: 3 }
+  }
+};
+
+export const SCENARIOS = {
+  founding: {
+    id: 'founding',
+    name: 'Founding of Olundar',
+    seed: 'Olundar-Founding',
+    difficultyId: 'standard',
+    text: 'Balanced start with the capital, a scout, an engineer, and enough time to choose your first frontier.'
+  },
+  dawnroad: {
+    id: 'dawnroad',
+    name: 'Dawnward Road Compact',
+    seed: 'Dawnward-Road-Compact',
+    difficultyId: 'standard',
+    text: 'A northern road campaign with extra influence and a sworn spear for early alliance play.',
+    resourceDelta: { influence: 2, stone: 8, gold: -6 },
+    units: [{ type: 'spearGuard', faction: 'olundar', x: 9, y: 16, name: 'Road Oath-Spear' }]
+  },
+  marketCrown: {
+    id: 'marketCrown',
+    name: 'Veyr Market Crown',
+    seed: 'Veyr-Market-Crown',
+    difficultyId: 'standard',
+    text: 'A coin-rich start that can rush trade, cavalry, or mercantile pressure at a morale cost.',
+    resourceDelta: { gold: 36, food: -8, influence: -1, morale: -1 }
+  },
+  ashgate: {
+    id: 'ashgate',
+    name: 'Ash Gate Frontier',
+    seed: 'Ash-Gate-Frontier',
+    difficultyId: 'legion',
+    text: 'A harder siege-forward start with more iron and stone, less morale, and faster eastern pressure.',
+    resourceDelta: { iron: 12, stone: 12, morale: -1 }
+  }
+};
+
 export const FACTIONS = {
   olundar: {
     id: 'olundar',

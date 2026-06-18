@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -42,8 +42,10 @@ const logPanel = document.querySelector('#logPanel');
 const tilePanel = document.querySelector('#tilePanel');
 const modeBanner = document.querySelector('#modeBanner');
 const toastEl = document.querySelector('#toast');
+const setupOverlay = document.querySelector('#setupOverlay');
+const campaignSetup = document.querySelector('#campaignSetup');
 
-let state = createGame('Olundar-Founding');
+let state = createGame({ scenarioId: 'founding' });
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
@@ -88,6 +90,7 @@ function renderCouncil() {
   const council = getWarCouncil(state);
   councilPanel.innerHTML = `
     <h2>${escapeHtml(council.headline)}</h2>
+    <p class="campaign-meta">${escapeHtml(council.campaign.scenarioName)} · ${escapeHtml(council.campaign.difficultyName)}</p>
     <div class="council-stats">
       ${council.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
     </div>
@@ -381,12 +384,70 @@ function loadGame() {
 }
 
 function newCampaign() {
-  const seed = window.prompt('Campaign seed:', `Olundar-${Math.floor(Math.random() * 9999)}`);
-  if (!seed) return;
-  state = createGame(seed);
+  openCampaignSetup();
+}
+
+function openCampaignSetup() {
+  renderCampaignSetup();
+  setupOverlay.hidden = false;
+}
+
+function closeCampaignSetup() {
+  setupOverlay.hidden = true;
+}
+
+function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 'founding', selectedDifficultyId = state.campaign?.difficultyId || SCENARIOS[selectedScenarioId]?.difficultyId || 'standard', seedOverride = null) {
+  const scenario = SCENARIOS[selectedScenarioId] || SCENARIOS.founding;
+  const difficultyId = DIFFICULTY_PRESETS[selectedDifficultyId] ? selectedDifficultyId : scenario.difficultyId;
+  const seedValue = seedOverride || scenario.seed;
+  campaignSetup.innerHTML = `
+    <div class="setup-head">
+      <div>
+        <h2 id="campaignSetupTitle">New Campaign</h2>
+        <p>${escapeHtml(scenario.name)} · ${escapeHtml(DIFFICULTY_PRESETS[difficultyId].name)}</p>
+      </div>
+      <button class="icon-button" type="button" data-action="close-setup" aria-label="Close campaign setup">X</button>
+    </div>
+    <label class="setup-field">
+      <span>Seed</span>
+      <input id="campaignSeed" name="seed" value="${escapeHtml(seedValue)}" autocomplete="off" />
+    </label>
+    <h3>Scenario</h3>
+    <div class="card-grid">
+      ${Object.values(SCENARIOS).map((item) => choiceCard('scenarioId', item.id, item.name, item.text, item.id === selectedScenarioId)).join('')}
+    </div>
+    <h3>Difficulty</h3>
+    <div class="card-grid difficulty-grid">
+      ${Object.values(DIFFICULTY_PRESETS).map((item) => choiceCard('difficultyId', item.id, item.name, item.text, item.id === difficultyId)).join('')}
+    </div>
+    <div class="setup-actions">
+      <button type="submit">Start Campaign</button>
+      <button type="button" data-action="close-setup">Cancel</button>
+    </div>
+  `;
+}
+
+function choiceCard(name, value, title, text, checked) {
+  return `
+    <label class="choice-card ${checked ? 'selected' : ''}">
+      <input type="radio" name="${name}" value="${escapeHtml(value)}" ${checked ? 'checked' : ''} />
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(text)}</span>
+    </label>
+  `;
+}
+
+function startConfiguredCampaign(form) {
+  const data = new FormData(form);
+  const scenarioId = data.get('scenarioId') || 'founding';
+  const scenario = SCENARIOS[scenarioId] || SCENARIOS.founding;
+  const difficultyId = data.get('difficultyId') || scenario.difficultyId || 'standard';
+  const seed = String(data.get('seed') || scenario.seed).trim() || scenario.seed;
+  state = createGame({ scenarioId, difficultyId, seed });
   hoverTile = null;
   lastTile = { x: 7, y: 16 };
-  toast(`New campaign: ${seed}`);
+  closeCampaignSetup();
+  toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
   render();
 }
 
@@ -468,6 +529,10 @@ canvas.addEventListener('mouseleave', () => {
 
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !setupOverlay.hidden) {
+    closeCampaignSetup();
+    return;
+  }
   if (event.key === 'Escape') {
     state.mode = { type: 'select' };
     render();
@@ -491,5 +556,30 @@ document.querySelector('#nextUnitTop').addEventListener('click', () => selectNex
 document.querySelector('#newTop').addEventListener('click', () => newCampaign());
 document.querySelector('#saveTop').addEventListener('click', () => saveGame());
 document.querySelector('#loadTop').addEventListener('click', () => loadGame());
+
+setupOverlay.addEventListener('click', (event) => {
+  if (event.target === setupOverlay) closeCampaignSetup();
+});
+
+campaignSetup.addEventListener('click', (event) => {
+  if (event.target instanceof HTMLElement && event.target.dataset.action === 'close-setup') closeCampaignSetup();
+});
+
+campaignSetup.addEventListener('change', (event) => {
+  const data = new FormData(campaignSetup);
+  const scenarioId = data.get('scenarioId') || 'founding';
+  const scenario = SCENARIOS[scenarioId] || SCENARIOS.founding;
+  const scenarioChanged = event.target instanceof HTMLInputElement && event.target.name === 'scenarioId';
+  const difficultyId = scenarioChanged ? (scenario.difficultyId || 'standard') : (data.get('difficultyId') || scenario.difficultyId || 'standard');
+  const seed = event.target instanceof HTMLInputElement && event.target.name === 'scenarioId'
+    ? scenario.seed
+    : String(data.get('seed') || scenario.seed);
+  renderCampaignSetup(scenarioId, difficultyId, seed);
+});
+
+campaignSetup.addEventListener('submit', (event) => {
+  event.preventDefault();
+  startConfiguredCampaign(campaignSetup);
+});
 
 resizeCanvas();

@@ -154,6 +154,123 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.setup-overlay[hidden] {
+  display: none;
+}
+
+.setup-dialog {
+  width: min(920px, 100%);
+  max-height: min(92vh, 780px);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid rgba(240, 200, 102, 0.34);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(29, 31, 38, 0.98), rgba(12, 15, 22, 0.98));
+  box-shadow: var(--shadow);
+}
+
+.setup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.setup-head h2,
+.setup-dialog h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--gold);
+}
+
+.setup-head p {
+  margin: 0.22rem 0 0;
+  color: var(--muted);
+}
+
+.icon-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  text-align: center;
+}
+
+.setup-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.setup-field input {
+  width: 100%;
+  border: 1px solid rgba(240, 200, 102, 0.25);
+  border-radius: 8px;
+  padding: 0.62rem 0.7rem;
+  background: rgba(0, 0, 0, 0.26);
+  color: var(--text);
+  font: inherit;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.55rem 0 1rem;
+}
+
+.choice-card {
+  display: grid;
+  gap: 0.28rem;
+  min-height: 7rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  cursor: pointer;
+}
+
+.choice-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice-card strong {
+  color: #f9e6a8;
+}
+
+.choice-card span {
+  color: #ddd0ae;
+  line-height: 1.35;
+  font-size: 0.86rem;
+}
+
+.choice-card.selected {
+  border-color: rgba(186, 245, 140, 0.52);
+  background: rgba(186, 245, 140, 0.09);
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
@@ -244,6 +361,12 @@ button:disabled {
 .council {
   border-color: rgba(240, 200, 102, 0.36);
   background: linear-gradient(180deg, rgba(48, 36, 20, 0.94), rgba(18, 23, 32, 0.92));
+}
+
+.campaign-meta {
+  margin-top: -0.25rem !important;
+  margin-bottom: 0.65rem !important;
+  color: var(--muted) !important;
 }
 
 .council-stats {
@@ -443,6 +566,15 @@ button:disabled {
 
   .council-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-dialog {
+    max-height: 94vh;
+    padding: 0.8rem;
   }
 
   .panel {
