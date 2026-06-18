@@ -16,6 +16,7 @@ import {
   findPath,
   forecastBuildingAttack,
   forecastUnitAttack,
+  getCampaignRecap,
   getEndTurnWarnings,
   getFirstTurnsGuide,
   getObjectiveProgress,
@@ -241,6 +242,36 @@ check('save file import creates transferable named slots', () => {
     failed = error.message.includes('not compatible');
   }
   assert(failed, 'Incompatible save imports should fail closed.');
+});
+
+check('campaign recaps summarize imports and outcomes', () => {
+  const active = createGame({ scenarioId: 'dawnroad', difficultyId: 'standard', seed: 'quality-recap-active' });
+  active.factions.dawn.discovered = true;
+  active.flags.firstAllySeen = true;
+  const imported = getCampaignRecap(active, 'import');
+  assert(imported.title === 'Imported Campaign Recap', 'Imported saves should get a dedicated recap title.');
+  assert(imported.statusLabel === 'In Progress', 'Active imported campaign should remain in progress.');
+  assert(imported.stats.some((stat) => stat.label === 'Mapped'), 'Recap should expose map progress.');
+  assert(imported.milestones.length === active.objectives.length, 'Recap milestones should match campaign objectives.');
+  assert(imported.nextSteps.length > 0, 'Active recap should give resume guidance.');
+
+  const won = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-recap-win' });
+  won.status = 'won';
+  won.winner = 'olundar';
+  won.flags.bossSlain = true;
+  won.flags.portalDestroyed = true;
+  const victory = getCampaignRecap(won);
+  assert(victory.title === 'Victory Recap' && victory.tone === 'good', 'Victory recap should be clearly positive.');
+  assert(victory.summary.includes('Olundar survived'), 'Victory recap should summarize survival.');
+  assert(victory.milestones.find((milestone) => milestone.detail === 'Portal destroyed')?.done, 'Victory recap should show portal completion.');
+
+  const lost = createGame({ scenarioId: 'ashgate', difficultyId: 'hollowCrown', seed: 'quality-recap-loss' });
+  lost.status = 'lost';
+  lost.winner = 'dead';
+  lost.factions.olundar.resources.morale = 0;
+  const defeat = getCampaignRecap(lost);
+  assert(defeat.title === 'Defeat Recap' && defeat.tone === 'danger', 'Defeat recap should be clearly marked.');
+  assert(defeat.nextSteps.some((step) => step.includes('Scout earlier')), 'Defeat recap should provide practical after-action advice.');
 });
 
 check('audio cue registry stays lightweight and browser-safe', () => {

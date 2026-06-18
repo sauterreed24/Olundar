@@ -175,6 +175,7 @@ Future versions can add optional policies: rationing, conscription, evacuation, 
 - Readable on laptops and phones.
 - Canvas map with large silhouettes and high-contrast fog.
 - Side panel for selected units/buildings, orders, tile data, objectives, diplomacy, and log.
+- Campaign recap overlay for imported saves, victories, and defeats so players can quickly understand what happened and what to do next.
 - No hidden mandatory hotkeys.
 - Local save, export, and JSON save import from the first prototype.
 

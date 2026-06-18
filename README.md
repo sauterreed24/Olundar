@@ -11,6 +11,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - A compact First Six Turns guide that teaches the opening scout, engineer, training, iron, diplomacy, and Deadwalker-front priorities from live campaign state.
 - Siege Operations that track midgame victory work: onagers, survival pacts, Deadwalker strongholds, Vorgath, and the Bone Portal.
+- Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
@@ -25,7 +26,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -53,6 +54,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Press `Esc` to cancel build mode.
 - Click **Save** or **Load** to manage named campaign slots.
 - Click **Import save file** or **Import JSON** in the save manager to load an exported campaign on the current device.
+- Imported campaigns open a recap with the current status, milestones, and best next moves.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
@@ -106,6 +108,7 @@ olundar_game/
 - Player settings normalize audio volume, motion, and map-scale choices.
 - PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
+- Campaign recaps summarize active imports, victories, defeats, objective milestones, and after-action advice from live state.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
 - Strategic path from Olundar toward the portal front exists.
@@ -119,5 +122,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add a compact campaign recap screen after victory, defeat, and imported save loads.
-2. Add richer faction war aims so living civilizations bargain, raid, and defend more visibly.
+1. Add richer faction war aims so living civilizations bargain, raid, and defend more visibly.
+2. Add a dedicated diplomacy ledger so promises, pressure, aid, and grievances remain visible over a long campaign.

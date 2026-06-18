@@ -11,6 +11,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   fortifyUnit,
+  getCampaignRecap,
   getEndTurnWarnings,
   getFirstTurnsGuide,
   getObjectiveProgress,
@@ -61,6 +62,8 @@ const saveManager = document.querySelector('#saveManager');
 const saveImportInput = document.querySelector('#saveImportInput');
 const settingsOverlay = document.querySelector('#settingsOverlay');
 const settingsPanel = document.querySelector('#settingsPanel');
+const recapOverlay = document.querySelector('#recapOverlay');
+const recapPanel = document.querySelector('#recapPanel');
 const audioTop = document.querySelector('#audioTop');
 
 let state = createGame({ scenarioId: 'founding' });
@@ -69,6 +72,7 @@ let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
 let playerSettings = readSettings();
+let lastAutoRecapKey = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -101,6 +105,7 @@ function render() {
   renderLog();
   renderTilePanel();
   renderMode();
+  maybeOpenOutcomeRecap();
 }
 
 function renderTopBar() {
@@ -221,6 +226,8 @@ function renderActions() {
   actionPanel.appendChild(heading);
 
   if (state.status !== 'playing') {
+    actionPanel.appendChild(button('Review campaign recap', () => openCampaignRecap('current')));
+    actionPanel.appendChild(button('Save final campaign', () => openSaveManager('save')));
     actionPanel.appendChild(button('New campaign', () => newCampaign()));
     return;
   }
@@ -572,9 +579,12 @@ function importSaveFile(raw, fileName = '') {
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
     closeSaveManager();
+    const outcomeKey = campaignOutcomeKey();
+    if (outcomeKey) lastAutoRecapKey = outcomeKey;
     toast(`${imported.slot.name} loaded.`);
     playAudioCue('load');
     render();
+    openCampaignRecap('import');
     return imported.slot;
   } catch (error) {
     toast(error.message || 'Save file failed to import.', 'bad');
@@ -622,6 +632,70 @@ function openSettings() {
 function closeSettings() {
   settingsOverlay.hidden = true;
   setAudioVolume(playerSettings.audioVolume);
+}
+
+function openCampaignRecap(context = 'current') {
+  renderRecapPanel(context);
+  recapOverlay.hidden = false;
+  playAudioCue(state.status === 'won' ? 'fanfare' : 'ui');
+}
+
+function closeCampaignRecap() {
+  recapOverlay.hidden = true;
+}
+
+function maybeOpenOutcomeRecap() {
+  const key = campaignOutcomeKey();
+  if (!key || lastAutoRecapKey === key || !recapOverlay.hidden) return;
+  lastAutoRecapKey = key;
+  openCampaignRecap('current');
+}
+
+function campaignOutcomeKey() {
+  if (state.status === 'playing') return null;
+  return `${state.status}:${state.winner || 'none'}:${state.turn}:${state.messages[0]?.text || ''}`;
+}
+
+function renderRecapPanel(context = 'current') {
+  const recap = getCampaignRecap(state, context);
+  recapPanel.innerHTML = `
+    <div class="setup-head">
+      <div>
+        <h2 id="recapTitle">${escapeHtml(recap.title)}</h2>
+        <p>${escapeHtml(recap.subtitle)}</p>
+      </div>
+      <button class="icon-button" type="button" data-action="close-recap" aria-label="Close campaign recap">X</button>
+    </div>
+    <div class="recap-banner ${escapeHtml(recap.tone)}">
+      <strong>${escapeHtml(recap.statusLabel)}</strong>
+      <p>${escapeHtml(recap.summary)}</p>
+    </div>
+    <div class="recap-stats">
+      ${recap.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
+    </div>
+    <div class="recap-details">
+      ${recap.details.map((detail) => `<p>${escapeHtml(detail)}</p>`).join('')}
+    </div>
+    <h3>Campaign Milestones</h3>
+    <div class="recap-milestones">
+      ${recap.milestones.map((milestone) => `
+        <article class="${milestone.done ? 'done' : ''}">
+          <span>${milestone.done ? 'Done' : 'Open'}</span>
+          <strong>${escapeHtml(milestone.label)}</strong>
+          <small>${escapeHtml(milestone.detail)}</small>
+        </article>
+      `).join('')}
+    </div>
+    <h3>${state.status === 'playing' ? 'Resume With' : 'After-Action Advice'}</h3>
+    <ol class="recap-next">
+      ${recap.nextSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}
+    </ol>
+    <div class="setup-actions">
+      <button type="button" data-action="close-recap">${state.status === 'playing' ? 'Return to campaign' : 'Close'}</button>
+      <button type="button" data-action="save-campaign">Save campaign</button>
+      <button type="button" data-action="new-campaign">New campaign</button>
+    </div>
+  `;
 }
 
 function renderSettingsPanel() {
@@ -786,6 +860,8 @@ function startConfiguredCampaign(form) {
   activeSaveSlotId = null;
   hoverTile = null;
   lastTile = { x: 7, y: 16 };
+  lastAutoRecapKey = null;
+  closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
   playAudioCue('fanfare');
@@ -880,6 +956,10 @@ canvas.addEventListener('mouseleave', () => {
 
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !recapOverlay.hidden) {
+    closeCampaignRecap();
+    return;
+  }
   if (event.key === 'Escape' && !saveOverlay.hidden) {
     closeSaveManager();
     return;
@@ -954,6 +1034,24 @@ saveOverlay.addEventListener('click', (event) => {
 
 settingsOverlay.addEventListener('click', (event) => {
   if (event.target === settingsOverlay) closeSettings();
+});
+
+recapOverlay.addEventListener('click', (event) => {
+  if (event.target === recapOverlay) closeCampaignRecap();
+});
+
+recapPanel.addEventListener('click', (event) => {
+  if (!(event.target instanceof HTMLElement)) return;
+  const action = event.target.dataset.action;
+  if (action === 'close-recap') {
+    closeCampaignRecap();
+  } else if (action === 'save-campaign') {
+    closeCampaignRecap();
+    openSaveManager('save');
+  } else if (action === 'new-campaign') {
+    closeCampaignRecap();
+    newCampaign();
+  }
 });
 
 saveManager.addEventListener('click', (event) => {

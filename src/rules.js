@@ -339,6 +339,94 @@ export function getWarCouncil(state) {
   };
 }
 
+export function getCampaignRecap(state, context = 'current') {
+  normalizeCampaignState(state);
+  const objectiveProgress = getObjectiveProgress(state);
+  const knownDead = knownDeadwalkerThreat(state);
+  const discoveredLiving = Object.values(state.factions).filter((faction) => !faction.player && faction.id !== 'dead' && faction.discovered).length;
+  const pacts = Object.values(state.factions.olundar.pacts || {}).filter(Boolean).length;
+  const trades = Object.values(state.factions.olundar.trades || {}).filter(Boolean).length;
+  const olundarUnits = state.units.filter((unit) => unit.faction === 'olundar');
+  const olundarBuildings = state.buildings.filter((building) => building.faction === 'olundar');
+  const deadBuildings = state.buildings.filter((building) => building.faction === 'dead');
+  const mapped = Math.round(revealedPercent(state));
+  const tone = state.status === 'won' ? 'good' : state.status === 'lost' ? 'danger' : 'info';
+  const statusLabel = state.status === 'won' ? 'Victory' : state.status === 'lost' ? 'Defeat' : 'In Progress';
+  const milestones = state.objectives.map((objective, index) => ({
+    label: objective,
+    done: Boolean(objectiveProgress[index]?.done),
+    detail: objectiveProgress[index]?.detail || 'No progress recorded'
+  }));
+
+  return {
+    title: recapTitle(state, context),
+    subtitle: `${state.campaign.scenarioName} - ${state.campaign.difficultyName} - Turn ${state.turn}`,
+    tone,
+    statusLabel,
+    summary: recapSummary(state, mapped, discoveredLiving, knownDead),
+    stats: [
+      { label: 'Status', value: statusLabel },
+      { label: 'Mapped', value: `${mapped}%` },
+      { label: 'Army', value: olundarUnits.length },
+      { label: 'Holdings', value: olundarBuildings.length },
+      { label: 'Pacts', value: `${pacts}/3` },
+      { label: 'Deadworks', value: deadBuildings.length }
+    ],
+    details: [
+      `Morale ${Math.floor(state.factions.olundar.resources.morale || 0)} with ${state.factions.olundar.population}/${state.factions.olundar.housing} population housed.`,
+      `${discoveredLiving}/3 living civilizations contacted, ${pacts} survival pact${pacts === 1 ? '' : 's'}, ${trades} trade route${trades === 1 ? '' : 's'}.`,
+      `${state.flags.deadStrongholdsDestroyed || 0} Deadwalker stronghold${state.flags.deadStrongholdsDestroyed === 1 ? '' : 's'} destroyed; threat pressure is ${knownDead ? knownDead.label.toLowerCase() : 'unknown'}.`
+    ],
+    milestones,
+    nextSteps: recapNextSteps(state, objectiveProgress, knownDead)
+  };
+}
+
+function recapTitle(state, context) {
+  if (context === 'import') return 'Imported Campaign Recap';
+  if (state.status === 'won') return 'Victory Recap';
+  if (state.status === 'lost') return 'Defeat Recap';
+  return 'Campaign Recap';
+}
+
+function recapSummary(state, mapped, discoveredLiving, knownDead) {
+  if (state.status === 'won') {
+    return `Olundar survived in ${state.turn} turns. The living front mapped ${mapped}% of the world, contacted ${discoveredLiving}/3 civilizations, and shattered the Bone Portal.`;
+  }
+  if (state.status === 'lost') {
+    return `Olundar fell on turn ${state.turn}. The campaign reached ${mapped}% map knowledge before the Deadwalker war overwhelmed the capital or morale.`;
+  }
+  if (knownDead) {
+    return `This campaign is active on turn ${state.turn}. Deadwalker pressure is ${knownDead.label.toLowerCase()}, with ${mapped}% of the world mapped.`;
+  }
+  return `This campaign is active on turn ${state.turn}. The frontier is still forming, with ${mapped}% of the world mapped and ${discoveredLiving}/3 living civilizations contacted.`;
+}
+
+function recapNextSteps(state, objectiveProgress, knownDead) {
+  if (state.status === 'won') {
+    return [
+      'Start a new campaign with a harder difficulty, different scenario, or custom seed.',
+      'Review which allies, siege operations, and stronghold kills made the win reliable.'
+    ];
+  }
+  if (state.status === 'lost') {
+    const advice = ['Scout earlier for allies, iron, and tower lines before the Deadwalker front arrives.'];
+    if (!hasOperationalBuilding(state, 'mine')) advice.push('Secure a Hill Mine sooner so legionaries, spear guards, and siege do not stall.');
+    if (!Object.values(state.factions.olundar.pacts || {}).some(Boolean)) advice.push('Convert first contact into a Survival Pact for shared sight and emergency aid.');
+    if (!hasOperationalBuilding(state, 'workshop')) advice.push('Build a Siege Workshop before trying to enter heavy blight.');
+    return advice.slice(0, 4);
+  }
+
+  const council = getWarCouncil(state);
+  const nextSteps = council.priorities.map((priority) => priority.text);
+  const siege = getSiegeOperations(state);
+  const nextOperation = siege.visible ? siege.operations.find((operation) => !operation.done && operation.tone !== 'locked') || siege.operations.find((operation) => !operation.done) : null;
+  if (nextOperation) nextSteps.push(`Siege operation: ${nextOperation.label}. ${nextOperation.detail}`);
+  if (!objectiveProgress[4]?.done && state.flags.bossSlain) nextSteps.push('Vorgath is dead; commit siege units and veterans to destroy the Bone Portal.');
+  if (!knownDead && !state.flags.firstDeadwalkerSeen) nextSteps.push('Push scouts and towers east until the Deadwalker front is visible.');
+  return nextSteps.slice(0, 4);
+}
+
 export function getFirstTurnsGuide(state) {
   normalizeCampaignState(state);
   const mapped = Math.round(revealedPercent(state));

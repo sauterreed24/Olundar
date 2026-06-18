@@ -312,6 +312,133 @@ button:disabled {
   width: min(720px, 100%);
 }
 
+.recap-dialog {
+  width: min(840px, 100%);
+}
+
+.recap-banner {
+  padding: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+
+.recap-banner.good {
+  border-color: rgba(186, 245, 140, 0.36);
+}
+
+.recap-banner.danger {
+  border-color: rgba(255, 138, 138, 0.42);
+}
+
+.recap-banner.info {
+  border-color: rgba(118, 178, 255, 0.32);
+}
+
+.recap-banner strong {
+  display: block;
+  color: var(--gold);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.recap-banner p {
+  margin: 0.35rem 0 0;
+  color: #f8f0d6;
+  line-height: 1.42;
+}
+
+.recap-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+}
+
+.recap-stats span {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.recap-stats b {
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.05;
+}
+
+.recap-details {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.recap-details p {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-left: 3px solid rgba(118, 178, 255, 0.45);
+  background: rgba(255,255,255,0.045);
+  color: #eee2c1;
+  line-height: 1.38;
+}
+
+.recap-milestones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.55rem 0 0.9rem;
+}
+
+.recap-milestones article {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 3px solid rgba(255, 138, 138, 0.45);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+}
+
+.recap-milestones article.done {
+  border-left-color: var(--good);
+}
+
+.recap-milestones span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.recap-milestones strong {
+  color: #f9e6a8;
+  line-height: 1.25;
+}
+
+.recap-milestones small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.recap-next {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0.55rem 0 0.9rem;
+  padding-left: 1.2rem;
+}
+
+.recap-next li {
+  color: #eee2c1;
+  line-height: 1.38;
+}
+
 .settings-grid .choice-card {
   min-height: 5.75rem;
 }
@@ -915,6 +1042,10 @@ button:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .recap-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .side {
     max-height: none;
     overflow: visible;
@@ -942,6 +1073,11 @@ button:disabled {
 
   .council-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recap-stats,
+  .recap-milestones {
+    grid-template-columns: 1fr;
   }
 
   .card-grid {
