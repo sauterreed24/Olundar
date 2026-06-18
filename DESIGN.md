@@ -182,6 +182,8 @@ The Crisis Council turns that abstraction into memorable midgame decisions. Refu
 
 Chained crisis aftermaths make those decisions persist beyond the first click. A refugee levy can later create petitions, a famine ruling can become market unrest, a raid warning can leave roads to repair or raiders to hunt, and an emergency council can demand proof of public accords. These follow-ups reuse the council surface so the player gets long-term consequence without another management panel.
 
+Aftermath Missions turn some follow-ups into map verbs. The council can now mark repair scars, escort roads, raider trails, or accord routes; the player must send an engineer, scout, cavalry, or combat unit to finish the task. The intent is to make political consequences alter movement priorities without turning the game into chores.
+
 Future versions can deepen these policies with festivals, emergency labor, oath debts, faction-specific refugee politics, and delayed consequences from harsh rulings.
 
 ## UI design goals

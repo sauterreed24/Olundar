@@ -86,7 +86,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
     crises: {
       resolved: {},
       history: [],
-      aftermath: { queue: [], resolved: {} }
+      aftermath: { queue: [], resolved: {} },
+      missions: []
     },
     objectives: OBJECTIVES.slice(),
     messages: []
@@ -122,6 +123,7 @@ function normalizeCampaignState(state) {
   if (!state.crises.aftermath) state.crises.aftermath = { queue: [], resolved: {} };
   if (!Array.isArray(state.crises.aftermath.queue)) state.crises.aftermath.queue = [];
   if (!state.crises.aftermath.resolved) state.crises.aftermath.resolved = {};
+  if (!Array.isArray(state.crises.missions)) state.crises.missions = [];
   if (!state.factions?.olundar?.fieldOrders) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
@@ -358,6 +360,55 @@ export function getObjectiveProgress(state) {
       detail: state.flags.portalDestroyed ? 'Portal destroyed' : 'Portal still active'
     }
   ];
+}
+
+export function getAftermathMissions(state) {
+  normalizeCampaignState(state);
+  const active = state.crises.missions
+    .filter((mission) => !mission.completedTurn)
+    .map(missionView);
+  const recent = state.crises.missions
+    .filter((mission) => mission.completedTurn && state.turn - mission.completedTurn <= 4)
+    .slice(-3)
+    .reverse()
+    .map(missionView);
+  return {
+    title: 'Aftermath Missions',
+    summary: aftermathMissionSummary(active, recent),
+    visible: state.status === 'playing' && (active.length > 0 || recent.length > 0),
+    active,
+    recent
+  };
+}
+
+function missionView(mission) {
+  return {
+    id: mission.id,
+    name: mission.name,
+    text: mission.text,
+    tone: mission.tone || 'info',
+    x: mission.x,
+    y: mission.y,
+    target: `${mission.x},${mission.y}`,
+    required: missionRequirementText(mission.required),
+    completed: Boolean(mission.completedTurn),
+    completedTurn: mission.completedTurn || null,
+    reward: mission.rewardText || 'A small campaign reward follows completion.'
+  };
+}
+
+function missionRequirementText(required = 'any') {
+  if (required === 'engineer') return 'Engineer';
+  if (required === 'recon') return 'Scout or cavalry';
+  if (required === 'combat') return 'Combat unit';
+  return 'Any Olundaran unit';
+}
+
+function aftermathMissionSummary(active, recent) {
+  if (active.length > 1) return `${active.length} aftermath field tasks are shaping the map. Use the Missions lens to find their targets.`;
+  if (active.length === 1) return `${active[0].name} is marked on the map. Send the right unit to finish the consequence.`;
+  if (recent.length) return 'Recent aftermath missions are complete; their rewards are now part of the campaign.';
+  return 'No aftermath missions are active.';
 }
 
 export function getEndTurnWarnings(state) {
@@ -1081,6 +1132,14 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     const unit = spawnOlundarUnitAtCapital(state, 'scout', 'Frontier Family Guide');
     const contacts = adjustKnownLivingRelations(state, 3);
     recordKnownFactionMemory(state, 'promise', 'Frontier Families Sponsored', 'Olundar sponsored displaced families as guides instead of abandoning them.', 1);
+    addAftermathMission(state, {
+      type: 'escort',
+      name: 'Escort Frontier Families',
+      text: 'Move a scout or cavalry unit to the marked road camp so the sponsored families can travel safely.',
+      required: 'recon',
+      tone: 'info',
+      rewardText: 'Completing it grants influence and steadies morale.'
+    });
     return { tone: unit ? 'good' : 'info', text: unit ? 'Frontier families send a guide to Olundar and improve trust on the living front.' : contacts ? 'Frontier families improve trust, though no open muster ground was found.' : 'Frontier families become border contacts, though no open muster ground was found.' };
   }
   if (item.eventId === 'refugeeAftermath' && choiceId === 'ignorePetitions') {
@@ -1106,11 +1165,27 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
   if (item.eventId === 'raidAftermath' && choiceId === 'repairStreets') {
     const fortified = reinforceOlundarHoldings(state, 8, 3);
     adjustOlundarMorale(state, 1);
+    addAftermathMission(state, {
+      type: 'repair',
+      name: 'Repair the Raid Roads',
+      text: 'Move an engineer to the marked street scar to finish repairs before raiders exploit it again.',
+      required: 'engineer',
+      tone: 'info',
+      rewardText: 'Completing it reinforces Olundar holdings and raises morale.'
+    });
     return { tone: 'good', text: fortified ? 'Street repairs harden Olundar holdings and steady frightened households.' : 'Street repairs steady frightened households, though no holdings were available to reinforce.' };
   }
   if (item.eventId === 'raidAftermath' && choiceId === 'huntRaiders') {
     const unit = spawnOlundarUnitAtCapital(state, 'cavalry', 'Road Vengeance Patrol');
     gainResources(state.factions.olundar.resources, { influence: 1 });
+    addAftermathMission(state, {
+      type: 'raid',
+      name: 'Break the Raider Trail',
+      text: 'Move a combat unit to the marked trailhead to scatter raiders before they return.',
+      required: 'combat',
+      tone: 'danger',
+      rewardText: 'Completing it grants gold, influence, and field experience.'
+    });
     return { tone: unit ? 'good' : 'info', text: unit ? 'A cavalry patrol hunts the road raiders and gives Olundar new influence.' : 'The hunt raises influence, but no open muster ground was found.' };
   }
   if (item.eventId === 'raidAftermath' && choiceId === 'blameOutskirts') {
@@ -1123,6 +1198,14 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     const contacts = adjustKnownLivingRelations(state, 5);
     recordKnownFactionMemory(state, 'promise', 'Emergency Accords Published', 'Olundar publicly honored emergency-council commitments to the living front.', 2);
     adjustOlundarMorale(state, 1);
+    addAftermathMission(state, {
+      type: 'accord',
+      name: 'Carry the Accord Tablets',
+      text: 'Move a scout or cavalry unit to the marked envoy road to prove the accords are more than speeches.',
+      required: 'recon',
+      tone: 'good',
+      rewardText: 'Completing it improves known-faction trust and grants influence.'
+    });
     return { tone: 'good', text: contacts ? 'Published accords raise morale and bind known factions closer to Olundar.' : 'Published accords raise morale, though no known faction can answer yet.' };
   }
   if (item.eventId === 'councilAftermath' && choiceId === 'drillVeterans') {
@@ -1145,6 +1228,113 @@ function recordKnownFactionMemory(state, type, label, detail, amount = 1) {
     count += 1;
   }
   return count;
+}
+
+function addAftermathMission(state, config) {
+  normalizeCampaignState(state);
+  const target = chooseAftermathMissionTarget(state, config.required);
+  if (!target) return null;
+  const mission = {
+    id: nextId(state, 'm'),
+    type: config.type,
+    name: config.name,
+    text: config.text,
+    required: config.required || 'any',
+    tone: config.tone || 'info',
+    x: target.x,
+    y: target.y,
+    radius: 0,
+    createdTurn: state.turn,
+    completedTurn: null,
+    rewardText: config.rewardText || ''
+  };
+  state.crises.missions.push(mission);
+  state.crises.missions = state.crises.missions.slice(-12);
+  return mission;
+}
+
+function chooseAftermathMissionTarget(state, required = 'any') {
+  const unit = missionPreferredUnit(state, required);
+  if (!unit) return null;
+  const preferred = required === 'combat' ? { x: unit.x + 2, y: unit.y } : { x: unit.x, y: unit.y - 1 };
+  const options = neighbors4(unit.x, unit.y)
+    .filter((tile) => missionTileIsUsable(state, unit, tile.x, tile.y))
+    .sort((a, b) => manhattan(a.x, a.y, preferred.x, preferred.y) - manhattan(b.x, b.y, preferred.x, preferred.y));
+  return options[0] || null;
+}
+
+function missionPreferredUnit(state, required) {
+  const units = state.units.filter((unit) => unit.faction === 'olundar');
+  const eligible = units.filter((unit) => unitCanCompleteMission(unit, { required }));
+  return eligible.find((unit) => !unit.hasActed) || eligible[0] || units.find((unit) => !unit.hasActed) || units[0] || null;
+}
+
+function missionTileIsUsable(state, unit, x, y) {
+  const tile = tileAt(state, x, y);
+  if (!tile || !TERRAIN[tile.terrain].passable || tile.terrain === 'blight') return false;
+  if (!isRevealed(state, x, y)) return false;
+  const occupant = unitAt(state, x, y);
+  if (occupant && occupant.id !== unit.id) return false;
+  const building = buildingAt(state, x, y);
+  return !building || !isEnemy(state, unit.faction, building.faction);
+}
+
+function updateAftermathMissions(state) {
+  normalizeCampaignState(state);
+  let completed = 0;
+  for (const mission of state.crises.missions) {
+    if (mission.completedTurn) continue;
+    const unit = state.units.find((candidate) => (
+      candidate.faction === 'olundar'
+      && unitCanCompleteMission(candidate, mission)
+      && manhattan(candidate.x, candidate.y, mission.x, mission.y) <= (mission.radius || 0)
+    ));
+    if (!unit) continue;
+    completeAftermathMission(state, mission, unit);
+    completed += 1;
+  }
+  return completed;
+}
+
+function unitCanCompleteMission(unit, mission) {
+  const def = getUnitDef(unit);
+  if (!def) return false;
+  if (mission.required === 'engineer') return def.tags.includes('builder');
+  if (mission.required === 'recon') return def.tags.includes('recon') || def.tags.includes('mounted');
+  if (mission.required === 'combat') return !def.tags.includes('builder') && !def.tags.includes('siege');
+  return true;
+}
+
+function completeAftermathMission(state, mission, unit) {
+  mission.completedTurn = state.turn;
+  mission.completedBy = unit.name;
+  const outcome = applyAftermathMissionReward(state, mission, unit);
+  addMessage(state, `${mission.name} completed by ${unit.name}: ${outcome}`, 'good');
+}
+
+function applyAftermathMissionReward(state, mission, unit) {
+  if (mission.type === 'repair') {
+    reinforceOlundarHoldings(state, 6, 2);
+    adjustOlundarMorale(state, 1);
+    return 'roads and holdings are repaired, and morale rises.';
+  }
+  if (mission.type === 'raid') {
+    gainResources(state.factions.olundar.resources, { gold: 10, influence: 1 });
+    unit.xp += 1;
+    return 'the raider trail is broken for gold, influence, and field experience.';
+  }
+  if (mission.type === 'escort') {
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    adjustOlundarMorale(state, 1);
+    return 'families reach the safe road, raising morale and influence.';
+  }
+  if (mission.type === 'accord') {
+    gainResources(state.factions.olundar.resources, { influence: 1 });
+    adjustKnownLivingRelations(state, 2);
+    recordKnownFactionMemory(state, 'fulfilled', 'Accord Route Carried', 'Olundar carried published accords onto the roads instead of leaving them in council chambers.', 1);
+    return 'envoys carry the accords forward, improving trust and influence.';
+  }
+  return 'the field task is resolved.';
 }
 
 function discoveredLivingFactions(state) {
@@ -1332,6 +1522,19 @@ export function getStrategicMapLens(state, lensId = 'normal') {
     }
     for (const unit of state.units.filter((item) => item.faction !== 'olundar' && isAllyForVision(state, item.faction))) pushMarker(unit, 'allyUnit', itemTone(unit));
     for (const building of state.buildings.filter((item) => item.faction !== 'olundar' && isAllyForVision(state, item.faction))) pushMarker(building, 'allyHolding', itemTone(building));
+  } else if (id === 'missions') {
+    const recentWindow = Math.max(0, state.turn - 4);
+    for (const mission of state.crises.missions.filter((item) => !item.completedTurn || item.completedTurn >= recentWindow)) {
+      const tile = tileAt(state, mission.x, mission.y);
+      if (!tile) continue;
+      const tone = mission.completedTurn ? 'supply' : mission.tone === 'danger' ? 'dead' : 'mission';
+      pushTile(tile, mission.completedTurn ? 'missionComplete' : 'missionTarget', tone, mission.completedTurn ? 0.6 : 1);
+      pushMarker({
+        x: mission.x,
+        y: mission.y,
+        name: mission.completedTurn ? `${mission.name} complete` : mission.name
+      }, mission.completedTurn ? 'missionComplete' : 'missionTarget', tone);
+    }
   }
 
   return { ...lens, tiles, markers };
@@ -1483,6 +1686,7 @@ export function moveUnit(state, unitId, x, y) {
   unit.fortified = 0;
   maybeSurveyRuin(state, unit);
   updateVisibility(state);
+  updateAftermathMissions(state);
   return { ok: true, reason: `${unit.name} moved.` };
 }
 
@@ -2024,6 +2228,7 @@ export function endTurn(state) {
   runNonPlayerTurns(state);
   resetActions(state);
   updateVisibility(state);
+  updateAftermathMissions(state);
   checkLossConditions(state);
   return state;
 }

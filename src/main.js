@@ -10,6 +10,7 @@ import {
   formatCost,
   forecastBuildingAttack,
   forecastUnitAttack,
+  getAftermathMissions,
   fortifyUnit,
   getCampaignRecap,
   getCrisisCouncil,
@@ -55,6 +56,7 @@ const councilPanel = document.querySelector('#councilPanel');
 const guidePanel = document.querySelector('#guidePanel');
 const operationsPanel = document.querySelector('#operationsPanel');
 const crisisPanel = document.querySelector('#crisisPanel');
+const missionPanel = document.querySelector('#missionPanel');
 const selectionPanel = document.querySelector('#selectionPanel');
 const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
@@ -108,6 +110,7 @@ function render() {
   renderGuide();
   renderOperations();
   renderCrisisCouncil();
+  renderAftermathMissions();
   renderObjectives();
   renderSelection();
   renderActions();
@@ -281,6 +284,38 @@ function renderCrisisCouncil() {
     `;
     crisisPanel.appendChild(history);
   }
+}
+
+function renderAftermathMissions() {
+  const missions = getAftermathMissions(state);
+  missionPanel.hidden = !missions.visible;
+  if (!missions.visible) {
+    missionPanel.innerHTML = '';
+    return;
+  }
+  missionPanel.innerHTML = `
+    <div class="missions-head">
+      <h2>${escapeHtml(missions.title)}</h2>
+      <p>${escapeHtml(missions.summary)}</p>
+    </div>
+    ${missions.active.length ? `
+      <div class="mission-list">
+        ${missions.active.map((mission) => `
+          <article class="mission ${escapeHtml(mission.tone)}">
+            <span>${escapeHtml(mission.required)}</span>
+            <strong>${escapeHtml(mission.name)}</strong>
+            <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}. ${escapeHtml(mission.reward)}</small>
+          </article>
+        `).join('')}
+      </div>
+    ` : ''}
+    ${missions.recent.length ? `
+      <div class="mission-history">
+        <h3>Completed</h3>
+        ${missions.recent.map((mission) => `<p><b>T${mission.completedTurn} ${escapeHtml(mission.name)}:</b> ${escapeHtml(mission.reward)}</p>`).join('')}
+      </div>
+    ` : ''}
+  `;
 }
 
 function renderObjectives() {

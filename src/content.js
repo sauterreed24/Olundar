@@ -513,7 +513,8 @@ export const MAP_LENSES = {
   blight: { id: 'blight', name: 'Blight', text: 'Highlight revealed grave-blight and known Deadwalker works.' },
   roads: { id: 'roads', name: 'Roads', text: 'Trace revealed military roads and logistics corridors.' },
   supply: { id: 'supply', name: 'Supply', text: 'Show revealed tiles inside Olundar city, outpost, and road supply reach.' },
-  alliance: { id: 'alliance', name: 'Alliance', text: 'Show Survival Pact vision and allied positions.' }
+  alliance: { id: 'alliance', name: 'Alliance', text: 'Show Survival Pact vision and allied positions.' },
+  missions: { id: 'missions', name: 'Missions', text: 'Highlight active aftermath mission targets and recently completed field tasks.' }
 };
 
 export const OBJECTIVES = [

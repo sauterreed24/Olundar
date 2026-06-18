@@ -13,13 +13,14 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Siege Operations that track midgame victory work: onagers, survival pacts, Deadwalker strongholds, Vorgath, and the Bone Portal.
 - Crisis Council events for refugee caravans, thin granaries, night raids, and emergency councils, with rulings that change resources, morale, population, troops, fortifications, or relations.
 - Chained crisis aftermaths that turn earlier hard rulings into delayed petitions, public strain, diplomatic memory, repairs, or battlefield opportunities.
+- Aftermath Missions that place crisis follow-through tasks on the map, such as escort roads, repair scars, raider trails, and accord routes.
 - Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Diplomacy Ledger that keeps contacts, pacts, trade, aid, pressure, and rivalries visible over long campaigns.
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
 - Faction-specific promises for Dawnward wall guards, Veyr war caravans, and Mireclan marsh routes, each with distinct costs and effects.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
 - Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
-- Compact strategic map lenses for blight, roads, supply reach, and Survival Pact vision.
+- Compact strategic map lenses for blight, roads, supply reach, Survival Pact vision, and aftermath mission targets.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
@@ -34,7 +35,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises, living-faction war aims, allied field orders, crisis rulings and aftermaths, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath missions, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -63,8 +64,9 @@ Browsers that support installation will expose an **Install** button after the a
 - Click **Save** or **Load** to manage named campaign slots.
 - Click **Import save file** or **Import JSON** in the save manager to load an exported campaign on the current device.
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
-- Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, and alliance vision.
+- Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, alliance vision, and active aftermath missions.
 - When the **Crisis Council** appears, choose one ruling per event; some rulings create delayed aftermath cards a few turns later, unaffordable choices are disabled, and recent rulings stay visible for a few turns.
+- When **Aftermath Missions** appear, use the Missions lens and send the required unit type to the marked tile to resolve the field consequence.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
 - Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
@@ -129,6 +131,7 @@ olundar_game/
 - Living-faction war aims must appear in diplomacy and steer pre-pact AI defense, raiding, or scouting.
 - Allied field orders must be pact-gated and steer allied AI toward reinforcement or Deadwalker harassment.
 - Crisis Council events stay out of the first-turn opening, then trigger from live famine, contact, Deadwalker, and coalition pressure; rulings must spend costs once, create real campaign consequences, and schedule delayed aftermaths that resolve only once.
+- Aftermath missions must be generated by selected aftermath rulings, appear on the Missions lens, complete through unit movement, and pay distinct rewards.
 - Strategic map lenses must expose revealed blight, roads, Olundar supply reach, and pact ally vision without breaking fog of war.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -143,5 +146,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Let aftermath rulings alter map objectives, such as escort routes, repair zones, or raider camps.
-2. Add faction promise follow-through demands if Olundar later ignores Dawnward walls, Veyr routes, or Mireclan marsh scouts.
+1. Add faction promise follow-through demands if Olundar later ignores Dawnward walls, Veyr routes, or Mireclan marsh scouts.
+2. Make mission targets more varied with spawned camps, route chains, and richer terrain-specific rewards.

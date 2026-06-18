@@ -18,6 +18,7 @@ const LENS_COLORS = {
   dead: '#9cf38a',
   roads: '#ffd76b',
   supply: '#baf58c',
+  mission: '#f0c866',
   alliance: '#88d8ff'
 };
 

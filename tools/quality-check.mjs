@@ -17,6 +17,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getCampaignRecap,
+  getAftermathMissions,
   getCrisisCouncil,
   getDiplomacyLedger,
   getEndTurnWarnings,
@@ -180,7 +181,7 @@ check('content tables are internally consistent', () => {
     assert(lens.id === id, `Map lens ${id} has mismatched id.`);
     assert(lens.name && lens.text, `Map lens ${id} needs player-facing text.`);
   }
-  for (const id of ['normal', 'blight', 'roads', 'supply', 'alliance']) assert(MAP_LENSES[id], `Missing required map lens ${id}.`);
+  for (const id of ['normal', 'blight', 'roads', 'supply', 'alliance', 'missions']) assert(MAP_LENSES[id], `Missing required map lens ${id}.`);
 });
 
 check('campaign generation creates playable essentials', () => {
@@ -399,6 +400,52 @@ check('crisis aftermath creates delayed follow-up rulings', () => {
   assert(accords.ok, accords.reason || 'Council aftermath ruling failed.');
   assert(councilState.factions.olundar.relations.dawn > beforeRelation, 'Published accords should improve known-faction relations.');
   assert(getDiplomacyLedger(councilState).entries.some((entry) => entry.memory?.promises >= 2), 'Published accords should create visible promise memory.');
+});
+
+check('aftermath missions turn rulings into map objectives', () => {
+  const state = createGame('quality-aftermath-missions');
+  state.turn = 8;
+  state.flags.firstAllySeen = true;
+  state.flags.firstDeadwalkerSeen = true;
+  for (const id of ['dawn', 'veyr', 'mire']) state.factions[id].discovered = true;
+  state.factions.olundar.resources = {
+    ...state.factions.olundar.resources,
+    food: 70,
+    wood: 90,
+    stone: 50,
+    iron: 50,
+    gold: 90,
+    influence: 8,
+    morale: 6
+  };
+
+  const setup = resolveCrisis(state, 'cityRaid', 'nightWatch');
+  assert(setup.ok, setup.reason || 'Night Watch setup failed.');
+  state.turn += 2;
+  const beforeMorale = state.factions.olundar.resources.morale;
+  const repair = resolveCrisis(state, 'raidAftermath', 'repairStreets');
+  assert(repair.ok, repair.reason || 'Raid repair aftermath failed.');
+  let missions = getAftermathMissions(state);
+  const active = missions.active.find((mission) => mission.name === 'Repair the Raid Roads');
+  assert(missions.visible && active, 'Repair aftermath should create an active map mission.');
+  assert(active.required === 'Engineer' && active.target.includes(','), 'Repair mission should expose requirement and target.');
+  const lens = getStrategicMapLens(state, 'missions');
+  assert(lens.markers.some((marker) => marker.kind === 'missionTarget' && marker.x === active.x && marker.y === active.y), 'Missions lens should mark the active target.');
+
+  const engineer = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'engineer');
+  engineer.hasActed = false;
+  const moved = moveUnit(state, engineer.id, active.x, active.y);
+  assert(moved.ok, moved.reason || 'Engineer should be able to move to the repair mission.');
+  missions = getAftermathMissions(state);
+  assert(!missions.active.some((mission) => mission.id === active.id), 'Completed aftermath missions should leave the active list.');
+  assert(missions.recent.some((mission) => mission.id === active.id && mission.completed), 'Completed aftermath missions should appear in recent history.');
+  assert(state.factions.olundar.resources.morale > beforeMorale, 'Completing a repair mission should improve morale beyond the aftermath ruling.');
+  const completedLens = getStrategicMapLens(state, 'missions');
+  assert(completedLens.markers.some((marker) => marker.kind === 'missionComplete' && marker.x === active.x && marker.y === active.y), 'Missions lens should retain recent completion markers.');
+
+  const legacy = createGame('quality-mission-legacy');
+  delete legacy.crises.missions;
+  assert(getAftermathMissions(legacy).active.length === 0, 'Legacy saves should normalize empty aftermath missions.');
 });
 
 check('named save slots preserve campaign metadata', () => {
@@ -707,6 +754,9 @@ check('strategic map lenses expose planning layers', () => {
   const alliance = getStrategicMapLens(state, 'alliance');
   assert(alliance.tiles.some((tile) => tile.kind === 'allianceVision' && tile.tone === 'dawn'), 'Alliance lens should show Survival Pact vision.');
   assert(alliance.markers.some((marker) => marker.kind === 'allyHolding' || marker.kind === 'allyUnit'), 'Alliance lens should mark pact ally positions.');
+  state.crises.missions.push({ id: 'm-test', type: 'repair', name: 'Test Mission', text: 'Marked task.', required: 'engineer', tone: 'info', x: city.x, y: city.y, createdTurn: state.turn, completedTurn: null, rewardText: 'Test reward.' });
+  const missions = getStrategicMapLens(state, 'missions');
+  assert(missions.markers.some((marker) => marker.kind === 'missionTarget' && marker.x === city.x && marker.y === city.y), 'Mission lens should mark active aftermath missions.');
   assert(getStrategicMapLens(state, 'unknown').id === 'normal', 'Unknown map lens ids should fall back to normal.');
 });
 
