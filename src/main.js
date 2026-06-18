@@ -30,8 +30,10 @@ import {
   isVisible
 } from './rules.js';
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
+import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
+const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const canvas = document.querySelector('#gameCanvas');
 const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
@@ -48,8 +50,11 @@ const modeBanner = document.querySelector('#modeBanner');
 const toastEl = document.querySelector('#toast');
 const setupOverlay = document.querySelector('#setupOverlay');
 const campaignSetup = document.querySelector('#campaignSetup');
+const saveOverlay = document.querySelector('#saveOverlay');
+const saveManager = document.querySelector('#saveManager');
 
 let state = createGame({ scenarioId: 'founding' });
+let activeSaveSlotId = null;
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
@@ -252,8 +257,8 @@ function renderActions() {
   actionPanel.appendChild(subheading('Campaign'));
   actionPanel.appendChild(button('Next ready unit', () => selectNextReadyUnit(), !getReadyOlundarUnits(state).length));
   actionPanel.appendChild(button('End turn', () => requestEndTurn()));
-  actionPanel.appendChild(button('Save', () => saveGame()));
-  actionPanel.appendChild(button('Load', () => loadGame()));
+  actionPanel.appendChild(button('Save / slots', () => openSaveManager('save')));
+  actionPanel.appendChild(button('Load campaign', () => openSaveManager('load')));
   actionPanel.appendChild(button('New campaign', () => newCampaign()));
   actionPanel.appendChild(button('Export save file', () => exportSave()));
 }
@@ -424,24 +429,51 @@ function selectNextReadyUnit() {
   render();
 }
 
-function saveGame() {
-  localStorage.setItem(SAVE_KEY, serializeState(state));
-  toast('Campaign saved locally.');
+function readSaveSlots() {
+  return parseSaveSlots(localStorage.getItem(SAVE_SLOTS_KEY));
 }
 
-function loadGame() {
+function writeSaveSlots(slots) {
+  localStorage.setItem(SAVE_SLOTS_KEY, serializeSaveSlots(slots));
+}
+
+function saveGame(name = null, slotId = activeSaveSlotId) {
+  const serialized = serializeState(state);
+  const currentSlots = readSaveSlots();
+  const existing = currentSlots.find((slot) => slot.id === slotId);
+  const slot = createSaveSlot(state, serialized, { id: existing?.id, name: name || existing?.name || defaultSaveSlotName(state) });
+  activeSaveSlotId = slot.id;
+  writeSaveSlots(upsertSaveSlot(currentSlots, slot));
+  localStorage.setItem(SAVE_KEY, serialized);
+  toast(`Saved ${slot.name}.`);
+  return slot;
+}
+
+function loadSerializedGame(raw, slot = null) {
+  try {
+    state = deserializeState(raw);
+    activeSaveSlotId = slot?.id || null;
+    localStorage.setItem(SAVE_KEY, raw);
+    toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
+    render();
+  } catch (error) {
+    toast(error.message || 'Save failed to load.', 'bad');
+  }
+}
+
+function loadGame(slotId = null) {
+  const slots = readSaveSlots();
+  const slot = slotId ? slots.find((item) => item.id === slotId) : slots.find((item) => item.id === activeSaveSlotId) || slots[0];
+  if (slot) {
+    loadSerializedGame(slot.data, slot);
+    return;
+  }
   const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) {
     toast('No local save found.', 'bad');
     return;
   }
-  try {
-    state = deserializeState(raw);
-    toast('Campaign loaded.');
-    render();
-  } catch (error) {
-    toast(error.message || 'Save failed to load.', 'bad');
-  }
+  loadSerializedGame(raw);
 }
 
 function newCampaign() {
@@ -455,6 +487,85 @@ function openCampaignSetup() {
 
 function closeCampaignSetup() {
   setupOverlay.hidden = true;
+}
+
+function openSaveManager(mode = 'save') {
+  renderSaveManager(mode);
+  saveOverlay.hidden = false;
+}
+
+function closeSaveManager() {
+  saveOverlay.hidden = true;
+}
+
+function renderSaveManager(mode = 'save') {
+  const slots = readSaveSlots();
+  const active = slots.find((slot) => slot.id === activeSaveSlotId);
+  const legacyRaw = localStorage.getItem(SAVE_KEY);
+  const hasLegacy = Boolean(legacyRaw && !slots.some((slot) => slot.data === legacyRaw));
+  const slotName = active?.name || defaultSaveSlotName(state);
+  saveManager.innerHTML = `
+    <div class="setup-head">
+      <div>
+        <h2 id="saveManagerTitle">${mode === 'load' ? 'Load Campaign' : 'Save Campaign'}</h2>
+        <p>${slots.length}/${MAX_SAVE_SLOTS} named slots used${active ? ` · Active: ${escapeHtml(active.name)}` : ''}</p>
+      </div>
+      <button class="icon-button" type="button" data-action="close-save" aria-label="Close save manager">X</button>
+    </div>
+    <label class="setup-field">
+      <span>Slot name</span>
+      <input id="saveSlotName" name="slotName" value="${escapeHtml(slotName)}" autocomplete="off" maxlength="48" />
+    </label>
+    <div class="setup-actions save-primary-actions">
+      <button type="submit">Save Current Campaign</button>
+      <button type="button" data-action="load-latest" ${slots.length ? '' : 'disabled'}>Load Latest</button>
+      <button type="button" data-action="close-save">Cancel</button>
+    </div>
+    <h3>Named Slots</h3>
+    <div class="save-slot-list">
+      ${slots.length ? slots.map((slot) => saveSlotCard(slot)).join('') : '<p class="muted">No named campaign slots yet. Save the current campaign to create one.</p>'}
+      ${hasLegacy ? legacySaveCard() : ''}
+    </div>
+  `;
+}
+
+function saveSlotCard(slot) {
+  const active = slot.id === activeSaveSlotId ? ' active' : '';
+  return `
+    <article class="save-slot${active}">
+      <div>
+        <strong>${escapeHtml(slot.name)}</strong>
+        <span>${escapeHtml(slot.scenarioName)} · ${escapeHtml(slot.difficultyName)} · Turn ${escapeHtml(slot.turn)}</span>
+        <small>${escapeHtml(formatSavedAt(slot.savedAt))} · ${escapeHtml(slot.seed)} · ${escapeHtml(slot.status)}</small>
+      </div>
+      <div class="slot-actions">
+        <button type="button" data-action="load-slot" data-slot-id="${escapeHtml(slot.id)}">Load</button>
+        <button type="button" data-action="overwrite-slot" data-slot-id="${escapeHtml(slot.id)}">Overwrite</button>
+        <button type="button" data-action="delete-slot" data-slot-id="${escapeHtml(slot.id)}">Delete</button>
+      </div>
+    </article>
+  `;
+}
+
+function legacySaveCard() {
+  return `
+    <article class="save-slot legacy">
+      <div>
+        <strong>Legacy quick save</strong>
+        <span>Single-slot save from an earlier build</span>
+        <small>Load it, then save into a named slot.</small>
+      </div>
+      <div class="slot-actions">
+        <button type="button" data-action="load-legacy">Load</button>
+      </div>
+    </article>
+  `;
+}
+
+function formatSavedAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 'founding', selectedDifficultyId = state.campaign?.difficultyId || SCENARIOS[selectedScenarioId]?.difficultyId || 'standard', seedOverride = null) {
@@ -505,6 +616,7 @@ function startConfiguredCampaign(form) {
   const difficultyId = data.get('difficultyId') || scenario.difficultyId || 'standard';
   const seed = String(data.get('seed') || scenario.seed).trim() || scenario.seed;
   state = createGame({ scenarioId, difficultyId, seed });
+  activeSaveSlotId = null;
   hoverTile = null;
   lastTile = { x: 7, y: 16 };
   closeCampaignSetup();
@@ -590,6 +702,10 @@ canvas.addEventListener('mouseleave', () => {
 
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !saveOverlay.hidden) {
+    closeSaveManager();
+    return;
+  }
   if (event.key === 'Escape' && !setupOverlay.hidden) {
     closeCampaignSetup();
     return;
@@ -606,7 +722,7 @@ window.addEventListener('keydown', (event) => {
     saveGame();
   } else if (event.key.toLowerCase() === 'l' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
-    loadGame();
+    openSaveManager('load');
   }
 });
 
@@ -615,8 +731,8 @@ document.querySelector('#endTurnTop').addEventListener('click', () => {
 });
 document.querySelector('#nextUnitTop').addEventListener('click', () => selectNextReadyUnit());
 document.querySelector('#newTop').addEventListener('click', () => newCampaign());
-document.querySelector('#saveTop').addEventListener('click', () => saveGame());
-document.querySelector('#loadTop').addEventListener('click', () => loadGame());
+document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
+document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
 
 setupOverlay.addEventListener('click', (event) => {
   if (event.target === setupOverlay) closeCampaignSetup();
@@ -641,6 +757,60 @@ campaignSetup.addEventListener('change', (event) => {
 campaignSetup.addEventListener('submit', (event) => {
   event.preventDefault();
   startConfiguredCampaign(campaignSetup);
+});
+
+saveOverlay.addEventListener('click', (event) => {
+  if (event.target === saveOverlay) closeSaveManager();
+});
+
+saveManager.addEventListener('click', (event) => {
+  if (!(event.target instanceof HTMLElement)) return;
+  const action = event.target.dataset.action;
+  if (!action) return;
+  if (action === 'close-save') {
+    closeSaveManager();
+  } else if (action === 'load-latest') {
+    const [latest] = readSaveSlots();
+    if (latest) {
+      closeSaveManager();
+      loadGame(latest.id);
+    }
+  } else if (action === 'load-slot') {
+    closeSaveManager();
+    loadGame(event.target.dataset.slotId);
+  } else if (action === 'overwrite-slot') {
+    const slots = readSaveSlots();
+    const slot = slots.find((item) => item.id === event.target.dataset.slotId);
+    if (slot) {
+      saveGame(slot.name, slot.id);
+      renderSaveManager('save');
+    }
+  } else if (action === 'delete-slot') {
+    const slotId = event.target.dataset.slotId;
+    const slots = readSaveSlots();
+    const slot = slots.find((item) => item.id === slotId);
+    if (slot && window.confirm(`Delete save slot "${slot.name}"?`)) {
+      writeSaveSlots(removeSaveSlot(slots, slotId));
+      if (activeSaveSlotId === slotId) activeSaveSlotId = null;
+      toast(`Deleted ${slot.name}.`);
+      renderSaveManager('load');
+    }
+  } else if (action === 'load-legacy') {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      closeSaveManager();
+      loadSerializedGame(raw);
+    }
+  }
+});
+
+saveManager.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const data = new FormData(saveManager);
+  const slot = saveGame(data.get('slotName'));
+  renderSaveManager('save');
+  const input = saveManager.querySelector('#saveSlotName');
+  if (input instanceof HTMLInputElement) input.value = slot.name;
 });
 
 resizeCanvas();

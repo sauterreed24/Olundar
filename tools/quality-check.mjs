@@ -26,6 +26,7 @@ import {
   upgradeBuilding,
   unitAt
 } from '../src/rules.js';
+import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -171,6 +172,29 @@ check('siege operations track midgame victory work', () => {
   assert(state.flags.deadStrongholdsDestroyed === 1, 'Destroyed strongholds should be counted.');
   assert(after.operations.find((operation) => operation.id === 'cleanse').done, 'Cleanse operation should complete after a stronghold falls.');
   assert(state.factions.olundar.resources.influence > beforeInfluence, 'Stronghold destruction should reward influence.');
+});
+
+check('named save slots preserve campaign metadata', () => {
+  const state = createGame({ scenarioId: 'ashgate', difficultyId: 'hollowCrown', seed: 'quality-slot' });
+  state.turn = 9;
+  const defaultName = defaultSaveSlotName(state);
+  const first = createSaveSlot(state, '{"version":1}', { id: 'slot-a', name: '  Ash   Gate  ', now: '2026-06-18T20:00:00.000Z' });
+  const second = createSaveSlot(state, '{"version":1,"turn":10}', { id: 'slot-b', name: '', now: '2026-06-18T20:01:00.000Z' });
+  assert(defaultName.includes('Ash Gate Frontier') && defaultName.includes('Hollow Crown'), 'Default save slot name should use campaign metadata.');
+  assert(first.name === 'Ash Gate', 'Slot names should be trimmed and collapsed.');
+  assert(second.name === defaultName, 'Blank slot names should fall back to campaign metadata.');
+  assert(first.scenarioName === 'Ash Gate Frontier' && first.difficultyName === 'Hollow Crown', 'Slot metadata should preserve scenario and difficulty.');
+  assert(first.turn === 9 && first.seed === 'quality-slot', 'Slot metadata should preserve turn and seed.');
+
+  const updatedFirst = createSaveSlot(state, '{"version":1,"turn":11}', { id: 'slot-a', name: 'Ash Gate Keep', now: '2026-06-18T20:02:00.000Z' });
+  const slots = upsertSaveSlot(upsertSaveSlot([], first), second);
+  const updated = upsertSaveSlot(slots, updatedFirst);
+  assert(updated.length === 2, 'Updating an existing slot should not duplicate it.');
+  assert(updated[0].id === 'slot-a' && updated[0].name === 'Ash Gate Keep', 'Updated slot should sort newest first.');
+  const parsed = parseSaveSlots(serializeSaveSlots(updated));
+  assert(parsed.length === 2 && parsed[0].id === 'slot-a', 'Serialized save slots should roundtrip in sorted order.');
+  assert(removeSaveSlot(parsed, 'slot-a').length === 1, 'Slot removal should drop the requested slot.');
+  assert(parseSaveSlots('{broken').length === 0, 'Corrupt save slot storage should fail closed.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {

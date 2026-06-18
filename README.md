@@ -19,9 +19,9 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
 - Deadwalker civilization: Bone Portal, Bone Pits, Grave Forges, Necropolises, Bone Thralls, Corpse Archers, Grave Knights, and Vorgath the Hollow Crown.
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
-- Local save/load and exportable JSON save files.
+- Named local campaign save slots, legacy quick-save loading, and exportable JSON save files.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -45,8 +45,9 @@ No package install is required because this prototype has no third-party runtime
 - Press `E` to end the turn; if units are idle, press `E` again or use `Shift + E` to confirm.
 - Click **New** to choose a scenario, difficulty, and seed.
 - Press `Esc` to cancel build mode.
-- Press `Ctrl/Cmd + S` to save locally.
-- Press `Ctrl/Cmd + L` to load locally.
+- Click **Save** or **Load** to manage named campaign slots.
+- Press `Ctrl/Cmd + S` to quick-save into the active named slot.
+- Press `Ctrl/Cmd + L` to open the load slots panel.
 
 ## Main objective
 
@@ -82,6 +83,7 @@ olundar_game/
 - Content table consistency.
 - Campaign essentials exist.
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
+- Named save slots sanitize names, preserve campaign metadata, sort by save time, update existing slots, and ignore corrupt storage.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -95,6 +97,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Convert the local save into named campaign slots.
-2. Add sound effects and light music using compressed mobile-friendly assets.
-3. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
+1. Add sound effects and light music using compressed mobile-friendly assets.
+2. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.

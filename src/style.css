@@ -271,6 +271,75 @@ button:disabled {
   margin-top: 0.5rem;
 }
 
+.save-dialog {
+  width: min(760px, 100%);
+}
+
+.save-primary-actions {
+  margin-bottom: 1rem;
+}
+
+.save-slot-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.save-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 3px solid rgba(136, 183, 255, 0.42);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+}
+
+.save-slot.active {
+  border-left-color: var(--good);
+  background: rgba(186, 245, 140, 0.08);
+}
+
+.save-slot.legacy {
+  border-left-color: var(--gold);
+}
+
+.save-slot strong,
+.save-slot span,
+.save-slot small {
+  display: block;
+  min-width: 0;
+}
+
+.save-slot strong {
+  color: #f9e6a8;
+}
+
+.save-slot span {
+  margin-top: 0.18rem;
+  color: #eee2c1;
+  line-height: 1.35;
+  font-size: 0.88rem;
+}
+
+.save-slot small {
+  margin-top: 0.14rem;
+  color: var(--muted);
+  line-height: 1.32;
+}
+
+.slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.38rem;
+}
+
+.slot-actions button {
+  padding: 0.42rem 0.55rem;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
@@ -769,6 +838,14 @@ button:disabled {
   .setup-dialog {
     max-height: 94vh;
     padding: 0.8rem;
+  }
+
+  .save-slot {
+    grid-template-columns: 1fr;
+  }
+
+  .slot-actions {
+    justify-content: flex-start;
   }
 
   .panel {
