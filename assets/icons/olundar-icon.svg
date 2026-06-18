@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Olundar app icon</title>
+  <desc id="desc">A golden Olundar sun over a green island and dark Deadwalker frontier.</desc>
+  <defs>
+    <radialGradient id="sky" cx="34%" cy="24%" r="72%">
+      <stop offset="0" stop-color="#29384b"/>
+      <stop offset="0.48" stop-color="#111827"/>
+      <stop offset="1" stop-color="#040508"/>
+    </radialGradient>
+    <radialGradient id="sun" cx="48%" cy="42%" r="50%">
+      <stop offset="0" stop-color="#fff2a8"/>
+      <stop offset="0.58" stop-color="#f0c866"/>
+      <stop offset="1" stop-color="#946826"/>
+    </radialGradient>
+    <linearGradient id="land" x1="70" y1="178" x2="386" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b7d979"/>
+      <stop offset="0.46" stop-color="#7ea95d"/>
+      <stop offset="1" stop-color="#315a40"/>
+    </linearGradient>
+    <linearGradient id="water" x1="119" y1="160" x2="350" y2="393" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#77c7ec"/>
+      <stop offset="1" stop-color="#1d5c83"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sky)"/>
+  <path d="M426 94c-21 3-41 10-58 22 24 0 44 3 64 10-19 5-35 14-48 28 23-6 44-6 64-1-23 15-40 33-50 55 27-16 53-23 80-22-17 26-42 51-74 75-23-32-56-60-99-84 32-43 73-71 121-83z" fill="#d5e8ff" opacity="0.08"/>
+  <g filter="url(#shadow)">
+    <path d="M144 168c50-45 131-55 193-23 52 27 86 83 85 145-1 77-60 143-137 153-56 8-114-14-148-58-52-66-49-159 7-217z" fill="url(#land)"/>
+    <path d="M126 239c24 7 45 4 60-11 18-18 12-40 30-54 19-16 45-2 61-20 15-17 4-35 23-48 55 24 92 79 92 142 0 83-68 150-151 150-55 0-104-30-130-75 14-13 17-34 15-84z" fill="#b8da75" opacity="0.52"/>
+    <path d="M118 312c31 7 62 3 92-11 26-13 49-18 68-15 28 5 46 25 79 15 19-6 34-20 47-42 2 13 1 26-2 41-12 66-71 116-141 116-63 0-117-40-143-104z" fill="#274f3c" opacity="0.38"/>
+    <path d="M134 194c27 34 63 51 109 51 29 0 56-7 82-22 27-16 51-21 72-16 9 20 14 42 13 65-34-18-68-18-103 1-35 18-72 25-112 20-39-5-70-22-93-50 6-18 17-35 32-49z" fill="url(#water)" opacity="0.86"/>
+    <path d="M156 177l44 18 19-42 22 45 49-14-23 43 41 28-50 7-6 49-36-34-44 25 10-49-37-34 50-6z" fill="url(#sun)" stroke="#fff4bd" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M350 327c23-2 45 4 66 17-14 35-42 63-77 78l-33-30 30-19-16-35z" fill="#1a1f2a" opacity="0.86"/>
+    <path d="M363 335l13 24 27 4-19 19 5 27-26-13-24 13 4-27-20-19 27-4z" fill="#cfd4d9" opacity="0.7"/>
+  </g>
+  <rect x="14" y="14" width="484" height="484" rx="82" fill="none" stroke="#f0c866" stroke-opacity="0.32" stroke-width="16"/>
+</svg>

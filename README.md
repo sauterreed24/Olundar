@@ -21,8 +21,9 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Named local campaign save slots, legacy quick-save loading, and exportable JSON save files.
 - Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
+- Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -34,6 +35,7 @@ npm start
 Then open the local URL printed by the server, usually `http://localhost:4173`.
 
 No package install is required because this prototype has no third-party runtime dependencies.
+Browsers that support installation will expose an **Install** button after the app is eligible; the service worker keeps the app shell available for offline reloads after the first visit.
 
 ## Controls
 
@@ -50,6 +52,7 @@ No package install is required because this prototype has no third-party runtime
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
+- Click **Install** when your browser offers it to add Olundar to the device.
 
 ## Main objective
 
@@ -60,10 +63,13 @@ Explore through fog, survive the Deadwalker expansion, build a war economy, use 
 ```text
 olundar_game/
   index.html
+  manifest.webmanifest
   package.json
   README.md
   DESIGN.md
+  sw.js
   assets/
+    icons/olundar-icon.svg
     sprites/olundar-sprite-sheet.svg
   src/
     content.js       # units, buildings, terrain, factions, costs, objectives
@@ -72,6 +78,7 @@ olundar_game/
     rules.js         # game state, fog, movement, combat, economy, AI, diplomacy
     render.js        # canvas terrain, sprites, fog, minimap, UI descriptions
     main.js          # browser UI/event loop
+    pwa.js           # install prompt and service-worker registration
     style.css
   tools/
     serve.mjs
@@ -88,6 +95,7 @@ olundar_game/
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
 - Named save slots sanitize names, preserve campaign metadata, sort by save time, update existing slots, and ignore corrupt storage.
 - Procedural audio cues stay browser-safe, distinct, and lightweight.
+- PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -101,5 +109,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Package as a PWA first, then wrap for mobile stores once balance and UI are polished.
-2. Add a richer settings panel for audio volume, motion preference, and map scale once the PWA shell exists.
+1. Add a richer settings panel for audio volume, motion preference, and map scale.
+2. Add save import from JSON files so campaign transfers work cleanly across installed devices.

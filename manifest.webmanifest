@@ -1,0 +1,21 @@
+{
+  "name": "Olundar: Deadwalker Strategy",
+  "short_name": "Olundar",
+  "description": "A turn-based exploration, survival, diplomacy, and war strategy game about leading Olundar against the Deadwalkers.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090b10",
+  "theme_color": "#151c29",
+  "categories": ["games", "strategy"],
+  "icons": [
+    {
+      "src": "./assets/icons/olundar-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

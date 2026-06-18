@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
@@ -51,6 +51,22 @@ function listFiles(dir, suffixes = ['.js', '.mjs']) {
     else if (suffixes.includes(path.extname(file))) out.push(file);
   }
   return out;
+}
+
+function readProjectFile(relativePath) {
+  return readFileSync(path.join(root, relativePath), 'utf8');
+}
+
+function webPathExists(webPath) {
+  if (webPath === './' || webPath === '/') return true;
+  const cleanPath = webPath.replace(/^\.\//, '').replace(/^\//, '');
+  return existsSync(path.join(root, cleanPath));
+}
+
+function parseServiceWorkerAssets(text) {
+  const match = text.match(/const APP_SHELL_ASSETS = (\[[\s\S]*?\]);/);
+  if (!match) throw new Error('Service worker asset list missing.');
+  return JSON.parse(match[1]);
 }
 
 check('source files parse under Node', () => {
@@ -203,6 +219,48 @@ check('audio cue registry stays lightweight and browser-safe', () => {
   assert(summary.count >= 10, 'Audio registry should cover core game feedback states.');
   assert(summary.ids.includes('attack') && summary.ids.includes('turn') && summary.ids.includes('fanfare'), 'Audio registry is missing important gameplay cues.');
   assert(summary.totalDuration < 3, 'Total procedural cue budget should stay lightweight.');
+});
+
+check('pwa install shell references real app assets', () => {
+  const index = readProjectFile('index.html');
+  const manifest = JSON.parse(readProjectFile('manifest.webmanifest'));
+  const serviceWorker = readProjectFile('sw.js');
+  const main = readProjectFile('src/main.js');
+  const pwaRuntime = readProjectFile('src/pwa.js');
+  const server = readProjectFile('tools/serve.mjs');
+  const shellAssets = parseServiceWorkerAssets(serviceWorker);
+
+  assert(index.includes('rel="manifest" href="./manifest.webmanifest"'), 'Index must link the web app manifest.');
+  assert(index.includes('name="theme-color"'), 'Index should expose a theme color for installed surfaces.');
+  assert(index.includes('id="installTop"'), 'Install affordance is missing from the top bar.');
+  assert(manifest.name.includes('Olundar') && manifest.short_name === 'Olundar', 'Manifest should identify the game clearly.');
+  assert(manifest.start_url === './' && manifest.scope === './', 'Manifest start URL and scope should stay repo-relative.');
+  assert(manifest.display === 'standalone', 'Manifest should launch as a standalone app.');
+  assert(manifest.icons.some((icon) => icon.src === './assets/icons/olundar-icon.svg' && icon.purpose.includes('maskable')), 'Manifest needs the maskable Olundar icon.');
+  for (const icon of manifest.icons) assert(webPathExists(icon.src), `Manifest icon missing: ${icon.src}`);
+
+  assert(main.includes("import { registerPwa } from './pwa.js';") && main.includes('registerPwa();'), 'Main runtime should initialize PWA registration.');
+  assert(pwaRuntime.includes('serviceWorker.register'), 'Runtime should register the service worker.');
+  assert(pwaRuntime.includes('beforeinstallprompt'), 'Runtime should expose install prompts when the browser supports them.');
+  assert(server.includes("'.webmanifest': 'application/manifest+json; charset=utf-8'"), 'Local server should serve manifests with the correct MIME type.');
+  assert(serviceWorker.includes("const CACHE_NAME = 'olundar-pwa-v"), 'Service worker cache name should be versioned.');
+  assert(serviceWorker.includes("request.mode === 'navigate'"), 'Service worker should provide an offline navigation fallback.');
+
+  const requiredAssets = [
+    './',
+    './index.html',
+    './manifest.webmanifest',
+    './assets/icons/olundar-icon.svg',
+    './src/main.js',
+    './src/pwa.js',
+    './src/rules.js',
+    './src/style.css'
+  ];
+  for (const asset of requiredAssets) assert(shellAssets.includes(asset), `Service worker shell cache missing ${asset}.`);
+  for (const asset of shellAssets) {
+    assert(!asset.startsWith('http'), `Service worker asset should be relative: ${asset}`);
+    assert(webPathExists(asset), `Service worker caches missing asset: ${asset}`);
+  }
 });
 
 check('scenario and difficulty presets change campaign shape', () => {

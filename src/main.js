@@ -32,6 +32,7 @@ import {
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 import { audioIsEnabled, initAudioPreference, playAudioCue, toggleAudio } from './audio.js';
+import { registerPwa } from './pwa.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -62,6 +63,7 @@ let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
 
 initAudioPreference();
+registerPwa();
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;

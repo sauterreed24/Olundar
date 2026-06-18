@@ -123,6 +123,10 @@ button:disabled {
   min-width: 5.6rem;
 }
 
+.top-actions #installTop {
+  min-width: 4.6rem;
+}
+
 .top-actions button[aria-pressed="true"] {
   border-color: rgba(186, 245, 140, 0.6);
   background: linear-gradient(180deg, rgba(186, 245, 140, 0.2), rgba(240, 200, 102, 0.08));
