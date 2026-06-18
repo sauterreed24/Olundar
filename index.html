@@ -25,6 +25,7 @@
           <button id="endTurnTop" type="button">End Turn</button>
           <button id="installTop" type="button" hidden>Install</button>
           <button id="audioTop" type="button" aria-pressed="false">Audio Off</button>
+          <button id="settingsTop" type="button">Settings</button>
           <button id="saveTop" type="button">Save</button>
           <button id="loadTop" type="button">Load</button>
           <button id="newTop" type="button">New</button>
@@ -39,6 +40,9 @@
     </div>
     <div id="saveOverlay" class="setup-overlay" hidden>
       <form id="saveManager" class="setup-dialog save-dialog" role="dialog" aria-modal="true" aria-labelledby="saveManagerTitle"></form>
+    </div>
+    <div id="settingsOverlay" class="setup-overlay" hidden>
+      <form id="settingsPanel" class="setup-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"></form>
     </div>
 
     <main class="layout">

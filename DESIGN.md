@@ -198,7 +198,7 @@ Olundar loses its city or collapses beyond recovery. The current prototype hard-
 
 ## Quality gate philosophy
 
-The `npm run quality:check` script is the first production guardrail. It should be run before committing any mechanics change. The current gate validates syntax, data consistency, PWA install shell integrity, map pathing, training, construction, combat, boss/portal rules, simulation stability, and absence of unfinished markers.
+The `npm run quality:check` script is the first production guardrail. It should be run before committing any mechanics change. The current gate validates syntax, data consistency, player settings, PWA install shell integrity, map pathing, training, construction, combat, boss/portal rules, simulation stability, and absence of unfinished markers.
 
 Future quality gates should add:
 

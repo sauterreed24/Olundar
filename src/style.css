@@ -123,6 +123,10 @@ button:disabled {
   min-width: 5.6rem;
 }
 
+.top-actions #settingsTop {
+  min-width: 5.1rem;
+}
+
 .top-actions #installTop {
   min-width: 4.6rem;
 }
@@ -238,6 +242,21 @@ button:disabled {
   font: inherit;
 }
 
+.volume-field span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.volume-field b {
+  color: var(--gold);
+}
+
+.volume-field input[type="range"] {
+  accent-color: var(--gold);
+  padding: 0;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -287,6 +306,14 @@ button:disabled {
 
 .save-dialog {
   width: min(760px, 100%);
+}
+
+.settings-dialog {
+  width: min(720px, 100%);
+}
+
+.settings-grid .choice-card {
+  min-height: 5.75rem;
 }
 
 .save-primary-actions {
@@ -787,6 +814,20 @@ button:disabled {
 
 .toast.bad {
   border-color: rgba(255, 138, 138, 0.55);
+}
+
+.reduced-motion button,
+.reduced-motion .toast {
+  transition: none;
+}
+
+.reduced-motion button:hover:not(:disabled) {
+  transform: none;
+}
+
+.reduced-motion .toast,
+.reduced-motion .toast.show {
+  transform: translate(-50%, 0);
 }
 
 .build-readout {

@@ -31,8 +31,9 @@ import {
 } from './rules.js';
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
-import { audioIsEnabled, initAudioPreference, playAudioCue, toggleAudio } from './audio.js';
+import { audioIsEnabled, initAudioPreference, playAudioCue, setAudioVolume, toggleAudio } from './audio.js';
 import { registerPwa } from './pwa.js';
+import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -54,6 +55,8 @@ const setupOverlay = document.querySelector('#setupOverlay');
 const campaignSetup = document.querySelector('#campaignSetup');
 const saveOverlay = document.querySelector('#saveOverlay');
 const saveManager = document.querySelector('#saveManager');
+const settingsOverlay = document.querySelector('#settingsOverlay');
+const settingsPanel = document.querySelector('#settingsPanel');
 const audioTop = document.querySelector('#audioTop');
 
 let state = createGame({ scenarioId: 'founding' });
@@ -61,17 +64,20 @@ let activeSaveSlotId = null;
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
+let playerSettings = readSettings();
 
 initAudioPreference();
+applyPlayerSettings(playerSettings);
 registerPwa();
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.parentElement;
+  const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
   const idealHeight = width * (MAP_HEIGHT / MAP_WIDTH);
-  const maxHeight = Math.max(420, window.innerHeight - 146);
-  const height = Math.max(360, Math.min(idealHeight, maxHeight));
+  const maxHeight = Math.max(mapScale.maxHeightFloor, window.innerHeight - mapScale.maxHeightOffset);
+  const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
   canvas.style.height = `${height}px`;
@@ -530,6 +536,57 @@ function closeSaveManager() {
   saveOverlay.hidden = true;
 }
 
+function openSettings() {
+  renderSettingsPanel();
+  settingsOverlay.hidden = false;
+  playAudioCue('ui');
+}
+
+function closeSettings() {
+  settingsOverlay.hidden = true;
+  setAudioVolume(playerSettings.audioVolume);
+}
+
+function renderSettingsPanel() {
+  const settings = normalizeSettings(playerSettings);
+  settingsPanel.innerHTML = `
+    <div class="setup-head">
+      <div>
+        <h2 id="settingsTitle">Settings</h2>
+        <p>Player comfort and device fit</p>
+      </div>
+      <button class="icon-button" type="button" data-action="close-settings" aria-label="Close settings">X</button>
+    </div>
+    <label class="setup-field volume-field">
+      <span>Audio volume <b id="volumeValue">${settings.audioVolume}%</b></span>
+      <input id="audioVolume" name="audioVolume" type="range" min="0" max="100" step="1" value="${settings.audioVolume}" />
+    </label>
+    <h3>Motion</h3>
+    <div class="card-grid settings-grid">
+      ${Object.values(MOTION_MODES).map((item) => choiceCard('motion', item.id, item.label, item.text, item.id === settings.motion)).join('')}
+    </div>
+    <h3>Map Scale</h3>
+    <div class="card-grid settings-grid">
+      ${Object.values(MAP_SCALE_PRESETS).map((item) => choiceCard('mapScale', item.id, item.label, item.text, item.id === settings.mapScale)).join('')}
+    </div>
+    <div class="setup-actions">
+      <button type="submit">Apply Settings</button>
+      <button type="button" data-action="reset-settings">Reset</button>
+      <button type="button" data-action="close-settings">Cancel</button>
+    </div>
+  `;
+}
+
+function applyPlayerSettings(settings) {
+  playerSettings = normalizeSettings(settings);
+  setAudioVolume(playerSettings.audioVolume);
+  document.body.classList.toggle('reduced-motion', playerSettings.motion === 'reduced');
+}
+
+function persistPlayerSettings(settings) {
+  applyPlayerSettings(saveSettings(settings));
+}
+
 function renderSaveManager(mode = 'save') {
   const slots = readSaveSlots();
   const active = slots.find((slot) => slot.id === activeSaveSlotId);
@@ -740,6 +797,10 @@ window.addEventListener('keydown', (event) => {
     closeSaveManager();
     return;
   }
+  if (event.key === 'Escape' && !settingsOverlay.hidden) {
+    closeSettings();
+    return;
+  }
   if (event.key === 'Escape' && !setupOverlay.hidden) {
     closeCampaignSetup();
     return;
@@ -773,6 +834,7 @@ audioTop.addEventListener('click', () => {
 document.querySelector('#newTop').addEventListener('click', () => newCampaign());
 document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
+document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
 
 setupOverlay.addEventListener('click', (event) => {
   if (event.target === setupOverlay) closeCampaignSetup();
@@ -801,6 +863,10 @@ campaignSetup.addEventListener('submit', (event) => {
 
 saveOverlay.addEventListener('click', (event) => {
   if (event.target === saveOverlay) closeSaveManager();
+});
+
+settingsOverlay.addEventListener('click', (event) => {
+  if (event.target === settingsOverlay) closeSettings();
 });
 
 saveManager.addEventListener('click', (event) => {
@@ -851,6 +917,50 @@ saveManager.addEventListener('submit', (event) => {
   renderSaveManager('save');
   const input = saveManager.querySelector('#saveSlotName');
   if (input instanceof HTMLInputElement) input.value = slot.name;
+});
+
+settingsPanel.addEventListener('click', (event) => {
+  if (!(event.target instanceof HTMLElement)) return;
+  const action = event.target.dataset.action;
+  if (action === 'close-settings') {
+    closeSettings();
+  } else if (action === 'reset-settings') {
+    persistPlayerSettings(DEFAULT_SETTINGS);
+    renderSettingsPanel();
+    resizeCanvas();
+    toast('Settings reset.');
+    playAudioCue('ui');
+  }
+});
+
+settingsPanel.addEventListener('input', (event) => {
+  if (event.target instanceof HTMLInputElement && event.target.name === 'audioVolume') {
+    const settings = normalizeSettings({ ...playerSettings, audioVolume: event.target.value });
+    setAudioVolume(settings.audioVolume);
+    const value = settingsPanel.querySelector('#volumeValue');
+    if (value) value.textContent = `${settings.audioVolume}%`;
+  }
+});
+
+settingsPanel.addEventListener('change', (event) => {
+  if (!(event.target instanceof HTMLInputElement) || !['motion', 'mapScale'].includes(event.target.name)) return;
+  for (const input of settingsPanel.querySelectorAll(`input[name="${event.target.name}"]`)) {
+    input.closest('.choice-card')?.classList.toggle('selected', input.checked);
+  }
+});
+
+settingsPanel.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const data = new FormData(settingsPanel);
+  persistPlayerSettings({
+    audioVolume: data.get('audioVolume'),
+    motion: data.get('motion'),
+    mapScale: data.get('mapScale')
+  });
+  closeSettings();
+  resizeCanvas();
+  toast('Settings applied.');
+  playAudioCue('ui');
 });
 
 resizeCanvas();

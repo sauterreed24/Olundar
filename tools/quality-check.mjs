@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
+import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
   addUnit,
@@ -221,6 +222,24 @@ check('audio cue registry stays lightweight and browser-safe', () => {
   assert(summary.totalDuration < 3, 'Total procedural cue budget should stay lightweight.');
 });
 
+check('player settings are valid and persistable', () => {
+  const summary = validateSettingsConfig();
+  const corrupt = normalizeSettings({ audioVolume: 900, motion: 'spin', mapScale: 'cinema' });
+  const reduced = normalizeSettings({ audioVolume: '33', motion: 'reduced', mapScale: 'expanded' });
+
+  assert(summary.motionIds.length >= 2 && summary.motionIds.includes('reduced'), 'Settings should include reduced motion.');
+  assert(summary.mapScaleIds.length >= 3 && summary.mapScaleIds.includes('compact') && summary.mapScaleIds.includes('expanded'), 'Settings should include compact and expanded map scale options.');
+  assert(DEFAULT_SETTINGS.audioVolume === 58, 'Default audio volume should match the original mix level.');
+  assert(corrupt.audioVolume === 100 && corrupt.motion === DEFAULT_SETTINGS.motion && corrupt.mapScale === DEFAULT_SETTINGS.mapScale, 'Settings normalization should clamp or recover bad values.');
+  assert(reduced.audioVolume === 33 && reduced.motion === 'reduced' && reduced.mapScale === 'expanded', 'Settings normalization should preserve valid choices.');
+  for (const preset of Object.values(MAP_SCALE_PRESETS)) {
+    assert(preset.maxHeightFloor >= preset.minHeight, `Map scale ${preset.id} has invalid heights.`);
+  }
+  for (const mode of Object.values(MOTION_MODES)) {
+    assert(mode.label.length <= 24, `Motion mode ${mode.id} label is too long for mobile cards.`);
+  }
+});
+
 check('pwa install shell references real app assets', () => {
   const index = readProjectFile('index.html');
   const manifest = JSON.parse(readProjectFile('manifest.webmanifest'));
@@ -254,6 +273,7 @@ check('pwa install shell references real app assets', () => {
     './src/main.js',
     './src/pwa.js',
     './src/rules.js',
+    './src/settings.js',
     './src/style.css'
   ];
   for (const asset of requiredAssets) assert(shellAssets.includes(asset), `Service worker shell cache missing ${asset}.`);

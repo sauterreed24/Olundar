@@ -21,9 +21,10 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
 - Named local campaign save slots, legacy quick-save loading, and exportable JSON save files.
 - Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
+- Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -52,6 +53,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
+- Click **Settings** to adjust volume, motion, and map scale for the current device.
 - Click **Install** when your browser offers it to add Olundar to the device.
 
 ## Main objective
@@ -79,6 +81,7 @@ olundar_game/
     render.js        # canvas terrain, sprites, fog, minimap, UI descriptions
     main.js          # browser UI/event loop
     pwa.js           # install prompt and service-worker registration
+    settings.js      # player comfort settings and map-scale presets
     style.css
   tools/
     serve.mjs
@@ -95,6 +98,7 @@ olundar_game/
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
 - Named save slots sanitize names, preserve campaign metadata, sort by save time, update existing slots, and ignore corrupt storage.
 - Procedural audio cues stay browser-safe, distinct, and lightweight.
+- Player settings normalize audio volume, motion, and map-scale choices.
 - PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
@@ -109,5 +113,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add a richer settings panel for audio volume, motion preference, and map scale.
-2. Add save import from JSON files so campaign transfers work cleanly across installed devices.
+1. Add save import from JSON files so campaign transfers work cleanly across installed devices.
+2. Add an in-game battle forecast before attacks so players can make sharper tactical choices.

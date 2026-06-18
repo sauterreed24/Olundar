@@ -1,4 +1,5 @@
 export const AUDIO_STORAGE_KEY = 'olundar.audio.enabled';
+export const DEFAULT_AUDIO_VOLUME = 58;
 
 export const AUDIO_CUES = {
   ui: { notes: [392, 494], duration: 0.06, spacing: 0.035, type: 'triangle', gain: 0.028 },
@@ -20,6 +21,7 @@ let audioContext = null;
 let masterGain = null;
 let ambientNodes = [];
 let enabled = false;
+let volume = DEFAULT_AUDIO_VOLUME;
 
 export function validateAudioCueRegistry(registry = AUDIO_CUES) {
   const ids = Object.keys(registry);
@@ -63,6 +65,19 @@ export function initAudioPreference(storage = null) {
 
 export function audioIsEnabled() {
   return enabled;
+}
+
+export function getAudioVolume() {
+  return volume;
+}
+
+export function setAudioVolume(nextVolume) {
+  volume = normalizeVolume(nextVolume);
+  if (masterGain && audioContext) {
+    const target = volume / 100;
+    masterGain.gain.setTargetAtTime(target, audioContext.currentTime, 0.025);
+  }
+  return volume;
 }
 
 export function setAudioEnabled(nextEnabled, storage = null) {
@@ -135,12 +150,18 @@ function ensureAudioContext() {
   if (!audioContext) {
     audioContext = new AudioContextClass();
     masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.58;
+    masterGain.gain.value = volume / 100;
     masterGain.connect(audioContext.destination);
   }
 
   if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
   return audioContext;
+}
+
+function normalizeVolume(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_AUDIO_VOLUME;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
 function startAmbient() {
