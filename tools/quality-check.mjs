@@ -31,6 +31,7 @@ import {
   makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
+  resolvePromiseDemand,
   resolveCrisis,
   serializeState,
   setFieldOrder,
@@ -133,6 +134,16 @@ check('content tables are internally consistent', () => {
     for (const [resource, amount] of Object.entries(promise.cost)) {
       assert(['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].includes(resource), `Diplomatic promise ${id} has unknown cost ${resource}.`);
       assert(Number.isInteger(amount) && amount >= 0, `Diplomatic promise ${id} has invalid ${resource} cost.`);
+    }
+    const demand = promise.demand;
+    assert(demand && demand.id && demand.name && demand.text && demand.preview, `Diplomatic promise ${id} needs a follow-through demand.`);
+    assert(Number.isInteger(demand.delay) && demand.delay > 0, `Diplomatic promise ${id} demand needs a positive delay.`);
+    assert(Number.isInteger(demand.relation) && demand.relation > 0, `Diplomatic promise ${id} demand needs positive relation.`);
+    assert(Number.isInteger(demand.memory) && demand.memory > 0, `Diplomatic promise ${id} demand needs positive memory.`);
+    assert(demand.cost && typeof demand.cost === 'object', `Diplomatic promise ${id} demand needs a cost object.`);
+    for (const [resource, amount] of Object.entries(demand.cost)) {
+      assert(['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].includes(resource), `Diplomatic promise ${id} demand has unknown cost ${resource}.`);
+      assert(Number.isInteger(amount) && amount >= 0, `Diplomatic promise ${id} demand has invalid ${resource} cost.`);
     }
   }
   for (const id of ['dawnWallGuard', 'veyrCaravanFund', 'mireMarshRoutes']) assert(DIPLOMATIC_PROMISES[id], `Missing required diplomatic promise ${id}.`);
@@ -660,6 +671,82 @@ check('faction-specific promises create distinct diplomatic commitments', () => 
   delete legacy.flags.factionPromises;
   const ledger = getDiplomacyLedger(legacy);
   assert(ledger.entries.every((entry) => entry.commitments.every((promise) => !promise.fulfilled)), 'Legacy saves should normalize empty faction promises.');
+});
+
+check('faction promise demands create answer or grievance follow-through', () => {
+  const readyState = (seed) => {
+    const state = createGame(seed);
+    for (const id of ['dawn', 'veyr', 'mire']) state.factions[id].discovered = true;
+    state.flags.firstAllySeen = true;
+    state.factions.olundar.resources = {
+      ...state.factions.olundar.resources,
+      food: 120,
+      wood: 120,
+      stone: 80,
+      iron: 60,
+      gold: 140,
+      influence: 8,
+      morale: 8
+    };
+    return state;
+  };
+
+  const dawnState = readyState('quality-dawn-demand');
+  const dawnCity = dawnState.buildings.find((building) => building.faction === 'dawn' && building.type === 'city');
+  assert(makeDiplomaticPromise(dawnState, 'dawn', 'dawnWallGuard').ok, 'Dawn wall promise should set up a later demand.');
+  assert(getDiplomacyLedger(dawnState).entries.find((entry) => entry.id === 'dawn').demands.length === 0, 'Promise demand should not appear immediately.');
+  dawnState.turn += 3;
+  const dawnDemand = getDiplomacyLedger(dawnState).entries.find((entry) => entry.id === 'dawn').demands.find((demand) => demand.id === 'dawnWallWatch');
+  assert(dawnDemand && !dawnDemand.disabled && dawnDemand.cost.includes('stone'), 'Dawn demand should become payable with a visible stone cost.');
+  const beforeDawnMaxHp = dawnCity.maxHp;
+  const beforeDawnRelation = dawnState.factions.olundar.relations.dawn;
+  const answeredDawn = resolvePromiseDemand(dawnState, 'dawn', 'dawnWallWatch', 'answer');
+  assert(answeredDawn.ok, answeredDawn.reason || 'Dawn demand answer failed.');
+  assert(dawnCity.maxHp > beforeDawnMaxHp, 'Answered Dawn demand should reinforce Dawn holdings again.');
+  assert(dawnState.factions.olundar.relations.dawn > beforeDawnRelation, 'Answered Dawn demand should improve relations.');
+  const dawnAfter = getDiplomacyLedger(dawnState).entries.find((entry) => entry.id === 'dawn');
+  assert(dawnAfter.demands.length === 0, 'Answered demand should leave the active demand list.');
+  assert(dawnAfter.demandHistory.some((demand) => demand.id === 'dawnWallWatch' && demand.status === 'answered'), 'Answered demand should remain in short ledger history.');
+  assert(!resolvePromiseDemand(dawnState, 'dawn', 'dawnWallWatch', 'ignore').ok, 'Resolved demands should not be repeatable.');
+
+  const veyrState = readyState('quality-veyr-demand');
+  assert(makeDiplomaticPromise(veyrState, 'veyr', 'veyrCaravanFund').ok, 'Veyr caravan promise should set up a later demand.');
+  veyrState.turn += 3;
+  const beforeFood = veyrState.factions.olundar.resources.food;
+  const beforeIron = veyrState.factions.olundar.resources.iron;
+  const beforeGold = veyrState.factions.olundar.resources.gold;
+  const answeredVeyr = resolvePromiseDemand(veyrState, 'veyr', 'veyrRouteTolls', 'answer');
+  assert(answeredVeyr.ok, answeredVeyr.reason || 'Veyr demand answer failed.');
+  assert(veyrState.factions.olundar.resources.food === beforeFood + 18, 'Answered Veyr demand should deliver food.');
+  assert(veyrState.factions.olundar.resources.iron === beforeIron + 5, 'Answered Veyr demand should deliver iron.');
+  assert(veyrState.factions.olundar.resources.gold === beforeGold - 18, 'Answered Veyr demand should spend toll gold.');
+
+  const mireState = readyState('quality-mire-demand-ignore');
+  assert(makeDiplomaticPromise(mireState, 'mire', 'mireMarshRoutes').ok, 'Mire marsh promise should set up a later demand.');
+  mireState.turn += 3;
+  const beforeGrievances = getDiplomacyLedger(mireState).entries.find((entry) => entry.id === 'mire').memory.grievances;
+  const beforeMireRelation = mireState.factions.olundar.relations.mire;
+  const ignoredMire = resolvePromiseDemand(mireState, 'mire', 'mireGuideStores', 'ignore');
+  assert(ignoredMire.ok, ignoredMire.reason || 'Mire demand ignore failed.');
+  const mireAfter = getDiplomacyLedger(mireState).entries.find((entry) => entry.id === 'mire');
+  assert(mireAfter.memory.grievances > beforeGrievances, 'Ignored demand should create grievance memory.');
+  assert(mireState.factions.olundar.relations.mire < beforeMireRelation, 'Ignored demand should cool relations.');
+  assert(mireAfter.demandHistory.some((demand) => demand.id === 'mireGuideStores' && demand.status === 'ignored'), 'Ignored demand should remain in short ledger history.');
+
+  const poorState = readyState('quality-demand-poor');
+  assert(makeDiplomaticPromise(poorState, 'dawn', 'dawnWallGuard').ok, 'Poor demand setup promise failed.');
+  poorState.turn += 3;
+  poorState.factions.olundar.resources.stone = 0;
+  const poorDemand = getDiplomacyLedger(poorState).entries.find((entry) => entry.id === 'dawn').demands.find((demand) => demand.id === 'dawnWallWatch');
+  assert(poorDemand && poorDemand.disabled, 'Unaffordable demand answer should be disabled in the ledger.');
+  assert(!resolvePromiseDemand(poorState, 'dawn', 'dawnWallWatch', 'answer').ok, 'Unaffordable demand answer should fail closed.');
+  assert(resolvePromiseDemand(poorState, 'dawn', 'dawnWallWatch', 'ignore').ok, 'Unaffordable demand should still allow the political ignore choice.');
+
+  const legacy = readyState('quality-demand-legacy');
+  assert(makeDiplomaticPromise(legacy, 'dawn', 'dawnWallGuard').ok, 'Legacy demand setup promise failed.');
+  delete legacy.flags.promiseDemands;
+  legacy.turn += 3;
+  assert(getDiplomacyLedger(legacy).entries.find((entry) => entry.id === 'dawn').demands.some((demand) => demand.id === 'dawnWallWatch'), 'Legacy saves without demand records should normalize and show due demands.');
 });
 
 check('pact field orders steer allied AI', () => {

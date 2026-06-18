@@ -159,7 +159,9 @@ Survival Pacts unlock broad allied field orders instead of direct micromanagemen
 
 Faction promises add a more personal layer before diplomacy becomes generic. Dawnward asks for wall guards and reinforced hillforts, Veyr responds to funded caravans and practical supply profit, and Mireclan trusts food, respect, and marsh-route scouting. Each promise costs Olundar real resources and creates visible memory so the ledger shows the political price of building a coalition.
 
-This should later evolve into promise follow-through demands, allied war plans, tribute, hostage diplomacy, and long-running commitments tied to crisis rulings.
+A few turns after a promise, that civilization can return with a follow-through demand. Answering the demand spends more resources but proves the oath under pressure, gives practical help, and deepens diplomatic memory. Ignoring it preserves the treasury at the cost of relation damage and a visible grievance. This keeps promises from being one-click bonuses and makes coalition politics compete with survival logistics.
+
+This should later evolve into allied war plans, tribute, hostage diplomacy, and long-running commitments tied to crisis rulings.
 
 ## Deadwalker AI
 

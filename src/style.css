@@ -1406,6 +1406,71 @@ button:disabled {
   font-size: 0.84rem;
 }
 
+.promise-demands,
+.promise-demand-history {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.promise-demands {
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 138, 138, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 138, 138, 0.06);
+}
+
+.promise-demands > strong {
+  color: var(--bad);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.promise-demand {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.48rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.16);
+}
+
+.promise-demand p,
+.promise-demand small,
+.promise-demand-history p {
+  margin: 0 !important;
+  color: #ddd0ae;
+  line-height: 1.32;
+}
+
+.promise-demand b {
+  color: #f9e6a8;
+}
+
+.promise-demand small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.demand-actions {
+  margin: 0;
+}
+
+.promise-demand-history p {
+  padding: 0.45rem 0.5rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+}
+
+.promise-demand-history p.good b {
+  color: var(--good);
+}
+
+.promise-demand-history p.danger b {
+  color: var(--bad);
+}
+
 .field-order-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
