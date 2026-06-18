@@ -21,6 +21,7 @@ import {
   getSiegeOperations,
   getWarCouncil,
   moveUnit,
+  serializeState,
   startConstruction,
   startTraining,
   trainingQueueLimit,
@@ -29,6 +30,7 @@ import {
   unitAt
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
+import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -215,6 +217,30 @@ check('named save slots preserve campaign metadata', () => {
   assert(parseSaveSlots('{broken').length === 0, 'Corrupt save slot storage should fail closed.');
 });
 
+check('save file import creates transferable named slots', () => {
+  const state = createGame({ scenarioId: 'dawnroad', difficultyId: 'chronicle', seed: 'quality-transfer' });
+  state.turn = 12;
+  const raw = serializeState(state);
+  const imported = importSaveSnapshot(raw, { fileName: 'road-oath-turn-12.json', now: '2026-06-18T21:00:00.000Z' });
+  const slots = upsertSaveSlot([], imported.slot);
+  const parsed = parseSaveSlots(serializeSaveSlots(slots));
+
+  assert(imported.state.turn === 12, 'Imported state should preserve turn.');
+  assert(imported.state.campaign.scenarioName === 'Dawnward Road Compact', 'Imported state should preserve scenario metadata.');
+  assert(imported.slot.name === 'Imported Road Oath Turn 12', 'Imported slot should use the source file name.');
+  assert(imported.slot.data === imported.serialized, 'Imported slot data should use normalized serialized state.');
+  assert(parsed.length === 1 && parsed[0].id === imported.slot.id, 'Imported slot should roundtrip through named slot storage.');
+  assert(importedSlotName(state, '') === 'Imported Dawnward Road Compact - Chronicle', 'Imported slots should fall back to campaign metadata when file names are absent.');
+
+  let failed = false;
+  try {
+    importSaveSnapshot('{"version":0}', { fileName: 'old.json' });
+  } catch (error) {
+    failed = error.message.includes('not compatible');
+  }
+  assert(failed, 'Incompatible save imports should fail closed.');
+});
+
 check('audio cue registry stays lightweight and browser-safe', () => {
   const summary = validateAudioCueRegistry(AUDIO_CUES);
   assert(summary.count >= 10, 'Audio registry should cover core game feedback states.');
@@ -273,6 +299,7 @@ check('pwa install shell references real app assets', () => {
     './src/main.js',
     './src/pwa.js',
     './src/rules.js',
+    './src/saveTransfer.js',
     './src/settings.js',
     './src/style.css'
   ];

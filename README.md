@@ -19,12 +19,12 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
 - Deadwalker civilization: Bone Portal, Bone Pits, Grave Forges, Necropolises, Bone Thralls, Corpse Archers, Grave Knights, and Vorgath the Hollow Crown.
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
-- Named local campaign save slots, legacy quick-save loading, and exportable JSON save files.
+- Named local campaign save slots, legacy quick-save loading, plus exportable and importable JSON save files.
 - Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, advisor logic, pathing, training, construction, upgrades, combat, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -50,6 +50,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Click **New** to choose a scenario, difficulty, and seed.
 - Press `Esc` to cancel build mode.
 - Click **Save** or **Load** to manage named campaign slots.
+- Click **Import save file** or **Import JSON** in the save manager to load an exported campaign on the current device.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
@@ -81,6 +82,7 @@ olundar_game/
     render.js        # canvas terrain, sprites, fog, minimap, UI descriptions
     main.js          # browser UI/event loop
     pwa.js           # install prompt and service-worker registration
+    saveTransfer.js  # exported JSON save import helpers
     settings.js      # player comfort settings and map-scale presets
     style.css
   tools/
@@ -97,6 +99,7 @@ olundar_game/
 - Campaign essentials exist.
 - Scenario and difficulty presets apply resources, metadata, starting units, and Deadwalker cadence.
 - Named save slots sanitize names, preserve campaign metadata, sort by save time, update existing slots, and ignore corrupt storage.
+- Exported JSON save files import into named save slots and reject incompatible versions.
 - Procedural audio cues stay browser-safe, distinct, and lightweight.
 - Player settings normalize audio volume, motion, and map-scale choices.
 - PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
@@ -113,5 +116,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add save import from JSON files so campaign transfers work cleanly across installed devices.
-2. Add an in-game battle forecast before attacks so players can make sharper tactical choices.
+1. Add an in-game battle forecast before attacks so players can make sharper tactical choices.
+2. Add a compact campaign recap screen after victory, defeat, and imported save loads.

@@ -175,7 +175,7 @@ Future versions can add optional policies: rationing, conscription, evacuation, 
 - Canvas map with large silhouettes and high-contrast fog.
 - Side panel for selected units/buildings, orders, tile data, objectives, diplomacy, and log.
 - No hidden mandatory hotkeys.
-- Local save and export from the first prototype.
+- Local save, export, and JSON save import from the first prototype.
 
 ## Win and loss
 
@@ -198,7 +198,7 @@ Olundar loses its city or collapses beyond recovery. The current prototype hard-
 
 ## Quality gate philosophy
 
-The `npm run quality:check` script is the first production guardrail. It should be run before committing any mechanics change. The current gate validates syntax, data consistency, player settings, PWA install shell integrity, map pathing, training, construction, combat, boss/portal rules, simulation stability, and absence of unfinished markers.
+The `npm run quality:check` script is the first production guardrail. It should be run before committing any mechanics change. The current gate validates syntax, data consistency, save-file import, player settings, PWA install shell integrity, map pathing, training, construction, combat, boss/portal rules, simulation stability, and absence of unfinished markers.
 
 Future quality gates should add:
 

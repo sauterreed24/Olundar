@@ -31,6 +31,7 @@ import {
 } from './rules.js';
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
+import { importSaveSnapshot } from './saveTransfer.js';
 import { audioIsEnabled, initAudioPreference, playAudioCue, setAudioVolume, toggleAudio } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
@@ -55,6 +56,7 @@ const setupOverlay = document.querySelector('#setupOverlay');
 const campaignSetup = document.querySelector('#campaignSetup');
 const saveOverlay = document.querySelector('#saveOverlay');
 const saveManager = document.querySelector('#saveManager');
+const saveImportInput = document.querySelector('#saveImportInput');
 const settingsOverlay = document.querySelector('#settingsOverlay');
 const settingsPanel = document.querySelector('#settingsPanel');
 const audioTop = document.querySelector('#audioTop');
@@ -282,6 +284,7 @@ function renderActions() {
   actionPanel.appendChild(button('Load campaign', () => openSaveManager('load')));
   actionPanel.appendChild(button('New campaign', () => newCampaign()));
   actionPanel.appendChild(button('Export save file', () => exportSave()));
+  actionPanel.appendChild(button('Import save file', () => openImportSaveFile()));
 }
 
 function renderDiplomacy() {
@@ -487,6 +490,7 @@ function loadSerializedGame(raw, slot = null) {
   try {
     state = deserializeState(raw);
     activeSaveSlotId = slot?.id || null;
+    focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
     playAudioCue('load');
@@ -512,6 +516,26 @@ function loadGame(slotId = null) {
   loadSerializedGame(raw);
 }
 
+function importSaveFile(raw, fileName = '') {
+  try {
+    const imported = importSaveSnapshot(raw, { fileName });
+    state = imported.state;
+    activeSaveSlotId = imported.slot.id;
+    writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
+    localStorage.setItem(SAVE_KEY, imported.serialized);
+    focusCampaign();
+    closeSaveManager();
+    toast(`${imported.slot.name} loaded.`);
+    playAudioCue('load');
+    render();
+    return imported.slot;
+  } catch (error) {
+    toast(error.message || 'Save file failed to import.', 'bad');
+    playAudioCue('error');
+    return null;
+  }
+}
+
 function newCampaign() {
   openCampaignSetup();
 }
@@ -534,6 +558,12 @@ function openSaveManager(mode = 'save') {
 
 function closeSaveManager() {
   saveOverlay.hidden = true;
+}
+
+function openImportSaveFile() {
+  saveImportInput.value = '';
+  saveImportInput.click();
+  playAudioCue('ui');
 }
 
 function openSettings() {
@@ -608,6 +638,7 @@ function renderSaveManager(mode = 'save') {
     <div class="setup-actions save-primary-actions">
       <button type="submit">Save Current Campaign</button>
       <button type="button" data-action="load-latest" ${slots.length ? '' : 'disabled'}>Load Latest</button>
+      <button type="button" data-action="import-file">Import JSON</button>
       <button type="button" data-action="close-save">Cancel</button>
     </div>
     <h3>Named Slots</h3>
@@ -725,6 +756,15 @@ function exportSave() {
   link.remove();
   URL.revokeObjectURL(url);
   playAudioCue('save');
+}
+
+function focusCampaign() {
+  const selected = state.units.find((unit) => unit.id === state.selectedUnitId)
+    || state.buildings.find((building) => building.id === state.selectedBuildingId)
+    || state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+    || state.units.find((unit) => unit.faction === 'olundar');
+  if (selected) lastTile = { x: selected.x, y: selected.y };
+  hoverTile = null;
 }
 
 function hasBuilding(type) {
@@ -907,6 +947,22 @@ saveManager.addEventListener('click', (event) => {
       closeSaveManager();
       loadSerializedGame(raw);
     }
+  } else if (action === 'import-file') {
+    openImportSaveFile();
+  }
+});
+
+saveImportInput.addEventListener('change', async () => {
+  const [file] = Array.from(saveImportInput.files || []);
+  if (!file) return;
+
+  try {
+    importSaveFile(await file.text(), file.name);
+  } catch (error) {
+    toast(error.message || 'Save file failed to import.', 'bad');
+    playAudioCue('error');
+  } finally {
+    saveImportInput.value = '';
   }
 });
 
