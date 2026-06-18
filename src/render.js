@@ -220,16 +220,147 @@ function drawStrategicLens(ctx, state, layout, lensId) {
     const x = layout.offsetX + marker.x * layout.tileSize;
     const y = layout.offsetY + marker.y * layout.tileSize;
     const color = lensColor(marker.tone);
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = Math.max(2, layout.tileSize * 0.07);
-    ctx.globalAlpha = marker.visible ? 0.95 : 0.5;
-    ctx.strokeRect(x + 3, y + 3, layout.tileSize - 6, layout.tileSize - 6);
-    ctx.beginPath();
-    ctx.arc(x + layout.tileSize * 0.5, y + layout.tileSize * 0.18, Math.max(2, layout.tileSize * 0.09), 0, Math.PI * 2);
-    ctx.fill();
+    if (marker.kind === 'missionTarget' || marker.kind === 'missionComplete') {
+      drawMissionSiteMarker(ctx, x, y, layout.tileSize, marker, color);
+    } else {
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.07);
+      ctx.globalAlpha = marker.visible ? 0.95 : 0.5;
+      ctx.strokeRect(x + 3, y + 3, layout.tileSize - 6, layout.tileSize - 6);
+      ctx.beginPath();
+      ctx.arc(x + layout.tileSize * 0.5, y + layout.tileSize * 0.18, Math.max(2, layout.tileSize * 0.09), 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
+}
+
+function drawMissionSiteMarker(ctx, x, y, s, marker, color) {
+  const visibleAlpha = marker.visible ? 1 : 0.58;
+  const completed = marker.kind === 'missionComplete' || marker.completed;
+  ctx.save();
+  ctx.globalAlpha = completed ? visibleAlpha * 0.72 : visibleAlpha;
+  ctx.lineWidth = Math.max(1.5, s * 0.06);
+  ctx.strokeStyle = completed ? '#baf58c' : color;
+  ctx.fillStyle = 'rgba(11, 13, 15, 0.76)';
+  ctx.strokeRect(x + s * 0.14, y + s * 0.14, s * 0.72, s * 0.72);
+  ctx.fillRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64);
+
+  if (marker.type === 'repair') drawRepairSite(ctx, x, y, s, completed);
+  else if (marker.type === 'raid') drawRaiderSite(ctx, x, y, s, completed);
+  else if (marker.type === 'accord') drawAccordSite(ctx, x, y, s, completed);
+  else drawCampSite(ctx, x, y, s, completed);
+
+  if (marker.chainLimit && !completed) drawMissionStepBadge(ctx, x, y, s, marker);
+  if (completed) drawMissionCheck(ctx, x, y, s);
+  ctx.restore();
+}
+
+function drawCampSite(ctx, x, y, s, completed) {
+  ctx.fillStyle = completed ? '#9fbf7c' : '#f0c866';
+  ctx.strokeStyle = '#3e2e1d';
+  ctx.lineWidth = Math.max(1, s * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.25, y + s * 0.70);
+  ctx.lineTo(x + s * 0.50, y + s * 0.28);
+  ctx.lineTo(x + s * 0.75, y + s * 0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = completed ? '#405032' : '#6b4d38';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.50, y + s * 0.34);
+  ctx.lineTo(x + s * 0.50, y + s * 0.70);
+  ctx.lineTo(x + s * 0.62, y + s * 0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#f7e7a8';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.24, y + s * 0.73);
+  ctx.lineTo(x + s * 0.76, y + s * 0.73);
+  ctx.stroke();
+}
+
+function drawRaiderSite(ctx, x, y, s, completed) {
+  ctx.fillStyle = completed ? '#73806b' : '#202226';
+  ctx.strokeStyle = completed ? '#baf58c' : '#ff8a8a';
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.25, y + s * 0.70);
+  ctx.lineTo(x + s * 0.50, y + s * 0.30);
+  ctx.lineTo(x + s * 0.75, y + s * 0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = completed ? '#d6f5bd' : '#ffcf6b';
+  ctx.lineWidth = Math.max(1.5, s * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.30, y + s * 0.34);
+  ctx.lineTo(x + s * 0.70, y + s * 0.74);
+  ctx.moveTo(x + s * 0.70, y + s * 0.34);
+  ctx.lineTo(x + s * 0.30, y + s * 0.74);
+  ctx.stroke();
+}
+
+function drawAccordSite(ctx, x, y, s, completed) {
+  ctx.fillStyle = completed ? '#9fbf7c' : '#f0c866';
+  ctx.strokeStyle = completed ? '#d6f5bd' : '#fff0af';
+  ctx.lineWidth = Math.max(1, s * 0.04);
+  ctx.fillRect(x + s * 0.28, y + s * 0.30, s * 0.18, s * 0.42);
+  ctx.fillRect(x + s * 0.54, y + s * 0.30, s * 0.18, s * 0.42);
+  ctx.strokeRect(x + s * 0.28, y + s * 0.30, s * 0.18, s * 0.42);
+  ctx.strokeRect(x + s * 0.54, y + s * 0.30, s * 0.18, s * 0.42);
+  ctx.strokeStyle = '#5b4628';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  for (const px of [0.32, 0.58]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * px, y + s * 0.42);
+    ctx.lineTo(x + s * (px + 0.10), y + s * 0.42);
+    ctx.moveTo(x + s * px, y + s * 0.53);
+    ctx.lineTo(x + s * (px + 0.10), y + s * 0.53);
+    ctx.stroke();
+  }
+}
+
+function drawRepairSite(ctx, x, y, s, completed) {
+  ctx.strokeStyle = completed ? '#baf58c' : '#f0c866';
+  ctx.lineWidth = Math.max(2, s * 0.12);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.23, y + s * 0.67);
+  ctx.lineTo(x + s * 0.78, y + s * 0.38);
+  ctx.stroke();
+  ctx.fillStyle = completed ? '#98aa82' : '#8a8e91';
+  for (let i = 0; i < 3; i += 1) {
+    ctx.fillRect(x + s * (0.28 + i * 0.16), y + s * (0.58 - i * 0.08), s * 0.09, s * 0.08);
+  }
+}
+
+function drawMissionStepBadge(ctx, x, y, s, marker) {
+  const label = `${marker.chainStep || 1}`;
+  ctx.fillStyle = 'rgba(8, 10, 12, 0.9)';
+  ctx.strokeStyle = '#f9e6a8';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  ctx.arc(x + s * 0.75, y + s * 0.25, Math.max(4, s * 0.14), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f9e6a8';
+  ctx.font = `900 ${Math.max(8, s * 0.20)}px system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + s * 0.75, y + s * 0.25);
+}
+
+function drawMissionCheck(ctx, x, y, s) {
+  ctx.strokeStyle = '#d6f5bd';
+  ctx.lineWidth = Math.max(2, s * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.28, y + s * 0.26);
+  ctx.lineTo(x + s * 0.42, y + s * 0.42);
+  ctx.lineTo(x + s * 0.72, y + s * 0.22);
+  ctx.stroke();
 }
 
 function drawReachable(ctx, state, layout) {
