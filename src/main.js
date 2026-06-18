@@ -13,6 +13,7 @@ import {
   getFirstTurnsGuide,
   getObjectiveProgress,
   getReadyOlundarUnits,
+  getSiegeOperations,
   getWarCouncil,
   trainingQueueLimit,
   trainingTurnsFor,
@@ -37,6 +38,7 @@ const turnLabel = document.querySelector('#turnLabel');
 const objectiveList = document.querySelector('#objectiveList');
 const councilPanel = document.querySelector('#councilPanel');
 const guidePanel = document.querySelector('#guidePanel');
+const operationsPanel = document.querySelector('#operationsPanel');
 const selectionPanel = document.querySelector('#selectionPanel');
 const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
@@ -70,6 +72,7 @@ function render() {
   renderTopBar();
   renderCouncil();
   renderGuide();
+  renderOperations();
   renderObjectives();
   renderSelection();
   renderActions();
@@ -128,6 +131,33 @@ function renderGuide() {
         </li>
       `).join('')}
     </ol>
+  `;
+}
+
+function renderOperations() {
+  const operations = getSiegeOperations(state);
+  operationsPanel.hidden = !operations.visible;
+  if (!operations.visible) {
+    operationsPanel.innerHTML = '';
+    return;
+  }
+  operationsPanel.innerHTML = `
+    <div class="operations-head">
+      <div>
+        <h2>${escapeHtml(operations.title)}</h2>
+        <p>${escapeHtml(operations.summary)}</p>
+      </div>
+      <span>${operations.completed}/${operations.total}</span>
+    </div>
+    <div class="operation-list">
+      ${operations.operations.map((operation) => `
+        <article class="operation ${escapeHtml(operation.tone)}">
+          <span>${operation.done ? 'Done' : operation.tone === 'locked' ? 'Locked' : operation.tone === 'danger' ? 'Urgent' : 'Open'}</span>
+          <strong>${escapeHtml(operation.label)}</strong>
+          <small>${escapeHtml(operation.detail)}</small>
+        </article>
+      `).join('')}
+    </div>
   `;
 }
 

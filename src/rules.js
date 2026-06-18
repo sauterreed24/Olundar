@@ -44,7 +44,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       bossSlain: false,
       portalDestroyed: false,
       firstDeadwalkerSeen: false,
-      firstAllySeen: false
+      firstAllySeen: false,
+      deadStrongholdsDestroyed: 0
     },
     objectives: OBJECTIVES.slice(),
     messages: []
@@ -418,6 +419,77 @@ function guideSummary(state, current) {
   return `Keep every early action tied to survival. Next best order: ${current.label}.`;
 }
 
+export function getSiegeOperations(state) {
+  normalizeCampaignState(state);
+  const faction = state.factions.olundar;
+  const knownDead = knownDeadwalkerThreat(state);
+  const discoveredLiving = ['dawn', 'veyr', 'mire'].filter((id) => state.factions[id].discovered).length;
+  const pacts = Object.values(faction.pacts || {}).filter(Boolean).length;
+  const livingCapitals = ['dawn', 'veyr', 'mire'].filter((id) => state.buildings.some((building) => building.faction === id && building.type === 'city'));
+  const alliedCapitalText = `${livingCapitals.length}/3 living capitals still stand`;
+  const onagerQueued = state.buildings.some((building) => building.faction === 'olundar' && building.queue?.some((entry) => entry.unitType === 'onager'));
+  const onagerReady = state.units.some((unit) => unit.faction === 'olundar' && unit.type === 'onager');
+  const workshopReady = hasOperationalBuilding(state, 'workshop');
+  const knownStrongholds = state.buildings.filter((building) => building.faction === 'dead' && ['bonePit', 'graveForge', 'necropolis'].includes(building.type) && isRevealed(state, building.x, building.y));
+  const deadStrongholdsDestroyed = state.flags.deadStrongholdsDestroyed || 0;
+  const boss = state.units.find((unit) => unit.type === 'lichBoss');
+  const portal = state.buildings.find((building) => building.type === 'portal');
+  const operations = [
+    {
+      id: 'siege',
+      label: 'Muster onager crews',
+      done: onagerReady,
+      tone: onagerReady ? 'good' : workshopReady || onagerQueued ? 'info' : 'locked',
+      detail: onagerReady ? 'Siege weapons are ready to crack grave-forges, necropolises, and the portal.' : onagerQueued ? 'An onager crew is in training.' : workshopReady ? 'Workshop ready. Queue an onager before entering heavy blight.' : 'Build a Siege Workshop once iron and wood income can support it.'
+    },
+    {
+      id: 'ally',
+      label: 'Bind one ally to the living front',
+      done: pacts > 0,
+      tone: pacts > 0 ? 'good' : livingCapitals.length < 3 ? 'danger' : 'info',
+      detail: pacts > 0 ? `${pacts} survival pact${pacts === 1 ? '' : 's'} active. Allied sight can keep the front from going dark.` : `${discoveredLiving}/3 civilizations contacted. ${alliedCapitalText}.`
+    },
+    {
+      id: 'cleanse',
+      label: 'Destroy a Deadwalker stronghold',
+      done: deadStrongholdsDestroyed > 0,
+      tone: deadStrongholdsDestroyed > 0 ? 'good' : knownStrongholds.length ? 'danger' : 'locked',
+      detail: deadStrongholdsDestroyed > 0 ? `${deadStrongholdsDestroyed} stronghold${deadStrongholdsDestroyed === 1 ? '' : 's'} broken; nearby blight weakens when they fall.` : knownStrongholds.length ? `${knownStrongholds.length} revealed stronghold${knownStrongholds.length === 1 ? '' : 's'}: target bone pits before they multiply.` : 'Reveal bone pits, grave-forges, or necropolises to open a safe siege target.'
+    },
+    {
+      id: 'vorgath',
+      label: 'Kill Vorgath the Hollow Crown',
+      done: state.flags.bossSlain,
+      tone: state.flags.bossSlain ? 'good' : boss && isRevealed(state, boss.x, boss.y) ? 'danger' : 'locked',
+      detail: state.flags.bossSlain ? 'The Hollow Crown is dead. The portal can no longer reform under his command.' : boss && isRevealed(state, boss.x, boss.y) ? 'Vorgath is located. Bring ranged support, line infantry, and siege cover.' : 'Scout the eastern blight until Vorgath is visible.'
+    },
+    {
+      id: 'portal',
+      label: 'Shatter the Bone Portal',
+      done: state.flags.portalDestroyed,
+      tone: state.flags.portalDestroyed ? 'good' : state.flags.bossSlain ? 'danger' : 'locked',
+      detail: state.flags.portalDestroyed ? 'The invasion is broken.' : state.flags.bossSlain ? 'Vorgath is dead. Commit onagers and veterans to finish the portal.' : portal && isRevealed(state, portal.x, portal.y) ? 'Portal found, but it will reform until Vorgath is killed.' : 'Find the portal and kill Vorgath before the final assault.'
+    }
+  ];
+  const completed = operations.filter((operation) => operation.done).length;
+  return {
+    title: 'Siege Operations',
+    summary: siegeOperationSummary(state, operations),
+    visible: state.status === 'playing' && (state.turn > 6 || state.flags.firstDeadwalkerSeen || state.flags.firstAllySeen || workshopReady || onagerQueued || onagerReady),
+    completed,
+    total: operations.length,
+    operations
+  };
+}
+
+function siegeOperationSummary(state, operations) {
+  const next = operations.find((operation) => !operation.done && operation.tone !== 'locked') || operations.find((operation) => !operation.done);
+  if (!next) return 'All siege operations are complete. Finish the campaign state and prepare a fresh war.';
+  if (state.flags.firstDeadwalkerSeen) return `Deadwalker pressure is confirmed. Next operation: ${next.label}.`;
+  if (state.flags.firstAllySeen) return `The living world is in reach. Next operation: ${next.label}.`;
+  return `Once the opening is stable, shift from survival to victory. Next operation: ${next.label}.`;
+}
+
 function councilHeadline(state, knownDead) {
   if (state.status === 'won') return 'Victory Council';
   if (state.status === 'lost') return 'After-Action Council';
@@ -757,6 +829,11 @@ function destroyBuilding(state, buildingId, attackerFaction = null) {
       state.winner = 'olundar';
       addMessage(state, 'The Bone Portal shatters. The Deadwalker invasion is broken. Olundar survives.', 'good');
     } else if (building.faction === 'dead' && attackerFaction === 'olundar') {
+      if (building.type !== 'portal') {
+        state.flags.deadStrongholdsDestroyed = (state.flags.deadStrongholdsDestroyed || 0) + 1;
+        gainResources(state.factions.olundar.resources, { influence: 1, morale: 1 });
+        state.factions.olundar.resources.morale = Math.min(12, state.factions.olundar.resources.morale || 0);
+      }
       addMessage(state, `${building.name} destroyed. Blight nearby begins to weaken.`, 'good');
       cleanseAround(state, building.x, building.y, 2);
     }

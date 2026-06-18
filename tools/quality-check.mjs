@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import {
   addBuilding,
+  addUnit,
   attackBuilding,
   attackUnit,
   canAfford,
@@ -15,6 +16,7 @@ import {
   getFirstTurnsGuide,
   getObjectiveProgress,
   getReadyOlundarUnits,
+  getSiegeOperations,
   getWarCouncil,
   moveUnit,
   startConstruction,
@@ -134,6 +136,41 @@ check('first-turn guide gives actionable live onboarding', () => {
   assert(laterGuide.steps.find((step) => step.id === 'iron').done, 'Guide should recognize iron progress.');
   assert(laterGuide.steps.find((step) => step.id === 'contact').done, 'Guide should recognize first contact.');
   assert(laterGuide.steps.find((step) => step.id === 'front').done, 'Guide should recognize Deadwalker sighting.');
+});
+
+check('siege operations track midgame victory work', () => {
+  const state = createGame('quality-siege-operations');
+  const opening = getSiegeOperations(state);
+  assert(!opening.visible, 'Siege operations should not crowd the first-turn opening.');
+
+  state.turn = 7;
+  state.flags.firstDeadwalkerSeen = true;
+  state.factions.dawn.discovered = true;
+  state.factions.olundar.pacts.dawn = true;
+  addBuilding(state, 'workshop', 'olundar', 9, 17, { complete: true });
+  addUnit(state, 'onager', 'olundar', 9, 16);
+  const bonePit = state.buildings.find((building) => building.faction === 'dead' && building.type === 'bonePit');
+  state.revealed[bonePit.y * MAP_WIDTH + bonePit.x] = true;
+
+  const before = getSiegeOperations(state);
+  assert(before.visible, 'Siege operations should appear once war pressure is active.');
+  assert(before.operations.find((operation) => operation.id === 'siege').done, 'Onager operation should recognize ready siege.');
+  assert(before.operations.find((operation) => operation.id === 'ally').done, 'Ally operation should recognize survival pacts.');
+  assert(before.operations.find((operation) => operation.id === 'cleanse').tone === 'danger', 'Revealed Deadwalker stronghold should become urgent.');
+
+  const legion = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'legionary');
+  legion.x = bonePit.x - 1;
+  legion.y = bonePit.y;
+  legion.hasActed = false;
+  bonePit.hp = 1;
+  const beforeInfluence = state.factions.olundar.resources.influence;
+  const attack = attackBuilding(state, legion.id, bonePit.id);
+  assert(attack.ok, attack.reason || 'Stronghold attack failed.');
+
+  const after = getSiegeOperations(state);
+  assert(state.flags.deadStrongholdsDestroyed === 1, 'Destroyed strongholds should be counted.');
+  assert(after.operations.find((operation) => operation.id === 'cleanse').done, 'Cleanse operation should complete after a stronghold falls.');
+  assert(state.factions.olundar.resources.influence > beforeInfluence, 'Stronghold destruction should reward influence.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {
