@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, FIELD_ORDERS, MAP_HEIGHT, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -27,6 +27,7 @@ import {
   moveUnit,
   performDiplomacy,
   serializeState,
+  setFieldOrder,
   startConstruction,
   startTraining,
   trainingQueueLimit,
@@ -110,6 +111,10 @@ check('content tables are internally consistent', () => {
     assert(scenario.name && scenario.seed && scenario.text, `Scenario ${id} needs name, seed, and text.`);
     assert(DIFFICULTY_PRESETS[scenario.difficultyId], `Scenario ${id} references missing difficulty.`);
     for (const unit of scenario.units || []) assert(UNIT_TYPES[unit.type], `Scenario ${id} starts with missing unit ${unit.type}.`);
+  }
+  for (const [id, order] of Object.entries(FIELD_ORDERS)) {
+    assert(order.id === id, `Field order ${id} has mismatched id.`);
+    assert(order.name && order.text, `Field order ${id} needs player-facing text.`);
   }
 });
 
@@ -304,6 +309,39 @@ check('diplomacy ledger tracks contacts, accords, and grievances', () => {
   const veyr = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'veyr');
   assert(veyr.atWar && veyr.posture.label === 'Rival', 'Ledger should expose pressure-created rivalries.');
   assert(veyr.recent[0].outcome.includes('Pressure'), 'Ledger should record pressure outcomes.');
+});
+
+check('pact field orders steer allied AI', () => {
+  const reinforce = createGame('quality-field-order-reinforce');
+  reinforce.factions.dawn.discovered = true;
+  reinforce.factions.olundar.pacts.dawn = true;
+  reinforce.factions.dawn.pacts.olundar = true;
+  reinforce.factions.olundar.relations.dawn = 45;
+  reinforce.factions.dawn.relations.olundar = 45;
+  const order = setFieldOrder(reinforce, 'dawn', 'reinforceCapital');
+  assert(order.ok, order.reason || 'Field order setup failed.');
+  assert(getDiplomacyLedger(reinforce).entries.find((entry) => entry.id === 'dawn').fieldOrder.id === 'reinforceCapital', 'Ledger should show the active field order.');
+  reinforce.turn = 3;
+  const beforeNearCapital = reinforce.units.filter((unit) => unit.faction === 'dawn' && Math.abs(unit.x - 7) + Math.abs(unit.y - 16) <= 5).length;
+  endTurn(reinforce);
+  const afterNearCapital = reinforce.units.filter((unit) => unit.faction === 'dawn' && Math.abs(unit.x - 7) + Math.abs(unit.y - 16) <= 5).length;
+  assert(afterNearCapital > beforeNearCapital, 'Reinforce Capital should muster pact units near Olundar Prime.');
+
+  const harass = createGame('quality-field-order-harass');
+  harass.factions.dawn.discovered = true;
+  harass.factions.olundar.pacts.dawn = true;
+  harass.factions.dawn.pacts.olundar = true;
+  harass.factions.olundar.relations.dawn = 45;
+  harass.factions.dawn.relations.olundar = 45;
+  const harassOrder = setFieldOrder(harass, 'dawn', 'harassDeadworks');
+  assert(harassOrder.ok, harassOrder.reason || 'Harass order setup failed.');
+  const spear = harass.units.find((unit) => unit.faction === 'dawn' && unit.type === 'spearGuard');
+  const bonePit = harass.buildings.find((building) => building.faction === 'dead' && building.type === 'bonePit');
+  const beforeDistance = Math.abs(spear.x - bonePit.x) + Math.abs(spear.y - bonePit.y);
+  endTurn(harass);
+  const afterSpear = harass.units.find((unit) => unit.id === spear.id);
+  const afterDistance = Math.abs(afterSpear.x - bonePit.x) + Math.abs(afterSpear.y - bonePit.y);
+  assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
 });
 
 check('audio cue registry stays lightweight and browser-safe', () => {

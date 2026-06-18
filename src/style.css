@@ -978,6 +978,40 @@ button:disabled {
   color: #f9e6a8;
 }
 
+.field-orders {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(186, 245, 140, 0.16);
+  border-radius: 8px;
+  background: rgba(186, 245, 140, 0.055);
+}
+
+.field-orders strong {
+  color: var(--good);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.field-orders p {
+  margin: 0 !important;
+  color: #ddd0ae;
+  font-size: 0.84rem;
+}
+
+.field-order-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.36rem;
+}
+
+.field-order-buttons button {
+  min-width: 0;
+  padding: 0.42rem 0.45rem;
+  font-size: 0.74rem;
+}
+
 .diplo-actions {
   margin-bottom: 0;
 }
@@ -1205,6 +1239,10 @@ button:disabled {
 
   .ledger-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-order-buttons {
+    grid-template-columns: 1fr;
   }
 
   .recap-stats,

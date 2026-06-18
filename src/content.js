@@ -356,6 +356,12 @@ export const DIPLOMACY_ACTIONS = {
   pressure: { name: 'Pressure Them', cost: { morale: 1 }, relation: -18, text: 'Try to extract resources quickly at a diplomatic cost.' }
 };
 
+export const FIELD_ORDERS = {
+  defendRoads: { id: 'defendRoads', name: 'Defend Roads', text: 'Patrol Olundar roads, outposts, and city approaches before pursuing distant targets.' },
+  reinforceCapital: { id: 'reinforceCapital', name: 'Reinforce Capital', text: 'Muster pact aid near Olundar Prime when possible.' },
+  harassDeadworks: { id: 'harassDeadworks', name: 'Harass Deadworks', text: 'Push toward revealed Deadwalker structures and pressure their expansion.' }
+};
+
 export const OBJECTIVES = [
   'Reveal the eastern wasteland where the Deadwalker portal is hidden.',
   'Build a war economy: farms, wood, iron, barracks, and archers.',

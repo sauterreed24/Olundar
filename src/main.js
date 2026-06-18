@@ -24,6 +24,7 @@ import {
   moveUnit,
   performDiplomacy,
   serializeState,
+  setFieldOrder,
   startConstruction,
   startTraining,
   upgradeBuilding,
@@ -328,6 +329,18 @@ function renderDiplomacy() {
       ` : ''}
     `;
     if (entry.discovered && state.status === 'playing') {
+      if (entry.pact) {
+        const orderBlock = document.createElement('div');
+        orderBlock.className = 'field-orders';
+        orderBlock.innerHTML = `<strong>Field Orders</strong><p>${escapeHtml(entry.fieldOrder?.text || 'Choose how this pact ally should help the front.')}</p>`;
+        const orderRow = document.createElement('div');
+        orderRow.className = 'field-order-buttons';
+        for (const order of entry.fieldOrders) {
+          orderRow.appendChild(button(order.active ? `${order.name} active` : order.name, () => runAction(() => setFieldOrder(state, entry.id, order.id), 'diplomacy'), order.disabled || order.active, order.disabledReason || order.text));
+        }
+        orderBlock.appendChild(orderRow);
+        card.appendChild(orderBlock);
+      }
       const row = document.createElement('div');
       row.className = 'button-grid diplo-actions';
       for (const action of entry.actions) {

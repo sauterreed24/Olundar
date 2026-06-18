@@ -4,6 +4,7 @@ import {
   DIFFICULTY_PRESETS,
   DIPLOMACY_ACTIONS,
   FACTIONS,
+  FIELD_ORDERS,
   MAP_HEIGHT,
   MAP_WIDTH,
   OBJECTIVES,
@@ -74,6 +75,9 @@ function normalizeCampaignConfig(seedOrConfig, options = {}) {
 
 function normalizeCampaignState(state) {
   if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
+  if (!state.factions?.olundar?.fieldOrders) {
+    if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
+  }
   if (state.campaign?.scenarioId && state.campaign?.difficultyId) return;
   const fallback = normalizeCampaignConfig(state.seed || 'Olundar-Legacy');
   state.campaign = {
@@ -107,7 +111,8 @@ function createFactions() {
       discovered: true,
       pacts: {},
       trades: {},
-      atWar: { dead: true }
+      atWar: { dead: true },
+      fieldOrders: {}
     },
     dawn: {
       ...clone(FACTIONS.dawn),
@@ -372,6 +377,8 @@ function diplomacyLedgerEntry(state, actor, id) {
   const atWar = Boolean(actor.atWar?.[id] || faction.atWar?.olundar);
   const pact = Boolean(actor.pacts?.[id]);
   const trade = Boolean(actor.trades?.[id]);
+  const fieldOrderId = pact ? actor.fieldOrders?.[id] || 'defendRoads' : null;
+  const fieldOrder = fieldOrderId ? FIELD_ORDERS[fieldOrderId] : null;
   const posture = discovered ? diplomacyPosture(relation, atWar, pact) : { label: 'Uncontacted', tone: 'info' };
   const recent = (state.diplomacyLog || []).filter((record) => record.factionId === id).slice(0, 2);
   return {
@@ -386,10 +393,17 @@ function diplomacyLedgerEntry(state, actor, id) {
     pact,
     trade,
     atWar,
-    tags: diplomacyTags(discovered, relation, pact, trade, atWar),
+    fieldOrder,
+    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder),
     advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar),
     recent,
-    actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar))
+    actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar)),
+    fieldOrders: Object.values(FIELD_ORDERS).map((order) => ({
+      ...order,
+      active: fieldOrder?.id === order.id,
+      disabled: !discovered || !pact || atWar,
+      disabledReason: !discovered ? 'Uncontacted.' : !pact ? 'Requires a Survival Pact.' : atWar ? 'At war.' : ''
+    }))
   };
 }
 
@@ -416,11 +430,12 @@ function diplomacyPosture(relation, atWar, pact) {
   return { label: 'Strained', tone: 'danger' };
 }
 
-function diplomacyTags(discovered, relation, pact, trade, atWar) {
+function diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder = null) {
   if (!discovered) return ['Uncontacted'];
   const tags = [`Relation ${relation}`];
   if (pact) tags.push('Survival Pact');
   if (trade) tags.push('Trade');
+  if (fieldOrder) tags.push(fieldOrder.name);
   if (atWar) tags.push('At war');
   if (!pact && !trade && !atWar) tags.push('No accord');
   return tags;
@@ -1303,6 +1318,21 @@ export function performDiplomacy(state, targetFaction, actionId) {
   return { ok: true };
 }
 
+export function setFieldOrder(state, targetFaction, orderId) {
+  normalizeCampaignState(state);
+  const actor = state.factions.olundar;
+  const target = state.factions[targetFaction];
+  const order = FIELD_ORDERS[orderId];
+  if (!target || !target.discovered || targetFaction === 'dead') return { ok: false, reason: 'That civilization is not available for field orders.' };
+  if (!order) return { ok: false, reason: 'Unknown field order.' };
+  if (!actor.pacts?.[targetFaction]) return { ok: false, reason: 'Field orders require a Survival Pact.' };
+  if (actor.atWar?.[targetFaction] || target.atWar?.olundar) return { ok: false, reason: `${target.name} is openly hostile. Field orders are unavailable.` };
+  actor.fieldOrders[targetFaction] = orderId;
+  addMessage(state, `${target.name} will ${order.name.toLowerCase()} under the Survival Pact.`, 'good');
+  recordDiplomacy(state, targetFaction, orderId, `Field order: ${order.name}`, order.text, 'good');
+  return { ok: true, reason: `${target.name}: ${order.name}.` };
+}
+
 function recordDiplomacy(state, factionId, actionId, outcome, detail, tone = 'info') {
   normalizeCampaignState(state);
   state.diplomacyLog.unshift({
@@ -1310,7 +1340,7 @@ function recordDiplomacy(state, factionId, actionId, outcome, detail, tone = 'in
     factionId,
     factionName: state.factions[factionId]?.name || factionId,
     actionId,
-    actionName: DIPLOMACY_ACTIONS[actionId]?.name || actionId,
+    actionName: DIPLOMACY_ACTIONS[actionId]?.name || FIELD_ORDERS[actionId]?.name || actionId,
     outcome,
     detail,
     relation: state.factions.olundar.relations[factionId] ?? 0,
@@ -1542,13 +1572,20 @@ function growDeadwalkerOutpost(state) {
 function runLivingAiTurn(state, factionId) {
   const faction = state.factions[factionId];
   const relation = state.factions.olundar.relations[factionId] ?? 0;
+  const fieldOrder = activeFieldOrder(state, factionId);
   // Muster slowly, faster when allied or threatened.
-  if (state.turn % (relation > 30 ? 4 : 6) === 0) {
-    const city = state.buildings.find((b) => b.faction === factionId && b.type === 'city');
+  const musterCadence = (fieldOrder || relation > 30) ? 4 : 6;
+  if (state.turn % musterCadence === 0) {
+    const allyCity = state.buildings.find((b) => b.faction === factionId && b.type === 'city');
+    const reinforceCity = fieldOrder === 'reinforceCapital' ? state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city') : null;
+    const city = reinforceCity || allyCity;
     if (city) {
       const roster = factionId === 'dawn' ? ['spearGuard', 'archer'] : factionId === 'veyr' ? ['cavalry', 'legionary'] : ['scout', 'archer'];
       const spawn = findSpawnNear(state, city.x, city.y, factionId);
-      if (spawn) addUnit(state, roster[state.turn % roster.length], factionId, spawn.x, spawn.y);
+      if (spawn) {
+        addUnit(state, roster[state.turn % roster.length], factionId, spawn.x, spawn.y);
+        if (reinforceCity) addMessage(state, `${faction.name} reinforces Olundar Prime under pact orders.`, 'good');
+      }
     }
   }
 
@@ -1556,6 +1593,12 @@ function runLivingAiTurn(state, factionId) {
     if (!state.units.includes(unit)) continue;
     const acted = aiTryAttack(state, unit);
     if (acted) continue;
+    const orderTarget = fieldOrderTarget(state, unit, fieldOrder);
+    if (orderTarget) {
+      aiMoveToward(state, unit, orderTarget.x, orderTarget.y);
+      aiTryAttack(state, unit);
+      continue;
+    }
     const deadTarget = nearestTargetFaction(state, unit.x, unit.y, 'dead', relation > 15 ? 14 : 8);
     if (deadTarget) {
       aiMoveToward(state, unit, deadTarget.x, deadTarget.y);
@@ -1567,6 +1610,56 @@ function runLivingAiTurn(state, factionId) {
       if (olundarTarget) aiMoveToward(state, unit, olundarTarget.x, olundarTarget.y);
     }
   }
+}
+
+function activeFieldOrder(state, factionId) {
+  if (!state.factions.olundar.pacts?.[factionId]) return null;
+  if (state.factions.olundar.atWar?.[factionId] || state.factions[factionId].atWar?.olundar) return null;
+  return state.factions.olundar.fieldOrders?.[factionId] || 'defendRoads';
+}
+
+function fieldOrderTarget(state, unit, orderId) {
+  if (!orderId) return null;
+  if (orderId === 'harassDeadworks') {
+    return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
+  }
+  if (orderId === 'reinforceCapital') {
+    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost']);
+  }
+  if (orderId === 'defendRoads') {
+    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
+  }
+  return null;
+}
+
+function nearestDeadwalkerStructure(state, x, y, maxDistance = Infinity) {
+  return state.buildings
+    .filter((building) => building.faction === 'dead' && ['bonePit', 'graveForge', 'necropolis', 'portal'].includes(building.type))
+    .map((building) => ({ kind: 'building', ref: building, x: building.x, y: building.y, dist: manhattan(x, y, building.x, building.y) }))
+    .filter((target) => target.dist <= maxDistance)
+    .sort((a, b) => a.dist - b.dist)[0] || null;
+}
+
+function nearestThreatToFactionAssets(state, x, y, factionId, protectRadius) {
+  const assets = [
+    ...state.units.filter((unit) => unit.faction === factionId).map((unit) => ({ x: unit.x, y: unit.y })),
+    ...state.buildings.filter((building) => building.faction === factionId).map((building) => ({ x: building.x, y: building.y }))
+  ];
+  if (!assets.length) return null;
+  return [
+    ...state.units.filter((unit) => unit.faction === 'dead'),
+    ...state.buildings.filter((building) => building.faction === 'dead')
+  ]
+    .filter((threat) => assets.some((asset) => manhattan(threat.x, threat.y, asset.x, asset.y) <= protectRadius))
+    .map((threat) => ({ ref: threat, x: threat.x, y: threat.y, dist: manhattan(x, y, threat.x, threat.y) }))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
+}
+
+function nearestFactionBuilding(state, x, y, factionId, types) {
+  return state.buildings
+    .filter((building) => building.faction === factionId && types.includes(building.type))
+    .map((building) => ({ kind: 'building', ref: building, x: building.x, y: building.y, dist: manhattan(x, y, building.x, building.y) }))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
 }
 
 function aiTryAttack(state, unit) {
