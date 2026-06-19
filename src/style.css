@@ -4555,3 +4555,261 @@ button:hover:not(:disabled) {
     font-size: 0.82rem;
   }
 }
+
+/* Dawnfield battlefield polish: brighter chrome, less border weight, more map. */
+:root {
+  --bg: #fbfcf2;
+  --panel: rgba(255, 255, 249, 0.96);
+  --panel-strong: #edf6ea;
+  --vellum: #fff9df;
+  --line: rgba(54, 125, 134, 0.16);
+  --text: #172015;
+  --muted: #53684f;
+  --gold: #a36a12;
+  --bronze: #c39235;
+  --crimson: #8c2b20;
+  --lapis: #1f728c;
+  --jade: #4f9362;
+  --shadow: 0 10px 24px rgba(49, 76, 58, 0.10);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 6%, rgba(255, 255, 255, 0.98), transparent 21rem),
+    radial-gradient(circle at 82% 12%, rgba(148, 219, 236, 0.23), transparent 24rem),
+    radial-gradient(circle at 72% 86%, rgba(130, 198, 121, 0.18), transparent 25rem),
+    linear-gradient(135deg, #fffefa 0%, #f5f8e7 44%, #e8f6f1 100%);
+}
+
+body::before {
+  opacity: 0.28;
+  background:
+    linear-gradient(90deg, rgba(51, 118, 125, 0.020) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(51, 118, 125, 0.018) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.topbar {
+  padding: 0.42rem 0.72rem;
+  border-bottom-color: rgba(55, 126, 134, 0.14);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 250, 0.98), rgba(248, 251, 236, 0.96) 52%, rgba(234, 248, 249, 0.96)),
+    radial-gradient(circle at 9% 0%, rgba(255, 255, 255, 0.90), transparent 16rem);
+  box-shadow: 0 8px 20px rgba(48, 75, 58, 0.08);
+}
+
+.topbar::after {
+  background: linear-gradient(90deg, transparent, rgba(31, 114, 140, 0.24), rgba(163, 106, 18, 0.20), transparent);
+}
+
+.brand h1 {
+  color: #8c2b20;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.96);
+}
+
+.brand p,
+.turnbox strong {
+  color: #445f45;
+}
+
+button {
+  border-color: rgba(46, 113, 119, 0.20);
+  background:
+    linear-gradient(180deg, rgba(255,255,252,0.98), rgba(231, 242, 221, 0.90)),
+    linear-gradient(90deg, rgba(255,255,255,0.48), rgba(32, 112, 137, 0.045));
+  color: #1f321e;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.86),
+    0 1px 0 rgba(64, 111, 92, 0.12),
+    0 7px 14px rgba(55, 84, 62, 0.08);
+  text-shadow: none;
+}
+
+button:hover:not(:disabled) {
+  border-color: rgba(31, 114, 140, 0.34);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.99), rgba(226, 246, 232, 0.93)),
+    linear-gradient(90deg, rgba(255,255,255,0.54), rgba(31, 114, 140, 0.05));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.90),
+    0 2px 0 rgba(64, 111, 92, 0.12),
+    0 9px 16px rgba(49, 82, 63, 0.10);
+}
+
+.resourcebar {
+  padding: 0.34rem 0.72rem;
+  border-bottom-color: rgba(55, 126, 134, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 249, 0.96), rgba(238, 246, 224, 0.80)),
+    radial-gradient(circle at 15% 0%, rgba(255, 255, 255, 0.78), transparent 18rem);
+  box-shadow: inset 0 -1px 0 rgba(65, 113, 98, 0.06);
+}
+
+.resource {
+  border-color: rgba(61, 126, 117, 0.16);
+  background: linear-gradient(180deg, rgba(255,255,252,0.98), rgba(232, 241, 216, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.76), 0 3px 9px rgba(70, 96, 62, 0.07);
+}
+
+.layout {
+  grid-template-columns: minmax(0, 1fr) minmax(286px, 358px);
+  gap: 0.56rem;
+  padding: 0.56rem;
+}
+
+.map-shell {
+  border: 1px solid rgba(52, 124, 132, 0.14);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255,255,251,0.84), rgba(237, 247, 226, 0.66)),
+    radial-gradient(circle at 52% 34%, rgba(255, 255, 255, 0.80), transparent 33rem),
+    linear-gradient(135deg, #faf9e1, #e8f6ef);
+  box-shadow:
+    0 12px 28px rgba(49, 76, 58, 0.10),
+    inset 0 0 0 1px rgba(255,255,255,0.78);
+}
+
+.map-shell::before,
+.map-shell::after {
+  display: none;
+}
+
+.map-lens-bar,
+.map-help,
+.map-intel {
+  backdrop-filter: none;
+}
+
+.map-lens-bar {
+  top: 0.56rem;
+  left: 0.56rem;
+  width: min(42rem, calc(100% - 1.12rem));
+  border-color: rgba(52, 124, 132, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 250, 0.88), rgba(236, 246, 225, 0.72)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.74), transparent 12rem);
+  box-shadow:
+    0 8px 18px rgba(50, 77, 58, 0.10),
+    inset 0 1px 0 rgba(255,255,255,0.82);
+}
+
+.map-help {
+  left: 0.62rem;
+  right: 0.62rem;
+  bottom: 0.54rem;
+  border-color: rgba(52, 124, 132, 0.13);
+  background: linear-gradient(180deg, rgba(255, 255, 249, 0.86), rgba(234, 244, 221, 0.76));
+  box-shadow:
+    0 8px 18px rgba(50, 77, 58, 0.09),
+    inset 0 1px 0 rgba(255,255,255,0.78);
+}
+
+.map-help span {
+  border-color: rgba(56, 127, 115, 0.14);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+#gameCanvas {
+  background:
+    radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.76), transparent 28rem),
+    #eef1cf;
+}
+
+.side {
+  gap: 0.50rem;
+  max-height: calc(100vh - 6.8rem);
+}
+
+.panel,
+.setup-dialog {
+  border-color: rgba(52, 124, 132, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255,255,252,0.96), rgba(239, 247, 226, 0.90)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.72), transparent 12rem);
+  box-shadow:
+    0 8px 20px rgba(50, 77, 58, 0.09),
+    inset 0 1px 0 rgba(255,255,255,0.84);
+}
+
+.panel {
+  padding: 0.66rem;
+}
+
+.panel::before,
+.setup-dialog::before {
+  background: linear-gradient(90deg, transparent, rgba(31, 114, 140, 0.18), rgba(163, 106, 18, 0.14), transparent);
+}
+
+.council,
+.guide,
+.command-card,
+.order-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,252,0.97), rgba(238, 247, 225, 0.92)),
+    radial-gradient(circle at 12% 0%, rgba(31, 114, 140, 0.08), transparent 12rem);
+}
+
+.mobile-intel-summary {
+  border-color: rgba(52, 124, 132, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 249, 0.96), rgba(233, 244, 220, 0.84)),
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.78), transparent 8rem);
+  color: #285236;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.74),
+    0 6px 14px rgba(58, 89, 62, 0.08);
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 0.42rem;
+    padding: 0.42rem;
+  }
+
+  .side {
+    gap: 0.46rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    padding: 0.22rem 0.34rem 0.24rem;
+  }
+
+  .resourcebar {
+    padding: 0.14rem 0.30rem;
+  }
+
+  .layout {
+    padding: 0.18rem;
+  }
+
+  .map-shell {
+    border-color: rgba(52, 124, 132, 0.08);
+    border-radius: 5px;
+    box-shadow: 0 6px 15px rgba(49, 76, 58, 0.08);
+  }
+
+  .map-lens-bar {
+    top: 0.24rem;
+    left: 0.24rem;
+    right: 0.24rem;
+    width: auto;
+    padding: 0.18rem;
+  }
+
+  .map-help {
+    left: 0.34rem;
+    right: 0.34rem;
+    bottom: 0.28rem;
+    padding: 0.18rem 0.20rem;
+  }
+
+  .map-intel {
+    left: 0.34rem;
+    right: 0.34rem;
+    bottom: 2.30rem;
+    padding: 0.24rem 0.34rem;
+  }
+}

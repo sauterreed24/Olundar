@@ -140,11 +140,13 @@ registerPwa();
 focusFirstReadyUnit();
 
 function resizeCanvas() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const compactViewport = window.innerWidth <= 620;
+  const dprCap = compactViewport ? 1.6 : 2;
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
-  const idealHeight = width * 0.8;
+  const idealHeight = width * (compactViewport ? 0.92 : 0.8);
   const maxHeight = Math.max(mapScale.maxHeightFloor, window.innerHeight - mapScale.maxHeightOffset);
   const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
   canvas.width = Math.floor(width * dpr);
@@ -241,7 +243,7 @@ function renderMapHelp() {
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective ? [] : [
-    '<span>Gold field marks movement radius</span>',
+    '<span>Gold field marks terrain-adjusted movement radius</span>',
     '<span>Standards mark key moves</span>',
     '<span>Laurels mark supplied ground</span>',
     '<span>Hover previews route cost</span>',
@@ -2653,7 +2655,7 @@ function focusOpeningFollowThrough(previousStepId) {
 }
 
 function scrollOpeningFollowThroughRail(previousStepId) {
-  if (!['scout', 'contact', 'front'].includes(previousStepId)) return;
+  if (!['scout', 'contact', 'front', 'training', 'engineer', 'iron', 'turn-report'].includes(previousStepId)) return;
   if (window.innerWidth > 980) {
     resetCommandRailScroll();
     return;
@@ -2707,7 +2709,7 @@ function executeOpeningDirective(action) {
       focusOpeningFollowThrough(previousStepId);
     }
     render();
-    if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    if (ok) scrollOpeningFollowThroughRail(previousStepId);
     return;
   }
   if (action.kind === 'build') {
@@ -2798,9 +2800,7 @@ function continueTurnReportOrders() {
   turnReport = null;
   focusOpeningFollowThrough('turn-report');
   render();
-  if (window.innerWidth <= 980) {
-    actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
-  }
+  if (window.innerWidth <= 980) scrollBattlefieldIntoView();
 }
 
 function selectNextReadyUnit() {
