@@ -2132,14 +2132,48 @@ function previewOpeningDirective(action) {
   if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
 }
 
+function focusOpeningFollowThrough(previousStepId) {
+  const directive = currentOpeningDirective();
+  if (!directive || directive.current.id === previousStepId) return false;
+  const recommendation = openingDirectiveAction(directive.current.id);
+  if (!recommendation) return false;
+
+  let focusTile = null;
+  if (recommendation.buildingId) {
+    const building = state.buildings.find((item) => item.id === recommendation.buildingId);
+    if (building) {
+      selectBuilding(building.id);
+      focusTile = { x: building.x, y: building.y };
+    }
+  } else if (recommendation.unitId) {
+    const unit = state.units.find((item) => item.id === recommendation.unitId);
+    if (unit) {
+      selectUnit(unit.id);
+      focusTile = { x: unit.x, y: unit.y };
+    }
+  }
+
+  if (!focusTile) return false;
+  if (Number.isFinite(recommendation.x) && Number.isFinite(recommendation.y)) {
+    focusTile = { x: recommendation.x, y: recommendation.y };
+  }
+  lastTile = focusTile;
+  hoverTile = focusTile;
+  return true;
+}
+
 function executeOpeningDirective(action) {
+  const previousStepId = currentOpeningDirective()?.current?.id || null;
   if (action.kind === 'move') {
     selectUnit(action.unitId);
     lastTile = { x: action.x, y: action.y };
     hoverTile = lastTile;
     const result = moveUnit(state, action.unitId, action.x, action.y);
     const ok = handleResult(result, 'move');
-    if (ok) toast(action.successToast || `${action.label} to ${action.x},${action.y}.`, 'good');
+    if (ok) {
+      toast(action.successToast || `${action.label} to ${action.x},${action.y}.`, 'good');
+      focusOpeningFollowThrough(previousStepId);
+    }
     render();
     return;
   }
@@ -2147,7 +2181,10 @@ function executeOpeningDirective(action) {
     selectBuilding(action.buildingId);
     const result = startTraining(state, action.buildingId, action.unitType);
     const ok = handleResult(result, 'train');
-    if (ok) toast(`${UNIT_TYPES[action.unitType].name} queued.`, 'good');
+    if (ok) {
+      toast(`${UNIT_TYPES[action.unitType].name} queued.`, 'good');
+      focusOpeningFollowThrough(previousStepId);
+    }
     render();
     if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
     return;
@@ -2163,6 +2200,7 @@ function executeOpeningDirective(action) {
       lastTile = { x: action.x, y: action.y };
       hoverTile = lastTile;
       toast(action.successToast || `${BUILDING_TYPES[action.buildingType].name} started.`, 'good');
+      focusOpeningFollowThrough(previousStepId);
     } else {
       state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
     }
@@ -2179,7 +2217,10 @@ function executeOpeningDirective(action) {
     }
     const result = fortifyUnit(state, action.unitId);
     const ok = handleResult(result, 'ui');
-    if (ok) toast(action.successToast || `${unit?.name || 'Unit'} fortified.`, 'good');
+    if (ok) {
+      toast(action.successToast || `${unit?.name || 'Unit'} fortified.`, 'good');
+      focusOpeningFollowThrough(previousStepId);
+    }
     render();
     if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
     return;
