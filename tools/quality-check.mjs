@@ -1028,7 +1028,8 @@ check('github pages workflow publishes the playable app', () => {
   assert(workflow.includes('Deploy Olundar to GitHub Pages'), 'Pages workflow should be named for Olundar deployment.');
   assert(workflow.includes('branches: [main]'), 'Pages workflow should publish from main.');
   assert(workflow.includes('npm run quality:check'), 'Pages workflow should run the quality gate before deploy.');
-  assert(workflow.includes('actions/configure-pages@v5'), 'Pages workflow should configure GitHub Pages.');
+  assert(workflow.includes('node-version: 24'), 'Pages workflow should use the current GitHub Actions Node runtime.');
+  assert(workflow.includes('actions/configure-pages@v5') && workflow.includes('enablement: true'), 'Pages workflow should configure and request GitHub Pages enablement.');
   assert(workflow.includes('actions/upload-pages-artifact@v3') && workflow.includes('path: .'), 'Pages workflow should upload the static app root.');
   assert(workflow.includes('actions/deploy-pages@v4'), 'Pages workflow should deploy through GitHub Pages.');
 });
