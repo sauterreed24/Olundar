@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -10,6 +10,7 @@ import {
   formatCost,
   forecastBuildingAttack,
   forecastUnitAttack,
+  findPath,
   getAftermathMissions,
   fortifyUnit,
   getCampaignRecap,
@@ -34,6 +35,7 @@ import {
   startTraining,
   upgradeBuilding,
   upgradeCostFor,
+  tileAt,
   unitAt,
   buildingAt,
   isEnemy,
@@ -49,6 +51,7 @@ import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, n
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const canvas = document.querySelector('#gameCanvas');
+const mapIntel = document.querySelector('#mapIntel');
 const mapLensBar = document.querySelector('#mapLensBar');
 const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
@@ -150,6 +153,7 @@ function render() {
   renderDiplomacy();
   renderLog();
   renderTilePanel();
+  renderMapIntel();
   renderMode();
   maybeOpenOutcomeRecap();
 }
@@ -1129,6 +1133,156 @@ function renderTilePanel() {
   }
   body += battleForecastReadout(tile);
   tilePanel.innerHTML = body;
+}
+
+function renderMapIntel() {
+  const tile = hoverTile || lastTile;
+  if (!mapIntel || !tile || !inMap(tile.x, tile.y)) return;
+  const intel = mapIntelState(tile);
+  mapIntel.className = `map-intel ${intel.tone}`;
+  mapIntel.innerHTML = `
+    <div class="map-intel-head">
+      <span>${escapeHtml(intel.kicker)}</span>
+      <strong>${escapeHtml(intel.title)}</strong>
+    </div>
+    <p>${escapeHtml(intel.detail)}</p>
+    <div class="map-intel-stats">
+      ${intel.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
+    </div>
+  `;
+}
+
+function mapIntelState(tile) {
+  if (!isVisible(state, tile.x, tile.y)) {
+    return {
+      tone: 'hidden',
+      kicker: 'Uncharted',
+      title: `Sector ${tile.x},${tile.y}`,
+      detail: 'Move scouts or build vision to reveal this ground before committing plans.',
+      stats: [
+        { value: '--', label: 'terrain' },
+        { value: 'fog', label: 'status' }
+      ]
+    };
+  }
+
+  const mapTile = tileAt(state, tile.x, tile.y);
+  const terrain = mapTile ? TERRAIN[mapTile.terrain] : null;
+  const terrainName = terrain?.name || formatTerrainName(mapTile?.terrain || 'unknown');
+  const visibleUnit = unitAt(state, tile.x, tile.y);
+  const visibleBuilding = buildingAt(state, tile.x, tile.y);
+  const road = state.buildings.some((building) => building.type === 'road' && building.x === tile.x && building.y === tile.y);
+  const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId);
+  const baseStats = [
+    { value: terrainName, label: 'terrain' },
+    { value: `${tile.x},${tile.y}`, label: 'sector' }
+  ];
+  if (road) baseStats.push({ value: 'road', label: 'logistics' });
+  if (mapTile?.blight) baseStats.push({ value: `${mapTile.blight}/9`, label: 'blight' });
+
+  if (state.mode.type === 'build') {
+    const def = BUILDING_TYPES[state.mode.buildingType];
+    const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
+    return {
+      tone: result.ok ? 'good' : 'bad',
+      kicker: 'Build survey',
+      title: def.name,
+      detail: result.ok ? 'Valid site. Click to commit this engineer order.' : result.reason,
+      stats: [...baseStats, { value: formatCost(def.cost), label: 'cost' }]
+    };
+  }
+
+  if (selectedUnit?.faction === 'olundar' && state.mode.type === 'select') {
+    const def = UNIT_TYPES[selectedUnit.type];
+    if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
+      const forecast = forecastUnitAttack(state, selectedUnit.id, visibleUnit.id);
+      return mapIntelForecast(`Engage ${visibleUnit.name}`, forecast, baseStats);
+    }
+    if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
+      const forecast = forecastBuildingAttack(state, selectedUnit.id, visibleBuilding.id);
+      return mapIntelForecast(`Strike ${visibleBuilding.name}`, forecast, baseStats);
+    }
+    if (selectedUnit.hasActed) {
+      return {
+        tone: 'spent',
+        kicker: selectedUnit.name,
+        title: terrainName,
+        detail: 'Orders spent. Select another ready force or end the turn.',
+        stats: [...baseStats, { value: 'acted', label: 'unit' }]
+      };
+    }
+    if (selectedUnit.x === tile.x && selectedUnit.y === tile.y) {
+      return {
+        tone: 'current',
+        kicker: selectedUnit.name,
+        title: terrainName,
+        detail: 'Current position. Use the highlighted field to choose a destination or hold.',
+        stats: [...baseStats, { value: `${def.move}`, label: 'move' }]
+      };
+    }
+    const path = findPath(state, selectedUnit, tile.x, tile.y, def.move);
+    if (path) {
+      const remaining = Math.max(0, def.move - path.cost);
+      return {
+        tone: road ? 'road' : 'good',
+        kicker: selectedUnit.name,
+        title: terrainName,
+        detail: road ? 'Road-linked move. Click to reposition along Olundar logistics.' : 'Valid move. Click to spend this unit action here.',
+        stats: [...baseStats, { value: `${path.cost}/${def.move}`, label: 'move' }, { value: `${remaining}`, label: 'left' }]
+      };
+    }
+    return {
+      tone: 'bad',
+      kicker: selectedUnit.name,
+      title: terrainName,
+      detail: 'No legal path inside this unit action. Use roads, scouts, or a closer destination.',
+      stats: [...baseStats, { value: `${def.move}`, label: 'move' }]
+    };
+  }
+
+  const occupant = visibleUnit
+    ? `${visibleUnit.name} (${visibleUnit.faction})`
+    : visibleBuilding
+      ? `${visibleBuilding.name} (${visibleBuilding.faction})`
+      : 'Open ground';
+  return {
+    tone: visibleUnit || visibleBuilding ? 'occupied' : 'neutral',
+    kicker: 'Field intel',
+    title: terrainName,
+    detail: occupant,
+    stats: baseStats
+  };
+}
+
+function mapIntelForecast(title, forecast, baseStats) {
+  if (!forecast.ok) {
+    return {
+      tone: 'bad',
+      kicker: 'Attack forecast',
+      title,
+      detail: forecast.reason,
+      stats: [...baseStats, { value: `${forecast.distance}/${forecast.range}`, label: 'range' }]
+    };
+  }
+  return {
+    tone: forecast.portalReforms ? 'bad' : forecast.lethal ? 'good' : 'attack',
+    kicker: 'Attack forecast',
+    title,
+    detail: forecast.portalReforms ? forecast.note : forecast.lethal ? 'Lethal strike if committed.' : forecast.note,
+    stats: [
+      ...baseStats,
+      { value: `${forecast.damage}`, label: 'damage' },
+      { value: `${forecast.targetHpBefore}->${forecast.targetHpAfter}`, label: 'hp' },
+      { value: `${forecast.distance}/${forecast.range}`, label: 'range' }
+    ]
+  };
+}
+
+function formatTerrainName(type) {
+  return String(type)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function missionSiteReceiptMarkup(tile) {
@@ -2124,6 +2278,7 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   renderTilePanel();
+  renderMapIntel();
   drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
