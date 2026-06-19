@@ -48,15 +48,55 @@ const LENS_COLORS = {
 };
 
 export function getLayout(canvas) {
-  const tileSize = Math.floor(Math.min(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT));
-  const mapWidth = tileSize * MAP_WIDTH;
-  const mapHeight = tileSize * MAP_HEIGHT;
+  const camera = canvas.__olundarState ? getCameraBounds(canvas.__olundarState) : {
+    x: 0,
+    y: 0,
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT
+  };
+  const tileSize = Math.max(8, Math.floor(Math.min(canvas.width / camera.width, canvas.height / camera.height)));
+  const mapWidth = tileSize * camera.width;
+  const mapHeight = tileSize * camera.height;
+  const frameX = Math.floor((canvas.width - mapWidth) / 2);
+  const frameY = Math.floor((canvas.height - mapHeight) / 2);
   return {
     tileSize,
-    offsetX: Math.floor((canvas.width - mapWidth) / 2),
-    offsetY: Math.floor((canvas.height - mapHeight) / 2),
+    offsetX: frameX - camera.x * tileSize,
+    offsetY: frameY - camera.y * tileSize,
+    frameX,
+    frameY,
     mapWidth,
-    mapHeight
+    mapHeight,
+    camera
+  };
+}
+
+function getCameraBounds(state) {
+  const revealed = [];
+  for (let y = 0; y < MAP_HEIGHT; y += 1) {
+    for (let x = 0; x < MAP_WIDTH; x += 1) {
+      if (isRevealed(state, x, y)) revealed.push({ x, y });
+    }
+  }
+  const selected = state.units.find((unit) => unit.id === state.selectedUnitId)
+    || state.buildings.find((building) => building.id === state.selectedBuildingId)
+    || state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+    || state.units.find((unit) => unit.faction === 'olundar');
+  const minX = revealed.length ? Math.min(...revealed.map((tile) => tile.x)) : selected?.x || 0;
+  const maxX = revealed.length ? Math.max(...revealed.map((tile) => tile.x)) : selected?.x || MAP_WIDTH - 1;
+  const minY = revealed.length ? Math.min(...revealed.map((tile) => tile.y)) : selected?.y || 0;
+  const maxY = revealed.length ? Math.max(...revealed.map((tile) => tile.y)) : selected?.y || MAP_HEIGHT - 1;
+  const revealedWidth = maxX - minX + 1;
+  const revealedHeight = maxY - minY + 1;
+  const width = Math.min(MAP_WIDTH, Math.max(20, revealedWidth + 10));
+  const height = Math.min(MAP_HEIGHT, Math.max(15, revealedHeight + 8));
+  const centerX = selected ? selected.x : (minX + maxX) / 2;
+  const centerY = selected ? selected.y : (minY + maxY) / 2;
+  return {
+    x: clamp(Math.round(centerX - width / 2), 0, Math.max(0, MAP_WIDTH - width)),
+    y: clamp(Math.round(centerY - height / 2), 0, Math.max(0, MAP_HEIGHT - height)),
+    width,
+    height
   };
 }
 
@@ -67,6 +107,9 @@ export function pointToTile(canvas, clientX, clientY) {
   const x = (clientX - rect.left) * scaleX;
   const y = (clientY - rect.top) * scaleY;
   const layout = getLayout(canvas);
+  if (x < layout.frameX || y < layout.frameY || x > layout.frameX + layout.mapWidth || y > layout.frameY + layout.mapHeight) {
+    return { x: -1, y: -1 };
+  }
   return {
     x: Math.floor((x - layout.offsetX) / layout.tileSize),
     y: Math.floor((y - layout.offsetY) / layout.tileSize)
@@ -74,10 +117,15 @@ export function pointToTile(canvas, clientX, clientY) {
 }
 
 export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null) {
+  canvas.__olundarState = state;
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackdrop(ctx, canvas);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
+  ctx.clip();
   drawTiles(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawReachable(ctx, state, layout);
@@ -89,6 +137,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
   drawBattleImpact(ctx, state, layout, battleImpact);
+  ctx.restore();
   drawImperialMapFrame(ctx, layout);
   drawMiniMap(ctx, state, layout, lensId);
   drawStatusRibbon(ctx, state, layout);
@@ -149,15 +198,15 @@ function drawMissionFocus(ctx, state, layout, overlay) {
 
 function drawBackdrop(ctx, canvas) {
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, '#6f4729');
-  gradient.addColorStop(0.45, '#3b2418');
-  gradient.addColorStop(1, '#151313');
+  gradient.addColorStop(0, '#fff4cf');
+  gradient.addColorStop(0.48, '#e9d4a6');
+  gradient.addColorStop(1, '#c8d8c9');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.strokeStyle = '#f0c36e';
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#b77d32';
   ctx.lineWidth = 1;
   const gap = Math.max(32, Math.floor(canvas.width / 34));
   for (let x = -gap; x < canvas.width + gap; x += gap) {
@@ -181,24 +230,24 @@ function drawTiles(ctx, state, layout) {
     const visible = isVisible(state, tile.x, tile.y);
     const base = TERRAIN_COLORS[tile.terrain] || '#777';
     ctx.fillStyle = shade(base, (tile.elevation - 0.5) * 36 + (visible ? 0 : -22));
-    ctx.fillRect(x, y, layout.tileSize, layout.tileSize);
+    ctx.fillRect(x - 0.5, y - 0.5, layout.tileSize + 1, layout.tileSize + 1);
     drawTileRelief(ctx, tile, x, y, layout.tileSize, visible);
     drawTerrainTexture(ctx, tile, x, y, layout.tileSize, visible);
     if (tile.road) drawRoad(ctx, x, y, layout.tileSize, visible);
     if (tile.blight > 0 && tile.terrain !== 'blight') drawBlightVeins(ctx, x, y, layout.tileSize, tile.blight, visible);
-    ctx.strokeStyle = visible ? 'rgba(58, 40, 21, 0.10)' : 'rgba(44, 33, 25, 0.18)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, layout.tileSize - 1, layout.tileSize - 1);
+    if (!visible) {
+      ctx.strokeStyle = 'rgba(44, 33, 25, 0.10)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, layout.tileSize - 1, layout.tileSize - 1);
+    }
   }
 }
 
 function drawUnchartedTile(ctx, tile, x, y, s) {
-  const base = ((tile.x * 17 + tile.y * 31) % 11) / 10;
-  const warmth = Math.floor(91 + base * 7);
-  ctx.fillStyle = `rgb(${warmth}, ${Math.floor(66 + base * 5)}, ${Math.floor(45 + base * 4)})`;
+  ctx.fillStyle = '#e7d2a2';
   ctx.fillRect(x, y, s, s);
   if ((tile.x * 5 + tile.y * 7) % 19 === 0) {
-    ctx.strokeStyle = 'rgba(255, 218, 128, 0.12)';
+    ctx.strokeStyle = 'rgba(139, 94, 42, 0.10)';
     ctx.lineWidth = Math.max(1, s * 0.025);
     ctx.beginPath();
     ctx.moveTo(x + s * 0.18, y + s * 0.72);
@@ -777,7 +826,6 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     ctx.fillText(`${building.turnsLeft}t`, x + s * 0.5, y + s * 0.24);
   }
   drawHealthBar(ctx, x + s * 0.16, y + s * 0.86, s * 0.68, s * 0.06, building.hp / building.maxHp);
-  if (def.glyph && building.type !== 'road') drawSmallGlyph(ctx, def.glyph, x + s * 0.5, y + s * 0.58, s, building.type === 'portal' ? '#f4f0ff' : '#1d1d1d');
   ctx.restore();
 }
 
@@ -856,7 +904,7 @@ function drawBannerPennon(ctx, x, y, h, color) {
 
 function drawUnitSprite(ctx, unit, x, y, s, state) {
   const def = UNIT_TYPES[unit.type];
-  const grow = s * 0.07;
+  const grow = s * 0.12;
   x -= grow;
   y -= grow;
   s += grow * 2;
@@ -1000,7 +1048,6 @@ function drawLivingSoldier(ctx, unit, color, x, y, s) {
     ctx.lineTo(x + s * 0.70, y + s * 0.43);
     ctx.stroke();
   }
-  drawSmallGlyph(ctx, UNIT_TYPES[unit.type].glyph, cx, y + s * 0.62, s, '#111');
 }
 
 function drawHelmet(ctx, cx, y, s, metal, plume) {
@@ -1067,7 +1114,6 @@ function drawCavalry(ctx, color, x, y, s) {
   ctx.lineTo(x + s * 0.70, y + s * 0.75);
   ctx.stroke();
   drawBannerPennon(ctx, x + s * 0.66, y + s * 0.24, s * 0.22, color);
-  drawSmallGlyph(ctx, 'C', x + s * 0.5, y + s * 0.61, s, '#111');
 }
 
 function drawOnager(ctx, color, x, y, s) {
@@ -1095,7 +1141,6 @@ function drawOnager(ctx, color, x, y, s) {
   ctx.arc(x + s * 0.35, y + s * 0.72, s * 0.09, 0, Math.PI * 2);
   ctx.arc(x + s * 0.68, y + s * 0.72, s * 0.09, 0, Math.PI * 2);
   ctx.fill();
-  drawSmallGlyph(ctx, 'O', x + s * 0.5, y + s * 0.57, s, '#111');
 }
 
 function drawUndead(ctx, unit, x, y, s) {
@@ -1167,7 +1212,6 @@ function drawUndead(ctx, unit, x, y, s) {
     ctx.closePath();
     ctx.fill();
   }
-  drawSmallGlyph(ctx, UNIT_TYPES[unit.type].glyph, cx, y + s * 0.62, s, unit.type === 'lichBoss' ? '#9cf38a' : '#111');
 }
 
 function drawFog(ctx, state, layout) {
@@ -1177,26 +1221,27 @@ function drawFog(ctx, state, layout) {
       const sy = layout.offsetY + y * layout.tileSize;
       if (!isRevealed(state, x, y)) {
         const s = layout.tileSize;
-        ctx.fillStyle = 'rgba(32, 21, 18, 0.34)';
+        ctx.fillStyle = 'rgba(255, 246, 218, 0.34)';
         ctx.fillRect(sx, sy, layout.tileSize, layout.tileSize);
         if ((x * 7 + y * 11) % 41 === 0) {
-          const veil = ctx.createRadialGradient(sx + s * 0.58, sy + s * 0.52, s * 0.12, sx + s * 0.58, sy + s * 0.52, s * 1.15);
-          veil.addColorStop(0, 'rgba(238, 208, 145, 0.20)');
-          veil.addColorStop(1, 'rgba(238, 208, 145, 0)');
+          const veil = ctx.createRadialGradient(sx + s * 0.58, sy + s * 0.52, s * 0.16, sx + s * 0.58, sy + s * 0.52, s * 2.0);
+          veil.addColorStop(0, 'rgba(255, 255, 244, 0.28)');
+          veil.addColorStop(0.52, 'rgba(255, 255, 244, 0.12)');
+          veil.addColorStop(1, 'rgba(255, 255, 244, 0)');
           ctx.fillStyle = veil;
-          ctx.fillRect(sx - s, sy - s, s * 2.2, s * 2.2);
+          ctx.fillRect(sx - s * 2, sy - s * 2, s * 4, s * 4);
         }
         if ((x * 11 + y * 13) % 47 === 0) {
-          ctx.strokeStyle = 'rgba(255, 229, 166, 0.12)';
+          ctx.strokeStyle = 'rgba(139, 94, 42, 0.13)';
           ctx.lineWidth = Math.max(1, s * 0.035);
           ctx.beginPath();
           ctx.arc(sx + s * 0.5, sy + s * 0.5, s * 0.20, 0.2, Math.PI * 1.35);
           ctx.stroke();
         }
       } else if (!isVisible(state, x, y)) {
-        ctx.fillStyle = 'rgba(58, 42, 28, 0.38)';
+        ctx.fillStyle = 'rgba(224, 199, 143, 0.36)';
         ctx.fillRect(sx, sy, layout.tileSize, layout.tileSize);
-        ctx.fillStyle = 'rgba(222, 190, 128, 0.08)';
+        ctx.fillStyle = 'rgba(255, 255, 244, 0.18)';
         ctx.fillRect(sx + layout.tileSize * 0.08, sy + layout.tileSize * 0.08, layout.tileSize * 0.84, layout.tileSize * 0.84);
       }
     }
@@ -1204,19 +1249,19 @@ function drawFog(ctx, state, layout) {
 }
 
 function drawImperialMapFrame(ctx, layout) {
-  const x = layout.offsetX;
-  const y = layout.offsetY;
+  const x = layout.frameX;
+  const y = layout.frameY;
   const w = layout.mapWidth;
   const h = layout.mapHeight;
   const s = layout.tileSize;
   ctx.save();
-  ctx.strokeStyle = 'rgba(255, 221, 142, 0.86)';
+  ctx.strokeStyle = 'rgba(147, 86, 28, 0.86)';
   ctx.lineWidth = Math.max(2, s * 0.09);
   ctx.strokeRect(x - s * 0.08, y - s * 0.08, w + s * 0.16, h + s * 0.16);
-  ctx.strokeStyle = 'rgba(89, 47, 23, 0.92)';
+  ctx.strokeStyle = 'rgba(255, 247, 220, 0.82)';
   ctx.lineWidth = Math.max(2, s * 0.04);
   ctx.strokeRect(x + s * 0.05, y + s * 0.05, w - s * 0.10, h - s * 0.10);
-  ctx.fillStyle = 'rgba(255, 221, 142, 0.78)';
+  ctx.fillStyle = 'rgba(143, 36, 24, 0.68)';
   for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
     ctx.beginPath();
     ctx.arc(px, py, Math.max(2, s * 0.12), 0, Math.PI * 2);
@@ -1260,17 +1305,17 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const scale = Math.max(2, Math.floor(layout.tileSize * 0.22));
   const w = MAP_WIDTH * scale;
   const h = MAP_HEIGHT * scale;
-  const x0 = layout.offsetX + layout.mapWidth - w - 8;
-  const y0 = layout.offsetY + 8;
+  const x0 = layout.frameX + layout.mapWidth - w - 8;
+  const y0 = layout.frameY + 8;
   ctx.save();
-  ctx.fillStyle = 'rgba(43, 25, 16, 0.82)';
+  ctx.fillStyle = 'rgba(255, 248, 225, 0.90)';
   ctx.fillRect(x0 - 7, y0 - 7, w + 14, h + 14);
-  ctx.strokeStyle = 'rgba(255, 221, 142, 0.72)';
+  ctx.strokeStyle = 'rgba(147, 86, 28, 0.72)';
   ctx.lineWidth = 2;
   ctx.strokeRect(x0 - 7, y0 - 7, w + 14, h + 14);
   for (const tile of state.map.tiles) {
-    let color = '#6f4d32';
-    if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#5b4938';
+    let color = '#d9bd82';
+    if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#c7b081';
     ctx.fillStyle = color;
     ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
   }
@@ -1286,7 +1331,7 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
     ctx.fillStyle = FACTION_COLORS[building.faction] || '#fff';
     ctx.fillRect(x0 + building.x * scale - 1, y0 + building.y * scale - 1, scale + 2, scale + 2);
   }
-  ctx.strokeStyle = '#fff0ba';
+  ctx.strokeStyle = '#8f2418';
   ctx.strokeRect(x0 - 3, y0 - 3, w + 6, h + 6);
   ctx.restore();
 }
@@ -1296,11 +1341,11 @@ function drawStatusRibbon(ctx, state, layout) {
   const text = state.status === 'won' ? 'OLUNDAR SURVIVES' : 'OLUNDAR FALLS';
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.76)';
-  ctx.fillRect(layout.offsetX, layout.offsetY + layout.mapHeight * 0.42, layout.mapWidth, layout.mapHeight * 0.16);
+  ctx.fillRect(layout.frameX, layout.frameY + layout.mapHeight * 0.42, layout.mapWidth, layout.mapHeight * 0.16);
   ctx.fillStyle = state.status === 'won' ? '#baf58c' : '#ff8a8a';
   ctx.font = `700 ${Math.floor(layout.tileSize * 1.2)}px Cinzel, Georgia, serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(text, layout.offsetX + layout.mapWidth / 2, layout.offsetY + layout.mapHeight * 0.52);
+  ctx.fillText(text, layout.frameX + layout.mapWidth / 2, layout.frameY + layout.mapHeight * 0.52);
   ctx.restore();
 }
 
@@ -1401,6 +1446,10 @@ function shade(hex, amount) {
 
 function clampColor(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function inMap(x, y) {
