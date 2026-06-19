@@ -165,7 +165,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   ctx.clip();
   drawTiles(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
-  drawReachable(ctx, state, layout);
+  drawTacticalActionOverlay(ctx, state, layout);
   drawMissionRoute(ctx, state, layout, routeOverlay);
   drawMissionFocus(ctx, state, layout, missionFocusOverlay);
   drawBuildSites(ctx, state, layout);
@@ -1163,20 +1163,124 @@ function drawRouteEndpoint(ctx, p, tileSize, color, target) {
   }
 }
 
-function drawReachable(ctx, state, layout) {
+function drawTacticalActionOverlay(ctx, state, layout) {
   const unit = state.units.find((u) => u.id === state.selectedUnitId && u.faction === 'olundar');
-  if (!unit || unit.hasActed) return;
+  if (!unit || state.mode.type !== 'select') return;
   const def = getUnitDef(unit);
+  drawCommandHalo(ctx, layout, unit, !unit.hasActed);
+  if (unit.hasActed) return;
+  const reachable = collectReachableTiles(state, unit, def.move);
+  const attackTiles = collectAttackTiles(state, unit, def.range);
   ctx.save();
+  for (const item of reachable) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    drawMoveReachTile(ctx, bounds, layout, item);
+  }
+  for (const item of attackTiles) {
+    drawAttackReachTile(ctx, tileBounds(layout, item.x, item.y), layout, item.target);
+  }
+  ctx.restore();
+}
+
+function collectReachableTiles(state, unit, move) {
+  const tiles = [];
   for (let y = 0; y < MAP_HEIGHT; y += 1) {
     for (let x = 0; x < MAP_WIDTH; x += 1) {
-      const p = findPath(state, unit, x, y, def.move);
-      if (!p || (x === unit.x && y === unit.y)) continue;
-      const bounds = tileBounds(layout, x, y);
-      fillTileDiamond(ctx, bounds, 'rgba(255, 244, 176, 0.18)', 2);
-      strokeTileDiamond(ctx, bounds, 'rgba(113, 85, 34, 0.18)', 1, 3);
+      if (x === unit.x && y === unit.y) continue;
+      const path = findPath(state, unit, x, y, move);
+      if (!path) continue;
+      const tile = tileAt(state, x, y);
+      const road = !!state.buildings.find((building) => building.type === 'road' && building.x === x && building.y === y);
+      tiles.push({ x, y, cost: path.cost, terrain: tile?.terrain || 'plains', road });
     }
   }
+  tiles.sort((a, b) => a.cost - b.cost);
+  return tiles;
+}
+
+function collectAttackTiles(state, unit, range) {
+  if (range <= 0) return [];
+  const tiles = [];
+  for (let y = unit.y - range; y <= unit.y + range; y += 1) {
+    for (let x = unit.x - range; x <= unit.x + range; x += 1) {
+      if (!inMap(x, y) || (x === unit.x && y === unit.y) || manhattan(unit.x, unit.y, x, y) > range || !isVisible(state, x, y)) continue;
+      const targetUnit = unitAt(state, x, y);
+      const targetBuilding = buildingAt(state, x, y);
+      const target = (targetUnit && targetUnit.id !== unit.id && isEnemy(state, unit.faction, targetUnit.faction))
+        || (targetBuilding && isEnemy(state, unit.faction, targetBuilding.faction));
+      tiles.push({ x, y, target });
+    }
+  }
+  return tiles;
+}
+
+function drawMoveReachTile(ctx, bounds, layout, item) {
+  const close = item.cost <= 1;
+  const fill = item.road ? 'rgba(118, 186, 210, 0.25)' : close ? 'rgba(244, 205, 105, 0.23)' : 'rgba(255, 244, 176, 0.20)';
+  const stroke = item.road ? 'rgba(47, 116, 141, 0.46)' : close ? 'rgba(151, 96, 29, 0.42)' : 'rgba(113, 85, 34, 0.26)';
+  fillTileDiamond(ctx, bounds, fill, 3);
+  strokeTileDiamond(ctx, bounds, stroke, Math.max(1, layout.tileSize * 0.018), 4);
+  drawTacticalMovePip(ctx, bounds, layout, item);
+}
+
+function drawAttackReachTile(ctx, bounds, layout, target) {
+  fillTileDiamond(ctx, bounds, target ? 'rgba(193, 47, 39, 0.17)' : 'rgba(193, 47, 39, 0.075)', 5);
+  strokeTileDiamond(ctx, bounds, target ? 'rgba(255, 107, 91, 0.78)' : 'rgba(148, 48, 39, 0.38)', target ? Math.max(2, layout.tileSize * 0.045) : Math.max(1.4, layout.tileSize * 0.024), target ? 5 : 7);
+  if (target) {
+    const r = Math.max(3, layout.tileSize * 0.08);
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 234, 182, 0.84)';
+    ctx.strokeStyle = 'rgba(112, 22, 16, 0.78)';
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+    ctx.beginPath();
+    ctx.arc(bounds.cx, bounds.cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    const mark = Math.max(3, layout.tileSize * 0.08);
+    const y = bounds.cy - layout.halfTileHeight * 0.48;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(139, 35, 28, 0.46)';
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx - mark, y);
+    ctx.lineTo(bounds.cx, y - mark * 0.45);
+    ctx.lineTo(bounds.cx + mark, y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawTacticalMovePip(ctx, bounds, layout, item) {
+  const radius = Math.max(2, layout.tileSize * (item.road ? 0.07 : 0.05));
+  const y = bounds.cy + layout.halfTileHeight * 0.44;
+  ctx.save();
+  ctx.fillStyle = item.road ? 'rgba(221, 247, 255, 0.88)' : 'rgba(255, 246, 196, 0.82)';
+  ctx.strokeStyle = item.road ? 'rgba(42, 99, 121, 0.68)' : 'rgba(117, 77, 25, 0.48)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.beginPath();
+  ctx.arc(bounds.cx, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (item.road) {
+    ctx.strokeStyle = 'rgba(42, 99, 121, 0.54)';
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx - radius * 1.8, y);
+    ctx.lineTo(bounds.cx + radius * 1.8, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCommandHalo(ctx, layout, unit, active) {
+  const bounds = tileBounds(layout, unit.x, unit.y);
+  ctx.save();
+  ctx.shadowColor = active ? 'rgba(255, 224, 138, 0.70)' : 'rgba(120, 95, 70, 0.30)';
+  ctx.shadowBlur = layout.tileSize * (active ? 0.22 : 0.12);
+  fillTileDiamond(ctx, bounds, active ? 'rgba(255, 224, 138, 0.20)' : 'rgba(120, 95, 70, 0.12)', 5);
+  strokeTileDiamond(ctx, bounds, active ? 'rgba(255, 231, 151, 0.82)' : 'rgba(138, 114, 85, 0.44)', Math.max(2, layout.tileSize * 0.05), 5);
+  strokeTileDiamond(ctx, bounds, active ? 'rgba(77, 43, 17, 0.48)' : 'rgba(77, 43, 17, 0.26)', Math.max(1, layout.tileSize * 0.018), 12);
   ctx.restore();
 }
 
