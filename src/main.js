@@ -1046,7 +1046,11 @@ function renderActions() {
   tools.appendChild(orderButton('New', 'Restart from setup', () => newCampaign()));
   tools.appendChild(orderButton('Export', 'Download save file', () => exportSave()));
   tools.appendChild(orderButton('Import', 'Load save file', () => openImportSaveFile()));
-  campaignSection.appendChild(tools);
+  const toolsDrawer = document.createElement('details');
+  toolsDrawer.className = 'campaign-tools-drawer';
+  toolsDrawer.innerHTML = '<summary><span>Campaign tools</span> <small>Save, load, export</small></summary>';
+  toolsDrawer.appendChild(tools);
+  campaignSection.appendChild(toolsDrawer);
   actionPanel.appendChild(campaignSection);
 }
 
