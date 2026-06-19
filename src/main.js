@@ -53,6 +53,7 @@ const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const canvas = document.querySelector('#gameCanvas');
 const mapIntel = document.querySelector('#mapIntel');
 const mapLensBar = document.querySelector('#mapLensBar');
+const mapHelp = document.querySelector('.map-help');
 const resourceBar = document.querySelector('#resourceBar');
 const turnLabel = document.querySelector('#turnLabel');
 const objectiveList = document.querySelector('#objectiveList');
@@ -143,6 +144,7 @@ function render() {
   drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
   renderTopBar();
   renderMapLensBar();
+  renderMapHelp();
   renderCouncil();
   renderGuide();
   renderOperations();
@@ -198,6 +200,31 @@ function renderMapLensBar() {
     group.appendChild(lensButton);
   }
   mapLensBar.appendChild(group);
+}
+
+function currentOpeningDirective() {
+  const guide = getFirstTurnsGuide(state);
+  if (!guide.visible) return null;
+  const current = guide.steps.find((step) => step.id === guide.currentId && !step.done)
+    || guide.steps.find((step) => !step.done);
+  if (!current) return null;
+  return { guide, current };
+}
+
+function renderMapHelp() {
+  if (!mapHelp) return;
+  const directive = currentOpeningDirective();
+  const compactDirective = Boolean(directive && window.innerWidth <= 620);
+  const hints = compactDirective ? [] : [
+    '<span>Gold/blue tiles show movement</span>',
+    '<span>Red rim marks attack reach</span>',
+    '<span>E ends turn | Esc cancels build</span>'
+  ];
+  const chips = [
+    ...(directive ? [`<span class="next-directive"><b>Next</b> ${escapeHtml(directive.current.label)}</span>`] : []),
+    ...hints
+  ];
+  mapHelp.innerHTML = chips.join('');
 }
 
 function renderCouncil() {
@@ -870,6 +897,8 @@ function renderActions() {
   actionPanel.appendChild(orderHeader());
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
   if (turnReport) actionPanel.appendChild(turnReportCard());
+  const doctrineCard = openingDoctrineCard();
+  if (doctrineCard) actionPanel.appendChild(doctrineCard);
 
   if (state.status !== 'playing') {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
@@ -1597,6 +1626,80 @@ function turnReportCard() {
     ${messages}
   `;
   return card;
+}
+
+function openingDoctrineCard() {
+  const directive = currentOpeningDirective();
+  if (!directive || state.status !== 'playing') return null;
+  const { guide, current } = directive;
+  const card = document.createElement('article');
+  card.className = 'opening-doctrine';
+  card.innerHTML = `
+    <div class="opening-doctrine-head">
+      <span>${escapeHtml(guide.title)}</span>
+      <b>${escapeHtml(`${guide.completed}/${guide.total}`)}</b>
+    </div>
+    <strong>${escapeHtml(current.label)}</strong>
+    <p>${escapeHtml(current.detail)}</p>
+    <small>${escapeHtml(guide.phase)}</small>
+  `;
+  const actions = commandActions('doctrine-actions');
+  actions.appendChild(orderButton('Focus order', focusOpeningDirectiveMeta(current.id), () => focusOpeningDirective(current.id), { tone: 'primary' }));
+  card.appendChild(actions);
+  return card;
+}
+
+function focusOpeningDirectiveMeta(stepId) {
+  if (['engineer', 'iron'].includes(stepId)) return 'Select a builder and show the map';
+  if (stepId === 'training') return 'Select the city queue';
+  if (['contact', 'front', 'scout'].includes(stepId)) return 'Select a scout and show the map';
+  return 'Jump to the right command surface';
+}
+
+function focusOpeningDirective(stepId) {
+  const readyOlundar = state.units.filter((unit) => unit.faction === 'olundar' && !unit.hasActed);
+  const allOlundar = state.units.filter((unit) => unit.faction === 'olundar');
+  const byTag = (tag) => readyOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag))
+    || allOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag));
+  let targetUnit = null;
+  let targetBuilding = null;
+
+  if (['engineer', 'iron'].includes(stepId)) {
+    targetUnit = byTag('builder');
+  } else if (stepId === 'training') {
+    targetBuilding = state.buildings.find((building) => {
+      const def = BUILDING_TYPES[building.type];
+      return building.faction === 'olundar' && building.turnsLeft <= 0 && def?.trains?.length;
+    });
+  } else {
+    targetUnit = byTag('recon') || readyOlundar[0] || allOlundar[0];
+  }
+
+  if (targetBuilding) {
+    selectBuilding(targetBuilding.id);
+    lastTile = { x: targetBuilding.x, y: targetBuilding.y };
+    hoverTile = lastTile;
+    const def = BUILDING_TYPES[targetBuilding.type];
+    toast(`${def.name} ready for the next opening order.`, 'info');
+    playAudioCue('select');
+    render();
+    if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+
+  if (targetUnit) {
+    selectUnit(targetUnit.id);
+    lastTile = { x: targetUnit.x, y: targetUnit.y };
+    hoverTile = lastTile;
+    toast(`${targetUnit.name} focused for the next opening order.`, 'info');
+    playAudioCue('select');
+    render();
+    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+
+  toast('No matching force is ready for that opening order.', 'bad');
+  playAudioCue('warning');
 }
 
 function focusTurnReportOnMobile() {
