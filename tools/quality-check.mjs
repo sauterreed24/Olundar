@@ -415,6 +415,7 @@ check('crisis aftermath creates delayed follow-up rulings', () => {
 
 check('aftermath missions turn rulings into map objectives', () => {
   const mainSource = readProjectFile('src/main.js');
+  const rulesSource = readProjectFile('src/rules.js');
   const renderSource = readProjectFile('src/render.js');
   const styleSource = readProjectFile('src/style.css');
   const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
@@ -428,10 +429,12 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionArchiveTypeFilter') && mainSource.includes('data-action="set-mission-archive-type"'), 'Archived mission outcomes should be filterable by site type.');
   assert(mainSource.includes('missionArchiveSearch') && mainSource.includes('data-action="search-mission-archive"'), 'Archived mission outcomes should support compact text search.');
   assert(mainSource.includes('missionArchiveSortOrder') && mainSource.includes('data-action="set-mission-archive-sort"'), 'Archived mission outcomes should support newest/oldest sort controls.');
+  assert(mainSource.includes('missionArchiveGroupMode') && mainSource.includes('data-action="set-mission-archive-group"'), 'Archived mission outcomes should support route-chain grouping controls.');
   assert(mainSource.includes('data-action="focus-completed-mission"') && mainSource.includes('focusCompletedMissionSite'), 'Completed mission outcomes should be able to focus their map site.');
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
   assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
+  assert(rulesSource.includes('routeName: mission.routeName') && rulesSource.includes('chainTag: mission.chainTag'), 'Mission views should expose route-chain metadata for archive grouping.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(renderSource.includes('function drawMissionFocus') && renderSource.includes('missionFocusOverlay'), 'Focused completed mission sites should draw a dedicated map overlay.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
@@ -442,6 +445,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(styleSource.includes('.mission-type-filter'), 'Mission archive type filters need compact styling.');
   assert(styleSource.includes('.mission-archive-search'), 'Mission archive text search needs compact styling.');
   assert(styleSource.includes('.mission-archive-sort'), 'Mission archive sort controls need compact styling.');
+  assert(styleSource.includes('.mission-archive-group-mode') && styleSource.includes('.mission-archive-group-head'), 'Mission archive route grouping needs compact styling.');
   assert(styleSource.includes('.mission-site-receipt'), 'Focused archived mission receipts need compact tile-panel styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 
@@ -519,6 +523,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   let routeMissions = getAftermathMissions(routeState);
   const firstRoute = routeMissions.active.find((mission) => mission.name === 'Escort Frontier Families');
   assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
+  assert(firstRoute.routeName === 'Frontier Family Route' && firstRoute.chainTag === 'frontierFamilies' && firstRoute.chainStep === 1, 'Route missions should expose route-chain metadata for grouped history review.');
   assert(firstRoute.route?.unitName && firstRoute.route.cost !== null, 'Route missions should expose nearest eligible unit and route cost.');
   assert(firstRoute.route.path.length >= 2, 'Route mission previews should include route overlay path points.');
   const routeLens = getStrategicMapLens(routeState, 'missions');
