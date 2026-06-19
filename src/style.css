@@ -3109,6 +3109,65 @@ button:hover:not(:disabled) {
   border-top: 1px dashed rgba(129, 80, 33, 0.22);
 }
 
+.build-doctrine-card {
+  display: grid;
+  gap: 0.38rem;
+  margin-top: 0.52rem;
+  padding: 0.62rem;
+  border: 1px solid rgba(33, 112, 138, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(238, 251, 250, 0.94), rgba(222, 238, 218, 0.76)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.86), transparent 8rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.70), 0 8px 18px rgba(61, 84, 53, 0.10);
+}
+
+.build-doctrine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.build-doctrine-head span,
+.build-doctrine-card p {
+  color: #5c6548;
+}
+
+.build-doctrine-head span {
+  font-size: 0.60rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.build-doctrine-head b {
+  padding: 0.16rem 0.40rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #315d27;
+  font-size: 0.68rem;
+}
+
+.build-doctrine-card > strong {
+  color: #7d2719;
+  font-size: 0.9rem;
+}
+
+.build-doctrine-card p {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.32;
+}
+
+.build-doctrine-actions {
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin-top: 0.1rem;
+}
+
+.build-doctrine-actions .order-button {
+  min-height: 2.58rem;
+}
+
 .campaign-tools-drawer,
 .order-drawer {
   margin-top: 0.44rem;
@@ -3187,6 +3246,15 @@ button:hover:not(:disabled) {
 
 .build-drawer {
   margin-top: 0.52rem;
+}
+
+.build-group-drawer {
+  margin-top: 0.36rem;
+}
+
+.build-group-drawer summary {
+  min-height: 1.92rem;
+  padding: 0.32rem 0.46rem;
 }
 
 .campaign-tools .order-button {
