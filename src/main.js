@@ -1710,6 +1710,24 @@ function openingBlockedInfrastructureAction(action) {
 
 function blockedBuilderRecovery(builder, blockedLabel, nextLabel = blockedLabel) {
   const readyUnits = getReadyOlundarUnits(state).filter((unit) => unit.id !== builder.id);
+  const scout = readyUnits.find((unit) => UNIT_TYPES[unit.type].tags.includes('recon'));
+  const scoutDestination = scout ? bestScoutAdvance(scout) : null;
+  if (scout && scoutDestination) {
+    return {
+      kind: 'move',
+      unitId: scout.id,
+      x: scoutDestination.x,
+      y: scoutDestination.y,
+      canExecute: true,
+      label: 'Scout while engineer readies',
+      meta: `${scoutDestination.revealGain} new map tile${scoutDestination.revealGain === 1 ? '' : 's'} | ${blockedLabel} next`,
+      executeLabel: 'Do order',
+      executeMeta: `${scoutDestination.x},${scoutDestination.y} contact search`,
+      previewMeta: `Preview ${scoutDestination.x},${scoutDestination.y} scout route`,
+      previewToast: `${scout.name} can keep searching for allies while the engineer prepares ${nextLabel}.`,
+      successToast: `${scout.name} scouts ahead while the engineer resets.`
+    };
+  }
   const guard = readyUnits.find((unit) => !UNIT_TYPES[unit.type].tags.includes('builder')) || readyUnits[0];
   if (guard) {
     return {
