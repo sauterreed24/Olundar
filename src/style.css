@@ -1151,6 +1151,30 @@ button:disabled {
   font-size: 0.66rem;
 }
 
+.mission-archive-sort {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  gap: 0.22rem;
+  padding: 0.14rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+}
+
+.mission-archive-sort button {
+  min-width: 0;
+  padding: 0.24rem 0.42rem;
+  border-color: transparent;
+  font-size: 0.66rem;
+}
+
+.mission-archive-sort button[aria-pressed="true"] {
+  border-color: rgba(129, 212, 250, 0.42);
+  color: #f9e6a8;
+  background: rgba(129, 212, 250, 0.12);
+}
+
 .mission-history-record,
 .mission-history > .history-empty {
   display: grid;

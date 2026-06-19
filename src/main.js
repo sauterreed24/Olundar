@@ -83,6 +83,10 @@ const MISSION_ARCHIVE_TYPE_FILTERS = [
   { id: 'raid', label: 'Raids' },
   { id: 'accord', label: 'Accords' }
 ];
+const MISSION_ARCHIVE_SORT_ORDERS = [
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' }
+];
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
@@ -97,6 +101,7 @@ let missionResultBanner = null;
 let missionHistoryFilter = 'recent';
 let missionArchiveTypeFilter = 'all';
 let missionArchiveSearch = '';
+let missionArchiveSortOrder = 'newest';
 let focusedArchivedMissionId = null;
 
 initAudioPreference();
@@ -344,11 +349,12 @@ function missionHistoryMarkup(missions) {
   const filter = missionHistoryFilter === 'archive' || (!missions.recent.length && missions.archive.length) ? 'archive' : 'recent';
   const typeFilter = selectedMissionArchiveType();
   const search = normalizedMissionArchiveSearch();
-  const archive = filter === 'archive' ? filteredArchiveMissions(missions.archive, typeFilter, search) : [];
+  const sortOrder = selectedMissionArchiveSortOrder();
+  const archive = filter === 'archive' ? sortedArchiveMissions(filteredArchiveMissions(missions.archive, typeFilter, search), sortOrder) : [];
   const history = filter === 'archive' ? archive : missions.recent;
   const title = filter === 'archive' ? missionArchiveTitle(typeFilter, archive.length, missions.archiveCount) : `Completed (${missions.recentCount})`;
-  const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search)
-    ? `<small class="mission-history-note">Filtered: ${escapeHtml(missionArchiveFilterLabel(typeFilter, search))} (${archive.length}/${missions.archiveCount}).</small>`
+  const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search || sortOrder !== 'newest')
+    ? `<small class="mission-history-note">${escapeHtml(missionArchiveStatusLabel(typeFilter, search, sortOrder))} (${archive.length}/${missions.archiveCount}).</small>`
     : '';
 
   return `
@@ -362,6 +368,7 @@ function missionHistoryMarkup(missions) {
       </div>
       ${filter === 'archive' ? missionArchiveTypeFilterMarkup(missions.archive, typeFilter) : ''}
       ${filter === 'archive' ? missionArchiveSearchMarkup(search) : ''}
+      ${filter === 'archive' ? missionArchiveSortMarkup(sortOrder) : ''}
       ${history.length ? history.map((mission) => missionHistoryRecordMarkup(mission)).join('') : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
     </div>
@@ -390,10 +397,26 @@ function missionArchiveSearchMarkup(search) {
   `;
 }
 
+function missionArchiveSortMarkup(selected) {
+  return `
+    <div class="mission-archive-sort" role="group" aria-label="Archive mission sort order">
+      ${MISSION_ARCHIVE_SORT_ORDERS.map((item) => `<button type="button" data-action="set-mission-archive-sort" data-sort="${escapeHtml(item.id)}" aria-pressed="${selected === item.id}">${escapeHtml(item.label)}</button>`).join('')}
+    </div>
+  `;
+}
+
 function filteredArchiveMissions(archive, typeFilter = 'all', search = '') {
   const typed = typeFilter === 'all' ? archive : archive.filter((mission) => mission.type === typeFilter);
   if (!search) return typed;
   return typed.filter((mission) => missionArchiveSearchText(mission).includes(search));
+}
+
+function sortedArchiveMissions(archive, sortOrder = 'newest') {
+  const sorted = archive.slice().sort((a, b) => {
+    const turnDiff = (b.completedTurn || 0) - (a.completedTurn || 0);
+    return turnDiff || String(b.id).localeCompare(String(a.id));
+  });
+  return sortOrder === 'oldest' ? sorted.reverse() : sorted;
 }
 
 function archiveTypeCount(archive, typeFilter = 'all') {
@@ -404,8 +427,16 @@ function selectedMissionArchiveType() {
   return MISSION_ARCHIVE_TYPE_FILTERS.some((item) => item.id === missionArchiveTypeFilter) ? missionArchiveTypeFilter : 'all';
 }
 
+function selectedMissionArchiveSortOrder() {
+  return MISSION_ARCHIVE_SORT_ORDERS.some((item) => item.id === missionArchiveSortOrder) ? missionArchiveSortOrder : 'newest';
+}
+
 function missionArchiveTypeLabel(typeFilter = 'all') {
   return MISSION_ARCHIVE_TYPE_FILTERS.find((item) => item.id === typeFilter)?.label || 'All';
+}
+
+function missionArchiveSortLabel(sortOrder = 'newest') {
+  return sortOrder === 'oldest' ? 'oldest first' : 'newest first';
 }
 
 function missionArchiveTitle(typeFilter, visibleCount, archiveCount) {
@@ -432,6 +463,10 @@ function missionArchiveSearchText(mission) {
 
 function missionArchiveFilterLabel(typeFilter, search) {
   return [typeFilter !== 'all' ? missionArchiveTypeLabel(typeFilter) : '', search ? `"${search}"` : ''].filter(Boolean).join(' + ') || 'All';
+}
+
+function missionArchiveStatusLabel(typeFilter, search, sortOrder) {
+  return `${typeFilter !== 'all' || search ? `Filtered: ${missionArchiveFilterLabel(typeFilter, search)}; ` : ''}Sorted: ${missionArchiveSortLabel(sortOrder)}`;
 }
 
 function clearFocusedArchivedMissionIfFilteredOut() {
@@ -1097,6 +1132,7 @@ function loadSerializedGame(raw, slot = null) {
     missionHistoryFilter = 'recent';
     missionArchiveTypeFilter = 'all';
     missionArchiveSearch = '';
+    missionArchiveSortOrder = 'newest';
     focusedArchivedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
@@ -1134,6 +1170,7 @@ function importSaveFile(raw, fileName = '') {
     missionHistoryFilter = 'recent';
     missionArchiveTypeFilter = 'all';
     missionArchiveSearch = '';
+    missionArchiveSortOrder = 'newest';
     focusedArchivedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
@@ -1426,6 +1463,7 @@ function startConfiguredCampaign(form) {
   missionHistoryFilter = 'recent';
   missionArchiveTypeFilter = 'all';
   missionArchiveSearch = '';
+  missionArchiveSortOrder = 'newest';
   focusedArchivedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
@@ -1585,6 +1623,10 @@ missionPanel.addEventListener('click', (event) => {
     const next = MISSION_ARCHIVE_TYPE_FILTERS.some((item) => item.id === target.dataset.filter) ? target.dataset.filter : 'all';
     missionArchiveTypeFilter = next;
     clearFocusedArchivedMissionIfFilteredOut();
+    render();
+  }
+  else if (target.dataset.action === 'set-mission-archive-sort') {
+    missionArchiveSortOrder = MISSION_ARCHIVE_SORT_ORDERS.some((item) => item.id === target.dataset.sort) ? target.dataset.sort : 'newest';
     render();
   }
   else if (target.dataset.action === 'clear-mission-archive-search') {
