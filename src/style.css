@@ -3763,6 +3763,212 @@ button:hover:not(:disabled) {
   color: #661b15;
 }
 
+:root {
+  --bg: #f7f4e8;
+  --panel: rgba(255, 253, 245, 0.96);
+  --panel-strong: #eef4e9;
+  --vellum: #fff7dc;
+  --line: rgba(67, 112, 118, 0.20);
+  --text: #202016;
+  --muted: #596850;
+  --gold: #97610f;
+  --bronze: #b9872e;
+  --crimson: #7f2c22;
+  --lapis: #236a83;
+  --jade: #4f8f5d;
+  --shadow: 0 14px 32px rgba(54, 74, 58, 0.13);
+}
+
+body {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(255, 255, 255, 0.96), transparent 20rem),
+    radial-gradient(circle at 84% 12%, rgba(151, 208, 222, 0.26), transparent 25rem),
+    radial-gradient(circle at 70% 84%, rgba(126, 184, 118, 0.18), transparent 25rem),
+    linear-gradient(135deg, #fffdf2 0%, #f5f1dc 42%, #e8f5ef 100%);
+}
+
+body::before {
+  opacity: 0.48;
+  background:
+    linear-gradient(90deg, rgba(45, 91, 95, 0.026) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(45, 91, 95, 0.022) 1px, transparent 1px);
+  background-size: 58px 58px;
+  mix-blend-mode: normal;
+}
+
+.topbar {
+  padding: 0.52rem 0.82rem;
+  border-bottom: 1px solid rgba(67, 112, 118, 0.18);
+  background:
+    linear-gradient(90deg, rgba(255, 254, 247, 0.98), rgba(247, 249, 232, 0.96) 48%, rgba(232, 247, 249, 0.96)),
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.90), transparent 16rem);
+  box-shadow: 0 8px 22px rgba(54, 74, 58, 0.10);
+}
+
+.topbar::after {
+  left: 0.82rem;
+  right: 0.82rem;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(35, 106, 131, 0.32), rgba(151, 97, 15, 0.26), transparent);
+}
+
+.brand h1 {
+  color: #8b261c;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.95), 0 10px 24px rgba(80, 93, 66, 0.12);
+}
+
+.brand p,
+.turnbox strong {
+  color: #485c45;
+}
+
+.sun {
+  border-color: rgba(255, 255, 255, 0.92);
+  background:
+    radial-gradient(circle at 38% 32%, #fffdec 0 18%, #f6c85a 19% 55%, #bb7d2a 56% 100%);
+  box-shadow:
+    0 0 0 2px rgba(151, 97, 15, 0.16),
+    0 10px 22px rgba(102, 125, 82, 0.16);
+}
+
+button {
+  border-color: rgba(73, 119, 123, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255,255,250,0.98), rgba(229, 238, 211, 0.90)),
+    linear-gradient(90deg, rgba(255,255,255,0.36), rgba(35, 106, 131, 0.05));
+  color: #29371f;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.82),
+    inset 0 -1px 0 rgba(86, 112, 66, 0.12),
+    0 2px 0 rgba(89, 119, 94, 0.16),
+    0 8px 16px rgba(72, 91, 65, 0.10);
+}
+
+button:hover:not(:disabled) {
+  border-color: rgba(35, 106, 131, 0.38);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.99), rgba(224, 242, 232, 0.94)),
+    linear-gradient(90deg, rgba(255,255,255,0.44), rgba(35, 106, 131, 0.06));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.88),
+    0 3px 0 rgba(73, 119, 123, 0.14),
+    0 10px 18px rgba(64, 92, 77, 0.12);
+}
+
+.resourcebar {
+  gap: 0.34rem;
+  padding: 0.42rem 0.82rem;
+  border-bottom-color: rgba(67, 112, 118, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 244, 0.96), rgba(239, 244, 221, 0.82)),
+    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.78), transparent 18rem);
+  box-shadow: inset 0 -1px 0 rgba(80, 113, 98, 0.08);
+}
+
+.resource {
+  border-color: rgba(69, 118, 104, 0.18);
+  background: linear-gradient(180deg, rgba(255,255,250,0.98), rgba(231, 239, 209, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.74), 0 4px 10px rgba(73, 94, 62, 0.08);
+}
+
+.layout {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 0.72rem;
+  padding: 0.72rem;
+}
+
+.map-shell {
+  border: 1px solid rgba(67, 112, 118, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,248,0.90), rgba(238, 244, 225, 0.74)),
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.86), transparent 34rem),
+    linear-gradient(135deg, #fbf8df, #e8f5ef);
+  box-shadow:
+    0 14px 34px rgba(54, 74, 58, 0.12),
+    inset 0 0 0 1px rgba(255,255,255,0.76);
+}
+
+.map-shell::before,
+.map-shell::after {
+  display: none;
+}
+
+.map-lens-bar {
+  padding: 0.42rem 0.52rem;
+  border-bottom-color: rgba(67, 112, 118, 0.14);
+  background:
+    linear-gradient(90deg, rgba(255, 254, 245, 0.95), rgba(236, 244, 220, 0.90)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.72), transparent 12rem);
+}
+
+.lens-label {
+  color: #7f2c22;
+}
+
+.lens-buttons {
+  width: min(100%, 33rem);
+}
+
+.lens-buttons button {
+  min-height: 1.82rem;
+  border-color: rgba(35, 106, 131, 0.20);
+}
+
+#gameCanvas {
+  background:
+    radial-gradient(circle at 38% 38%, rgba(255, 255, 255, 0.76), transparent 28rem),
+    #f3edcf;
+}
+
+.map-help {
+  padding: 0.46rem 0.52rem;
+  border-top-color: rgba(67, 112, 118, 0.14);
+  color: #334734;
+  background: linear-gradient(180deg, rgba(255, 254, 246, 0.92), rgba(235, 242, 218, 0.86));
+}
+
+.map-help span {
+  border-color: rgba(69, 118, 104, 0.16);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.side {
+  gap: 0.62rem;
+  max-height: calc(100vh - 7.4rem);
+  padding-right: 0.12rem;
+  scrollbar-color: rgba(78, 133, 139, 0.38) rgba(240, 246, 231, 0.90);
+}
+
+.panel,
+.setup-dialog {
+  border-color: rgba(67, 112, 118, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,250,0.97), rgba(241, 245, 225, 0.92)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.70), transparent 12rem);
+  box-shadow:
+    0 10px 24px rgba(55, 75, 58, 0.10),
+    inset 0 1px 0 rgba(255,255,255,0.84);
+}
+
+.panel {
+  padding: 0.74rem;
+}
+
+.panel::before,
+.setup-dialog::before {
+  background: linear-gradient(90deg, transparent, rgba(35, 106, 131, 0.22), rgba(151, 97, 15, 0.20), transparent);
+}
+
+.command-card,
+.order-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,251,0.98), rgba(239, 245, 224, 0.94)),
+    radial-gradient(circle at 12% 0%, rgba(35, 106, 131, 0.08), transparent 12rem);
+}
+
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
@@ -3896,17 +4102,17 @@ button:hover:not(:disabled) {
     align-items: center;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.28rem 0.5rem;
-    padding: 0.34rem 0.5rem 0.38rem;
+    gap: 0.20rem 0.38rem;
+    padding: 0.24rem 0.42rem 0.28rem;
   }
 
   .brand {
     flex: 0 0 auto;
-    gap: 0.45rem;
+    gap: 0.34rem;
   }
 
   .brand h1 {
-    font-size: 1.12rem;
+    font-size: 1rem;
     line-height: 1;
   }
 
@@ -3915,9 +4121,9 @@ button:hover:not(:disabled) {
   }
 
   .sun {
-    width: 2rem;
-    height: 2rem;
-    font-size: 1rem;
+    width: 1.72rem;
+    height: 1.72rem;
+    font-size: 0.88rem;
   }
 
   .turnbox {
@@ -3927,7 +4133,7 @@ button:hover:not(:disabled) {
     align-items: center;
     flex-direction: row;
     justify-content: flex-start;
-    gap: 0.34rem;
+    gap: 0.24rem;
   }
 
   .turnbox strong {
@@ -3940,7 +4146,7 @@ button:hover:not(:disabled) {
     min-width: 0;
     flex-wrap: nowrap;
     justify-content: flex-start;
-    gap: 0.24rem;
+    gap: 0.18rem;
     overflow: visible;
     scrollbar-width: none;
     padding-bottom: 0;
@@ -3956,9 +4162,9 @@ button:hover:not(:disabled) {
   .top-actions #installTop {
     flex: 0 1 auto;
     min-width: auto;
-    min-height: 1.58rem;
-    padding: 0.18rem 0.34rem;
-    font-size: 0.64rem;
+    min-height: 1.36rem;
+    padding: 0.12rem 0.26rem;
+    font-size: 0.56rem;
     line-height: 1;
   }
 
@@ -3970,15 +4176,15 @@ button:hover:not(:disabled) {
   }
 
   .toast {
-    top: calc(env(safe-area-inset-top, 0px) + 0.46rem);
-    right: 0.6rem;
+    top: calc(env(safe-area-inset-top, 0px) + 0.28rem);
+    right: 0.7rem;
     bottom: auto;
-    left: 0.6rem;
+    left: 0.7rem;
     max-width: none;
-    padding: 0.58rem 0.72rem;
-    font-size: 0.82rem;
-    line-height: 1.3;
-    transform: translateY(-0.45rem);
+    padding: 0.34rem 0.52rem;
+    font-size: 0.68rem;
+    line-height: 1.15;
+    transform: translateY(-0.32rem);
     z-index: 30;
   }
 
@@ -3989,20 +4195,20 @@ button:hover:not(:disabled) {
   }
 
   .layout {
-    padding: 0.46rem;
+    padding: 0.32rem;
   }
 
   .resourcebar {
     flex-wrap: wrap;
-    gap: 0.24rem;
+    gap: 0.18rem;
     overflow: hidden;
-    padding: 0.26rem 0.5rem;
+    padding: 0.18rem 0.36rem;
   }
 
   .resource {
     flex: 0 1 auto;
-    padding: 0.18rem 0.38rem;
-    font-size: 0.67rem;
+    padding: 0.13rem 0.30rem;
+    font-size: 0.59rem;
   }
 
   .map-lens-bar {
@@ -4023,7 +4229,7 @@ button:hover:not(:disabled) {
   .lens-buttons {
     display: flex;
     grid-template-columns: none;
-    overflow-x: auto;
+    overflow-x: hidden;
     scrollbar-width: none;
   }
 
@@ -4032,11 +4238,11 @@ button:hover:not(:disabled) {
   }
 
   .lens-buttons button {
-    flex: 0 0 auto;
-    min-width: 4.15rem;
-    min-height: 1.48rem;
-    padding: 0.16rem 0.28rem;
-    font-size: 0.62rem;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 1.34rem;
+    padding: 0.12rem 0.16rem;
+    font-size: 0.54rem;
     line-height: 1;
   }
 
