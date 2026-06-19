@@ -229,8 +229,7 @@ function drawTiles(ctx, state, layout) {
     }
     const visible = isVisible(state, tile.x, tile.y);
     const base = TERRAIN_COLORS[tile.terrain] || '#777';
-    ctx.fillStyle = shade(base, (tile.elevation - 0.5) * 36 + (visible ? 0 : -22));
-    ctx.fillRect(x - 0.5, y - 0.5, layout.tileSize + 1, layout.tileSize + 1);
+    drawTerrainGround(ctx, tile, x, y, layout.tileSize, visible, base);
     drawTileRelief(ctx, tile, x, y, layout.tileSize, visible);
     drawTerrainTexture(ctx, tile, x, y, layout.tileSize, visible);
     if (tile.road) drawRoad(ctx, x, y, layout.tileSize, visible);
@@ -241,6 +240,199 @@ function drawTiles(ctx, state, layout) {
       ctx.strokeRect(x + 0.5, y + 0.5, layout.tileSize - 1, layout.tileSize - 1);
     }
   }
+  drawGeographyOverlays(ctx, state, layout);
+}
+
+function drawTerrainGround(ctx, tile, x, y, s, visible, base) {
+  const elevationShade = (tile.elevation - 0.5) * 36 + (visible ? 0 : -22);
+  const ground = shade(base, elevationShade);
+  const highlight = TERRAIN_HIGHLIGHTS[tile.terrain] || '#ffffff';
+  ctx.fillStyle = ground;
+  ctx.fillRect(x - 0.75, y - 0.75, s + 1.5, s + 1.5);
+
+  const light = ctx.createLinearGradient(x, y, x + s, y + s);
+  light.addColorStop(0, colorMix(highlight, '#ffffff', visible ? 0.04 : 0.02));
+  light.addColorStop(0.52, ground);
+  light.addColorStop(1, shade(base, elevationShade - (visible ? 28 : 38)));
+  ctx.fillStyle = light;
+  ctx.fillRect(x - 0.5, y - 0.5, s + 1, s + 1);
+
+  ctx.save();
+  ctx.globalAlpha = visible ? 0.075 : 0.035;
+  ctx.fillStyle = tile.terrain === 'river' ? '#dff5ff' : '#fff1bd';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.08, y + s * 0.24);
+  ctx.quadraticCurveTo(x + s * 0.35, y + s * 0.12, x + s * 0.72, y + s * 0.22);
+  ctx.quadraticCurveTo(x + s * 0.88, y + s * 0.44, x + s * 0.74, y + s * 0.69);
+  ctx.quadraticCurveTo(x + s * 0.44, y + s * 0.86, x + s * 0.14, y + s * 0.68);
+  ctx.quadraticCurveTo(x + s * 0.02, y + s * 0.45, x + s * 0.08, y + s * 0.24);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  if (visible) {
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = 'rgba(88, 56, 25, 0.22)';
+    ctx.lineWidth = Math.max(1, s * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.98, y + s * 0.16);
+    ctx.lineTo(x + s * 0.98, y + s * 0.96);
+    ctx.lineTo(x + s * 0.16, y + s * 0.96);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawGeographyOverlays(ctx, state, layout) {
+  ctx.save();
+  for (const tile of state.map.tiles) {
+    if (!isVisible(state, tile.x, tile.y)) continue;
+    const x = layout.offsetX + tile.x * layout.tileSize;
+    const y = layout.offsetY + tile.y * layout.tileSize;
+    const s = layout.tileSize;
+    if (tile.terrain === 'forest') drawForestCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'hills') drawRidgeCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'mountains') drawMountainCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'river') drawRiverCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'plains') drawPlainsCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'marsh') drawMarshCrown(ctx, tile, x, y, s);
+    else if (tile.terrain === 'ruins') drawRuinsCrown(ctx, tile, x, y, s);
+  }
+  ctx.restore();
+}
+
+function drawForestCrown(ctx, tile, x, y, s) {
+  const seed = (tile.x * 17 + tile.y * 31) % 7;
+  if (seed > 4) return;
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = 'rgba(22, 59, 35, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.54, y + s * 0.70, s * 0.34, s * 0.13, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  const trees = seed % 2 ? [[0.30, 0.50, 0.55], [0.54, 0.43, 0.72], [0.73, 0.58, 0.50]] : [[0.38, 0.56, 0.60], [0.62, 0.48, 0.70]];
+  for (const [px, py, scale] of trees) {
+    triangle(ctx, x + s * px, y + s * py, s * 0.20 * scale, '#1e5a34');
+    triangle(ctx, x + s * px, y + s * (py - 0.10 * scale), s * 0.16 * scale, '#2f7b44');
+    ctx.fillStyle = '#5b3a23';
+    ctx.fillRect(x + s * (px - 0.022), y + s * (py + 0.13 * scale), s * 0.044, s * 0.13);
+  }
+  ctx.restore();
+}
+
+function drawRidgeCrown(ctx, tile, x, y, s) {
+  if ((tile.x * 11 + tile.y * 5) % 3 === 0) return;
+  ctx.save();
+  ctx.globalAlpha = 0.64;
+  ctx.strokeStyle = 'rgba(96, 70, 34, 0.72)';
+  ctx.lineWidth = Math.max(2, s * 0.055);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.12, y + s * 0.68);
+  ctx.quadraticCurveTo(x + s * 0.38, y + s * 0.36, x + s * 0.88, y + s * 0.56);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(251, 227, 154, 0.70)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.18, y + s * 0.62);
+  ctx.quadraticCurveTo(x + s * 0.42, y + s * 0.44, x + s * 0.78, y + s * 0.58);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMountainCrown(ctx, tile, x, y, s) {
+  if ((tile.x + tile.y) % 2) return;
+  ctx.save();
+  ctx.globalAlpha = 0.82;
+  ctx.fillStyle = 'rgba(56, 57, 55, 0.24)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.56, y + s * 0.78, s * 0.32, s * 0.10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#d8d2bf';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.24, y + s * 0.84);
+  ctx.lineTo(x + s * 0.48, y + s * 0.26);
+  ctx.lineTo(x + s * 0.76, y + s * 0.84);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#8a8d8d';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.48, y + s * 0.26);
+  ctx.lineTo(x + s * 0.60, y + s * 0.84);
+  ctx.lineTo(x + s * 0.76, y + s * 0.84);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.48, y + s * 0.28);
+  ctx.lineTo(x + s * 0.39, y + s * 0.84);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRiverCrown(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.82;
+  ctx.strokeStyle = 'rgba(255, 250, 218, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.07, y + s * 0.48);
+  ctx.bezierCurveTo(x + s * 0.30, y + s * 0.30, x + s * 0.62, y + s * 0.72, x + s * 0.92, y + s * 0.44);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(16, 73, 103, 0.24)';
+  ctx.lineWidth = Math.max(1, s * 0.09);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.04, y + s * 0.61);
+  ctx.bezierCurveTo(x + s * 0.26, y + s * 0.48, x + s * 0.68, y + s * 0.88, x + s * 0.96, y + s * 0.56);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlainsCrown(ctx, tile, x, y, s) {
+  if ((tile.x * 13 + tile.y * 7) % 4 !== 0) return;
+  ctx.save();
+  ctx.globalAlpha = 0.20;
+  ctx.strokeStyle = 'rgba(94, 132, 50, 0.65)';
+  ctx.lineWidth = Math.max(1, s * 0.024);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (0.16 + i * 0.18), y + s * 0.72);
+    ctx.quadraticCurveTo(x + s * (0.24 + i * 0.18), y + s * 0.48, x + s * (0.42 + i * 0.18), y + s * 0.60);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMarshCrown(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = 'rgba(207, 231, 169, 0.58)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.60, y + s * 0.68, s * 0.22, s * 0.07, -0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(31, 69, 47, 0.68)';
+  ctx.lineWidth = Math.max(1, s * 0.026);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (0.24 + i * 0.18), y + s * 0.76);
+    ctx.quadraticCurveTo(x + s * (0.28 + i * 0.18), y + s * 0.51, x + s * (0.36 + i * 0.18), y + s * 0.70);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRuinsCrown(ctx, tile, x, y, s) {
+  if ((tile.x + tile.y) % 2) return;
+  ctx.save();
+  ctx.globalAlpha = 0.68;
+  ctx.fillStyle = '#81725c';
+  ctx.fillRect(x + s * 0.28, y + s * 0.30, s * 0.10, s * 0.38);
+  ctx.fillRect(x + s * 0.54, y + s * 0.24, s * 0.10, s * 0.45);
+  ctx.fillStyle = '#e2d2a4';
+  ctx.fillRect(x + s * 0.25, y + s * 0.25, s * 0.16, s * 0.06);
+  ctx.fillRect(x + s * 0.51, y + s * 0.20, s * 0.16, s * 0.06);
+  ctx.restore();
 }
 
 function drawUnchartedTile(ctx, tile, x, y, s) {
@@ -1783,6 +1975,19 @@ function shade(hex, amount) {
   const g = clampColor(((n >> 8) & 255) + amount);
   const b = clampColor((n & 255) + amount);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function colorMix(hexA, hexB, amount) {
+  const a = parseInt(hexA.slice(1), 16);
+  const b = parseInt(hexB.slice(1), 16);
+  const mix = Math.max(0, Math.min(1, amount));
+  const ar = a >> 16;
+  const ag = (a >> 8) & 255;
+  const ab = a & 255;
+  const br = b >> 16;
+  const bg = (b >> 8) & 255;
+  const bb = b & 255;
+  return `rgb(${clampColor(ar + (br - ar) * mix)}, ${clampColor(ag + (bg - ag) * mix)}, ${clampColor(ab + (bb - ab) * mix)})`;
 }
 
 function clampColor(value) {
