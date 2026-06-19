@@ -53,6 +53,7 @@ const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const canvas = document.querySelector('#gameCanvas');
 const mapIntel = document.querySelector('#mapIntel');
+const mapTurnReport = document.querySelector('#mapTurnReport');
 const mapLensBar = document.querySelector('#mapLensBar');
 const mapHelp = document.querySelector('.map-help');
 const resourceBar = document.querySelector('#resourceBar');
@@ -160,6 +161,7 @@ function render() {
   renderTopBar();
   renderMapLensBar();
   renderMapHelp();
+  renderMapTurnReport();
   renderCouncil();
   renderGuide();
   renderOperations();
@@ -988,7 +990,7 @@ function renderActions() {
   actionPanel.innerHTML = '';
   actionPanel.appendChild(orderHeader());
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
-  if (turnReport) actionPanel.appendChild(turnReportCard());
+  if (turnReport && !isMobileIntelDrawerMode()) actionPanel.appendChild(turnReportCard());
   const placementCard = buildPlacementCard();
   if (placementCard) actionPanel.appendChild(placementCard);
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
@@ -1424,6 +1426,11 @@ function renderTilePanel() {
 function renderMapIntel() {
   const tile = hoverTile || lastTile;
   if (!mapIntel || !tile || !inMap(tile.x, tile.y)) return;
+  if (turnReport && window.innerWidth <= 980) {
+    mapIntel.hidden = true;
+    return;
+  }
+  mapIntel.hidden = false;
   const intel = mapIntelState(tile);
   mapIntel.className = `map-intel ${intel.tone}`;
   mapIntel.innerHTML = `
@@ -1434,6 +1441,32 @@ function renderMapIntel() {
     <p>${escapeHtml(intel.detail)}</p>
     <div class="map-intel-stats">
       ${intel.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
+    </div>
+  `;
+}
+
+function renderMapTurnReport() {
+  if (!mapTurnReport) return;
+  const shouldShow = Boolean(turnReport && window.innerWidth <= 980);
+  mapTurnReport.hidden = !shouldShow;
+  if (!shouldShow) {
+    mapTurnReport.innerHTML = '';
+    return;
+  }
+  const glance = turnReport.metrics.slice(0, 2).map((item) => `
+    <span><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>
+  `).join('');
+  mapTurnReport.className = `map-turn-report ${turnReport.tone}`;
+  mapTurnReport.innerHTML = `
+    <div class="map-turn-report-head">
+      <span>Turn report</span>
+      <strong>${escapeHtml(turnReport.title)}</strong>
+      <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
+    </div>
+    <p>${escapeHtml(turnReport.summary)}</p>
+    <div class="map-turn-report-glance">${glance}</div>
+    <div class="map-turn-report-actions">
+      <button type="button" data-action="continue-turn-orders">Continue orders</button>
     </div>
   `;
 }
@@ -2760,15 +2793,7 @@ function executeOpeningDirective(action) {
 
 function focusTurnReportOnMobile() {
   if (!turnReport || window.innerWidth > 980) return;
-  const report = actionPanel.querySelector('.turn-report');
-  if (!report) return;
-  const topbar = document.querySelector('.topbar');
-  const offset = Math.ceil(topbar?.getBoundingClientRect().height || 0) + 10;
-  const top = Math.max(0, window.scrollY + report.getBoundingClientRect().top - offset);
-  window.scrollTo({
-    top,
-    behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth'
-  });
+  scrollBattlefieldIntoView();
 }
 
 function requestEndTurn(force = false) {
@@ -3658,18 +3683,33 @@ document.querySelector('#saveTop').addEventListener('click', () => openSaveManag
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
 document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
 
+function handleTurnReportAction(action) {
+  if (action === 'clear-turn-report') {
+    turnReport = null;
+    render();
+    if (window.innerWidth <= 980) scrollBattlefieldIntoView();
+    return true;
+  }
+  if (action === 'continue-turn-orders') {
+    continueTurnReportOrders();
+    return true;
+  }
+  return false;
+}
+
 actionPanel.addEventListener('click', (event) => {
   const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;
   if (!(target instanceof HTMLElement)) return;
   if (target.dataset.action === 'clear-battle-impact') {
     battleImpact = null;
     render();
-  } else if (target.dataset.action === 'clear-turn-report') {
-    turnReport = null;
-    render();
-  } else if (target.dataset.action === 'continue-turn-orders') {
-    continueTurnReportOrders();
-  }
+  } else if (handleTurnReportAction(target.dataset.action)) return;
+});
+
+mapTurnReport?.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  handleTurnReportAction(target.dataset.action);
 });
 
 missionPanel.addEventListener('click', (event) => {
