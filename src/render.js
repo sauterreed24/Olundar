@@ -169,10 +169,12 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawMissionRoute(ctx, state, layout, routeOverlay);
   drawMissionFocus(ctx, state, layout, missionFocusOverlay);
   drawBuildSites(ctx, state, layout);
+  drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
+  drawFogAtmosphere(ctx, state, layout);
   drawBattleImpact(ctx, state, layout, battleImpact);
   ctx.restore();
   drawImperialMapFrame(ctx, layout);
@@ -253,6 +255,7 @@ function drawBackdrop(ctx, canvas) {
 function drawTiles(ctx, state, layout) {
   const sortedTiles = state.map.tiles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
   drawContinentUnderpaint(ctx, state, layout, sortedTiles);
+  drawElevationCastShadows(ctx, state, layout, sortedTiles);
   for (const tile of sortedTiles) {
     const bounds = tileBounds(layout, tile.x, tile.y);
     const { x, y, s } = bounds;
@@ -282,6 +285,7 @@ function drawTiles(ctx, state, layout) {
   drawRiverNetwork(ctx, state, layout, sortedTiles);
   drawRoadNetwork(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout);
+  drawRevealedFrontierRim(ctx, state, layout);
 }
 
 function drawContinentUnderpaint(ctx, state, layout, sortedTiles) {
@@ -297,6 +301,34 @@ function drawContinentUnderpaint(ctx, state, layout, sortedTiles) {
       halfW: bounds.halfW * 1.08,
       halfH: bounds.halfH * 1.16
     }, TERRAIN_COLORS[tile.terrain] || '#c6b27c');
+  }
+  ctx.restore();
+}
+
+function drawElevationCastShadows(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain === 'river') continue;
+    const terrainLift = tile.terrain === 'mountains'
+      ? 0.46
+      : tile.terrain === 'hills'
+        ? 0.30
+        : tile.terrain === 'forest'
+          ? 0.19
+          : Math.max(0, tile.elevation - 0.58) * 0.26;
+    if (terrainLift <= 0.06) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const offset = layout.tileSize * (0.06 + terrainLift * 0.20);
+    const visible = isVisible(state, tile.x, tile.y);
+    ctx.globalAlpha = visible ? 0.16 + terrainLift * 0.10 : 0.06 + terrainLift * 0.05;
+    fillTileDiamond(ctx, {
+      ...bounds,
+      cx: bounds.cx + offset,
+      cy: bounds.cy + offset * 0.62,
+      halfW: bounds.halfW * (0.98 + terrainLift * 0.18),
+      halfH: bounds.halfH * (0.88 + terrainLift * 0.10)
+    }, 'rgba(84, 54, 28, 0.52)', layout.tileSize * 0.03);
   }
   ctx.restore();
 }
@@ -501,6 +533,48 @@ function drawGeographyOverlays(ctx, state, layout) {
     else if (tile.terrain === 'ruins') drawRuinsCrown(ctx, tile, x, y, s);
   }
   ctx.restore();
+}
+
+function drawRevealedFrontierRim(ctx, state, layout) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of state.map.tiles) {
+    if (!isRevealed(state, tile.x, tile.y)) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const visible = isVisible(state, tile.x, tile.y);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (isRevealed(state, tile.x + dx, tile.y + dy)) continue;
+      const [start, end] = frontierEdgePoints(bounds, dx, dy);
+      ctx.globalAlpha = visible ? 0.46 : 0.24;
+      ctx.strokeStyle = 'rgba(94, 58, 27, 0.64)';
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+
+      ctx.globalAlpha = visible ? 0.56 : 0.26;
+      ctx.strokeStyle = 'rgba(255, 244, 199, 0.78)';
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.025);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y - layout.tileSize * 0.012);
+      ctx.lineTo(end.x, end.y - layout.tileSize * 0.012);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function frontierEdgePoints(bounds, dx, dy) {
+  const top = { x: bounds.cx, y: bounds.cy - bounds.halfH };
+  const right = { x: bounds.cx + bounds.halfW, y: bounds.cy };
+  const bottom = { x: bounds.cx, y: bounds.cy + bounds.halfH };
+  const left = { x: bounds.cx - bounds.halfW, y: bounds.cy };
+  if (dx > 0) return [right, bottom];
+  if (dx < 0) return [left, top];
+  if (dy > 0) return [bottom, left];
+  return [top, right];
 }
 
 function drawForestCrown(ctx, tile, x, y, s) {
@@ -1119,6 +1193,33 @@ function drawBuildSites(ctx, state, layout) {
       fillTileDiamond(ctx, bounds, result.ok ? 'rgba(186, 245, 140, 0.22)' : 'rgba(255, 138, 138, 0.18)', 2);
       strokeTileDiamond(ctx, bounds, result.ok ? '#baf58c' : '#ff8a8a', Math.max(2, layout.tileSize * 0.06), 3);
     }
+  }
+  ctx.restore();
+}
+
+function drawPieceCastShadows(ctx, state, layout) {
+  const pieces = [
+    ...state.buildings.map((piece) => ({ ...piece, pieceKind: 'building' })),
+    ...state.units.map((piece) => ({ ...piece, pieceKind: 'unit' }))
+  ].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  for (const piece of pieces) {
+    if (!isVisible(state, piece.x, piece.y)) continue;
+    if (piece.pieceKind === 'building' && piece.type === 'road') continue;
+    const { x, y, s } = tileBounds(layout, piece.x, piece.y);
+    const building = piece.pieceKind === 'building';
+    const large = building && ['city', 'portal', 'necropolis'].includes(piece.type);
+    const long = piece.type === 'cavalry' || piece.type === 'onager' || large;
+    const cx = x + s * (0.55 + (building ? 0.02 : 0));
+    const cy = y + s * (large ? 0.82 : building ? 0.78 : 0.80);
+    const width = s * (large ? 0.54 : long ? 0.44 : 0.34);
+    const height = s * (large ? 0.13 : 0.10);
+    ctx.globalAlpha = building ? 0.22 : 0.18;
+    ctx.fillStyle = 'rgba(77, 50, 25, 0.58)';
+    ctx.beginPath();
+    ctx.ellipse(cx + s * 0.08, cy + s * 0.05, width, height, -0.08, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -1986,6 +2087,44 @@ function drawFog(ctx, state, layout) {
   }
 }
 
+function drawFogAtmosphere(ctx, state, layout) {
+  ctx.save();
+  for (const tile of state.map.tiles) {
+    if (isRevealed(state, tile.x, tile.y)) continue;
+    const frontier = hasAdjacentRevealedTile(state, tile.x, tile.y);
+    const seed = (tile.x * 37 + tile.y * 19) % 13;
+    if (!frontier && seed > 1) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const radius = layout.tileSize * (frontier ? 1.05 + seed * 0.02 : 0.78);
+    const cx = bounds.cx + layout.halfTileWidth * ((seed % 5) - 2) * 0.12;
+    const cy = bounds.cy - layout.halfTileHeight * (0.28 + (seed % 3) * 0.08);
+    const glow = ctx.createRadialGradient(cx, cy, layout.tileSize * 0.08, cx, cy, radius);
+    glow.addColorStop(0, frontier ? 'rgba(255, 255, 241, 0.19)' : 'rgba(255, 250, 224, 0.10)');
+    glow.addColorStop(0.55, frontier ? 'rgba(255, 244, 210, 0.08)' : 'rgba(255, 244, 210, 0.04)');
+    glow.addColorStop(1, 'rgba(255, 244, 210, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+    if (frontier && seed % 4 === 0) {
+      ctx.globalAlpha = 0.10;
+      ctx.strokeStyle = 'rgba(126, 87, 45, 0.34)';
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.022);
+      ctx.beginPath();
+      ctx.arc(cx + layout.tileSize * 0.10, cy + layout.tileSize * 0.08, layout.tileSize * 0.24, 0.2, Math.PI * 1.45);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
+function hasAdjacentRevealedTile(state, x, y) {
+  return isRevealed(state, x + 1, y)
+    || isRevealed(state, x - 1, y)
+    || isRevealed(state, x, y + 1)
+    || isRevealed(state, x, y - 1);
+}
+
 function drawImperialMapFrame(ctx, layout) {
   const x = layout.frameX;
   const y = layout.frameY;
@@ -2040,20 +2179,44 @@ function drawSelection(ctx, state, layout, hoverTile) {
 }
 
 function drawMiniMap(ctx, state, layout, lensId = 'normal') {
-  const scale = Math.max(2, Math.min(6, Math.floor(layout.tileSize * 0.18)));
+  const compactInset = layout.mapWidth < 560;
+  const scale = Math.max(2, Math.min(compactInset ? 4 : 6, Math.floor(layout.tileSize * (compactInset ? 0.13 : 0.18))));
   const w = MAP_WIDTH * scale;
   const h = MAP_HEIGHT * scale;
   const x0 = layout.frameX + layout.mapWidth - w - 8;
   const y0 = layout.frameY + 8;
+  const panelX = x0 - 8;
+  const panelY = y0 - 8;
+  const panelW = w + 16;
+  const panelH = h + 16;
   ctx.save();
-  ctx.fillStyle = 'rgba(255, 248, 225, 0.90)';
-  ctx.fillRect(x0 - 7, y0 - 7, w + 14, h + 14);
-  ctx.strokeStyle = 'rgba(147, 86, 28, 0.72)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x0 - 7, y0 - 7, w + 14, h + 14);
+  ctx.shadowColor = 'rgba(70, 42, 18, 0.24)';
+  ctx.shadowBlur = layout.tileSize * 0.14;
+  ctx.shadowOffsetY = layout.tileSize * 0.04;
+  roundRectPath(ctx, panelX, panelY, panelW, panelH, Math.max(5, scale * 1.2));
+  const frame = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY + panelH);
+  frame.addColorStop(0, 'rgba(255, 252, 229, 0.94)');
+  frame.addColorStop(0.55, 'rgba(225, 196, 130, 0.90)');
+  frame.addColorStop(1, 'rgba(139, 82, 35, 0.62)');
+  ctx.fillStyle = frame;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(143, 36, 24, 0.70)';
+  ctx.lineWidth = Math.max(1, scale * 0.35);
+  ctx.stroke();
+
+  ctx.save();
+  roundRectPath(ctx, x0, y0, w, h, Math.max(3, scale * 0.75));
+  ctx.clip();
+  ctx.fillStyle = '#d9bd82';
+  ctx.fillRect(x0, y0, w, h);
   for (const tile of state.map.tiles) {
     let color = '#d9bd82';
-    if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#c7b081';
+    if (isRevealed(state, tile.x, tile.y)) {
+      color = isVisible(state, tile.x, tile.y)
+        ? colorMix(TERRAIN_COLORS[tile.terrain] || '#777777', '#fff4cf', 0.16)
+        : colorMix(TERRAIN_COLORS[tile.terrain] || '#c7b081', '#cfb77d', 0.54);
+    }
     ctx.fillStyle = color;
     ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
   }
@@ -2064,13 +2227,66 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
       ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
     }
   }
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = 'rgba(91, 55, 26, 0.65)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= MAP_WIDTH; x += 4) {
+    ctx.beginPath();
+    ctx.moveTo(x0 + x * scale, y0);
+    ctx.lineTo(x0 + x * scale, y0 + h);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= MAP_HEIGHT; y += 4) {
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + y * scale);
+    ctx.lineTo(x0 + w, y0 + y * scale);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
   for (const building of state.buildings) {
     if (!isRevealed(state, building.x, building.y)) continue;
     ctx.fillStyle = FACTION_COLORS[building.faction] || '#fff';
-    ctx.fillRect(x0 + building.x * scale - 1, y0 + building.y * scale - 1, scale + 2, scale + 2);
+    ctx.beginPath();
+    ctx.arc(x0 + (building.x + 0.5) * scale, y0 + (building.y + 0.5) * scale, Math.max(2, scale * 0.72), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = building.faction === 'dead' ? 'rgba(34, 42, 31, 0.88)' : 'rgba(255, 249, 219, 0.84)';
+    ctx.lineWidth = Math.max(1, scale * 0.22);
+    ctx.stroke();
   }
-  ctx.strokeStyle = '#8f2418';
-  ctx.strokeRect(x0 - 3, y0 - 3, w + 6, h + 6);
+  for (const unit of state.units) {
+    if (!isRevealed(state, unit.x, unit.y)) continue;
+    ctx.fillStyle = FACTION_COLORS[unit.faction] || '#fff';
+    ctx.beginPath();
+    ctx.arc(x0 + (unit.x + 0.5) * scale, y0 + (unit.y + 0.5) * scale, Math.max(1.5, scale * 0.42), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(143, 36, 24, 0.86)';
+  ctx.lineWidth = Math.max(1, scale * 0.34);
+  roundRectPath(ctx, x0 + layout.camera.x * scale, y0 + layout.camera.y * scale, layout.camera.width * scale, layout.camera.height * scale, Math.max(2, scale * 0.45));
+  ctx.stroke();
+  ctx.restore();
+
+  drawMiniMapCompass(ctx, panelX + panelW - scale * 2.2, panelY + panelH - scale * 2.2, scale * 1.5);
+  ctx.restore();
+}
+
+function drawMiniMapCompass(ctx, cx, cy, r) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 249, 224, 0.82)';
+  ctx.strokeStyle = 'rgba(143, 36, 24, 0.52)';
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#8f2418';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 0.76);
+  ctx.lineTo(cx + r * 0.20, cy);
+  ctx.lineTo(cx, cy + r * 0.52);
+  ctx.lineTo(cx - r * 0.20, cy);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
@@ -2131,6 +2347,21 @@ function strokeTileDiamond(ctx, bounds, strokeStyle, lineWidth = 1, inset = 0) {
   ctx.lineWidth = lineWidth;
   tileDiamondPath(ctx, bounds, inset);
   ctx.stroke();
+}
+
+function roundRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.max(0, Math.min(radius, width * 0.5, height * 0.5));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 export function describeSelection(state) {
