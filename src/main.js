@@ -86,6 +86,7 @@ let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
 let focusedMissionId = null;
 let missionResultBanner = null;
+let missionHistoryFilter = 'recent';
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -323,12 +324,41 @@ function renderAftermathMissions() {
         `).join('')}
       </div>
     ` : ''}
-    ${missions.recent.length ? `
-      <div class="mission-history">
-        <h3>Completed</h3>
-        ${missions.recent.map((mission) => `<p><b>T${mission.completedTurn} ${escapeHtml(mission.name)}:</b> ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}</p>`).join('')}
+    ${missionHistoryMarkup(missions)}
+  `;
+}
+
+function missionHistoryMarkup(missions) {
+  if (!missions.recent.length && !missions.archive.length) return '';
+  const filter = missionHistoryFilter === 'archive' || (!missions.recent.length && missions.archive.length) ? 'archive' : 'recent';
+  const history = filter === 'archive' ? missions.archive : missions.recent;
+  const title = filter === 'archive' ? `Archive (${missions.archiveCount})` : `Completed (${missions.recentCount})`;
+  const archiveNote = filter === 'archive' && missions.archiveOverflow
+    ? `<small class="mission-history-note">Showing newest ${missions.archive.length} of ${missions.archiveCount} archived outcomes.</small>`
+    : '';
+
+  return `
+    <div class="mission-history">
+      <div class="mission-history-head">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="mission-history-tools" role="group" aria-label="Completed mission history filter">
+          <button type="button" data-action="set-mission-history" data-filter="recent" aria-pressed="${filter === 'recent'}" ${missions.recentCount ? '' : 'disabled'}>Recent</button>
+          <button type="button" data-action="set-mission-history" data-filter="archive" aria-pressed="${filter === 'archive'}" ${missions.archiveCount ? '' : 'disabled'}>Archive</button>
+        </div>
       </div>
-    ` : ''}
+      ${history.length ? history.map((mission) => missionHistoryRecordMarkup(mission)).join('') : '<p class="history-empty">No completed field tasks match this filter.</p>'}
+      ${archiveNote}
+    </div>
+  `;
+}
+
+function missionHistoryRecordMarkup(mission) {
+  return `
+    <p>
+      <b>T${escapeHtml(mission.completedTurn)} ${escapeHtml(mission.name)}:</b>
+      ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}
+      ${mission.completedBy ? `<small>Completed by ${escapeHtml(mission.completedBy)}.</small>` : ''}
+    </p>
   `;
 }
 
@@ -915,6 +945,7 @@ function loadSerializedGame(raw, slot = null) {
     activeSaveSlotId = slot?.id || null;
     focusedMissionId = null;
     missionResultBanner = null;
+    missionHistoryFilter = 'recent';
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -948,6 +979,7 @@ function importSaveFile(raw, fileName = '') {
     activeSaveSlotId = imported.slot.id;
     focusedMissionId = null;
     missionResultBanner = null;
+    missionHistoryFilter = 'recent';
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1236,6 +1268,7 @@ function startConfiguredCampaign(form) {
   lastAutoRecapKey = null;
   focusedMissionId = null;
   missionResultBanner = null;
+  missionHistoryFilter = 'recent';
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
@@ -1385,6 +1418,10 @@ missionPanel.addEventListener('click', (event) => {
   if (target.dataset.action === 'focus-mission') focusMissionTarget(target.dataset.missionId);
   else if (target.dataset.action === 'focus-mission-unit') focusMissionUnit(target.dataset.missionId);
   else if (target.dataset.action === 'dispatch-mission') dispatchMission(target.dataset.missionId);
+  else if (target.dataset.action === 'set-mission-history') {
+    missionHistoryFilter = target.dataset.filter === 'archive' ? 'archive' : 'recent';
+    render();
+  }
   else if (target.dataset.action === 'close-mission-result') {
     missionResultBanner = null;
     render();

@@ -1069,9 +1069,38 @@ button:disabled {
   margin-top: 0.55rem;
 }
 
+.mission-history-head {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .mission-history h3,
 .mission-history p {
   margin: 0;
+}
+
+.mission-history-tools {
+  display: flex;
+  gap: 0.22rem;
+  padding: 0.14rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+}
+
+.mission-history-tools button {
+  min-width: 0;
+  padding: 0.24rem 0.42rem;
+  border-color: transparent;
+  font-size: 0.66rem;
+}
+
+.mission-history-tools button[aria-pressed="true"] {
+  border-color: rgba(186, 245, 140, 0.34);
+  color: #f9e6a8;
+  background: rgba(186, 245, 140, 0.12);
 }
 
 .mission-history p {
@@ -1081,8 +1110,24 @@ button:disabled {
   background: rgba(0,0,0,0.18);
 }
 
+.mission-history p small {
+  display: block;
+  margin-top: 0.18rem;
+  color: #ddd0ae;
+  font-size: 0.72rem;
+}
+
 .mission-history b {
   color: var(--good);
+}
+
+.mission-history-note {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.history-empty {
+  color: var(--muted);
 }
 
 .crisis {
