@@ -2851,7 +2851,7 @@ function drawSelection(ctx, state, layout, hoverTile) {
 
 function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const compactInset = layout.mapWidth < 560;
-  const scale = Math.max(2, Math.min(compactInset ? 3 : 5, Math.floor(layout.tileSize * (compactInset ? 0.11 : 0.15))));
+  const scale = Math.max(2, Math.min(compactInset ? 2 : 5, Math.floor(layout.tileSize * (compactInset ? 0.085 : 0.15))));
   const w = MAP_WIDTH * scale;
   const h = MAP_HEIGHT * scale;
   const x0 = layout.frameX + layout.mapWidth - w - 8;
