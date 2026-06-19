@@ -843,7 +843,7 @@ function renderSelection() {
   const kind = selection.unit ? 'Unit' : 'Structure';
   selectionPanel.innerHTML = `
     <div class="selection-command">
-      <div class="selection-crest ${selection.unit ? 'unit-crest' : 'building-crest'}" aria-hidden="true">${escapeHtml(kind.slice(0, 1))}</div>
+      ${selectionPortraitMarkup(selection)}
       <div>
         <div class="command-kicker">${escapeHtml(kind)} selected</div>
         <h2>${escapeHtml(selection.title)}</h2>
@@ -1801,6 +1801,231 @@ function selectionStatMarkup(selection) {
     stats.push(['Build', building.turnsLeft > 0 ? `${building.turnsLeft}t` : 'Ready']);
   }
   return `<div class="command-stats">${stats.map(([label, value]) => `<span class="stat-chip"><b>${escapeHtml(value)}</b><small>${escapeHtml(label)}</small></span>`).join('')}</div>`;
+}
+
+function selectionPortraitMarkup(selection) {
+  const entity = selection.unit || selection.building;
+  const type = cssToken(entity?.type || 'unknown');
+  const faction = cssToken(entity?.faction || 'neutral');
+  const kind = selection.unit ? 'unit' : 'building';
+  const svg = selection.unit ? unitPortraitSvg(selection.unit) : buildingPortraitSvg(selection.building);
+  return `<div class="selection-portrait ${kind}-portrait portrait-${type} faction-${faction}" aria-hidden="true">${svg}</div>`;
+}
+
+function unitPortraitSvg(unit) {
+  const dead = unit.faction === 'dead';
+  if (dead) return deadwalkerPortraitSvg(unit.type);
+  switch (unit.type) {
+    case 'scout':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M8 47c10-10 19-15 30-10 7 3 13 6 19 10v10H8z"/>
+        <path class="portrait-cloak" d="M25 28c-4 5-6 13-8 24h26c-1-10-4-19-10-24z"/>
+        <path class="portrait-hood" d="M22 25c3-8 14-8 18 0l-2 9H24z"/>
+        <circle class="portrait-face" cx="31" cy="30" r="5"/>
+        <path class="portrait-bow" d="M46 19c8 9 8 25 0 34"/>
+        <path class="portrait-string" d="M47 19v34"/>
+        <path class="portrait-banner" d="M38 20h10l-3 4 3 4H38z"/>
+      `);
+    case 'engineer':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c9-8 18-11 27-8 8 3 14 5 23 3v12H7z"/>
+        <path class="portrait-body" d="M24 31h16l5 22H19z"/>
+        <circle class="portrait-face" cx="32" cy="27" r="5"/>
+        <path class="portrait-helmet" d="M24 26c1-7 15-8 17 0z"/>
+        <path class="portrait-beam" d="M15 52l15-25"/>
+        <path class="portrait-beam" d="M49 52L34 27"/>
+        <path class="portrait-tool" d="M43 18l8 8M48 21l-8 8"/>
+        <rect class="portrait-pack" x="18" y="37" width="9" height="9" rx="2"/>
+      `);
+    case 'legionary':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M8 49c11-6 21-8 32-5 7 2 12 3 16 2v11H8z"/>
+        <path class="portrait-sword" d="M45 17l2 25M42 21l8-1"/>
+        <path class="portrait-body" d="M22 31h20l3 21H19z"/>
+        <circle class="portrait-face" cx="32" cy="27" r="5"/>
+        <path class="portrait-helmet" d="M22 27c2-10 18-10 20 0z"/>
+        <path class="portrait-shield" d="M16 32c10 0 16 3 16 3 0 12-5 18-16 21-9-3-13-10-13-21 0 0 5-3 13-3z"/>
+        <path class="portrait-shield-line" d="M16 34v19"/>
+      `);
+    case 'spearGuard':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M8 48c9-6 20-8 31-5 8 2 13 3 17 1v13H8z"/>
+        <path class="portrait-spear" d="M48 8v46M44 13l4-7 4 7"/>
+        <path class="portrait-body" d="M23 32h17l4 21H20z"/>
+        <circle class="portrait-face" cx="32" cy="28" r="5"/>
+        <path class="portrait-helmet" d="M23 27c2-9 16-9 18 0z"/>
+        <path class="portrait-shield tower" d="M17 31c7 0 12 3 12 3v18c-3 3-8 5-12 5-4 0-9-2-12-5V34s5-3 12-3z"/>
+      `);
+    case 'archer':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M8 48c11-8 22-10 33-4 6 3 11 4 15 3v10H8z"/>
+        <path class="portrait-body" d="M25 32h15l4 21H20z"/>
+        <circle class="portrait-face" cx="32" cy="28" r="5"/>
+        <path class="portrait-hood" d="M23 27c2-9 16-9 18 0l-3 8H26z"/>
+        <path class="portrait-bow" d="M50 14c-9 12-9 28 0 40"/>
+        <path class="portrait-string" d="M50 14v40"/>
+        <path class="portrait-arrow" d="M28 35h22M45 31l5 4-5 4"/>
+        <path class="portrait-quiver" d="M16 30l8 22"/>
+      `);
+    case 'cavalry':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M6 49c10-7 20-9 32-5 8 3 14 4 20 1v12H6z"/>
+        <path class="portrait-horse" d="M12 39c7-10 23-10 34-4l8 8-7 5H22l-7 6-4-4 5-7z"/>
+        <path class="portrait-horse-neck" d="M42 33l5-10 6 10-1 9"/>
+        <path class="portrait-rider" d="M27 21h10l4 16H24z"/>
+        <circle class="portrait-face" cx="32" cy="19" r="4"/>
+        <path class="portrait-sword" d="M43 12l4 20"/>
+      `);
+    case 'onager':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c11-7 23-8 35-4 7 2 11 2 15 0v11H7z"/>
+        <circle class="portrait-wheel" cx="22" cy="48" r="7"/>
+        <circle class="portrait-wheel" cx="43" cy="48" r="7"/>
+        <path class="portrait-frame" d="M15 47h35M20 43l18-17 16 18M28 43l8-20"/>
+        <path class="portrait-arm" d="M34 26l19-16"/>
+        <circle class="portrait-shot" cx="54" cy="9" r="3"/>
+        <path class="portrait-crew" d="M15 34h9l2 11H13z"/>
+      `);
+    default:
+      return portraitSvg(`
+        <path class="portrait-hill" d="M8 48c11-7 21-9 32-5 7 2 12 3 16 1v13H8z"/>
+        <path class="portrait-body" d="M23 31h18l4 22H19z"/>
+        <circle class="portrait-face" cx="32" cy="27" r="5"/>
+        <path class="portrait-helmet" d="M23 26c2-9 16-9 18 0z"/>
+        <path class="portrait-banner" d="M42 17h10l-3 4 3 4H42z"/>
+      `);
+  }
+}
+
+function deadwalkerPortraitSvg(type) {
+  if (type === 'lichBoss') {
+    return portraitSvg(`
+      <path class="portrait-blight" d="M7 50c12-11 27-13 50-5v12H7z"/>
+      <path class="portrait-aura" d="M18 47c0-17 6-29 14-29s14 12 14 29z"/>
+      <circle class="portrait-skull" cx="32" cy="28" r="10"/>
+      <path class="portrait-crown" d="M22 20l4-8 6 7 6-7 4 8z"/>
+      <path class="portrait-ribs" d="M23 40h18M25 45h14M28 50h8"/>
+      <path class="portrait-staff" d="M49 15v39M45 18l4-6 4 6"/>
+    `);
+  }
+  return portraitSvg(`
+    <path class="portrait-blight" d="M7 50c12-10 25-12 50-5v12H7z"/>
+    <path class="portrait-aura" d="M19 48c1-15 6-26 13-26s13 11 13 26z"/>
+    <circle class="portrait-skull" cx="32" cy="29" r="9"/>
+    <path class="portrait-ribs" d="M23 40h18M25 45h14M28 50h8"/>
+    <path class="portrait-bone-arm" d="M20 39L9 30M44 39l11-9"/>
+    <path class="portrait-weapon" d="M47 17v35"/>
+  `);
+}
+
+function buildingPortraitSvg(building) {
+  switch (building.type) {
+    case 'city':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c9-8 22-11 34-7 6 2 11 3 16 1v13H7z"/>
+        <path class="portrait-wall" d="M13 40h38v13H13z"/>
+        <path class="portrait-roof" d="M11 39l21-17 21 17z"/>
+        <path class="portrait-column" d="M19 39V27M32 39V23M45 39V27"/>
+        <path class="portrait-banner" d="M34 14h13l-4 4 4 4H34z"/>
+      `);
+    case 'farm':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c12-8 25-10 50-5v12H7z"/>
+        <path class="portrait-terrace" d="M12 48h39M16 41h36M21 34h28"/>
+        <path class="portrait-roof" d="M19 34l13-10 13 10z"/>
+        <rect class="portrait-wall" x="22" y="34" width="20" height="13" rx="2"/>
+        <path class="portrait-crop" d="M14 47c3-7 7-9 12-11M37 47c3-6 7-8 13-9"/>
+      `);
+    case 'lumberCamp':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c11-8 23-10 50-4v11H7z"/>
+        <path class="portrait-tree" d="M17 44l8-22 8 22zM37 46l7-19 8 19z"/>
+        <path class="portrait-trunk" d="M25 43v10M44 45v8"/>
+        <path class="portrait-log" d="M15 50h28M20 46h26"/>
+      `);
+    case 'mine':
+      return portraitSvg(`
+        <path class="portrait-mountain" d="M8 52l18-30 10 16 7-11 14 25z"/>
+        <path class="portrait-mine" d="M23 52c1-11 6-17 13-17s12 6 13 17z"/>
+        <path class="portrait-beam" d="M20 51h31M25 43h22M31 35v17M42 39v13"/>
+        <path class="portrait-gold-vein" d="M17 43l8-7M44 29l6 8"/>
+      `);
+    case 'barracks':
+    case 'archeryYard':
+    case 'stable':
+    case 'workshop':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c10-7 22-9 50-4v11H7z"/>
+        <path class="portrait-wall" d="M13 36h38v17H13z"/>
+        <path class="portrait-roof" d="M10 36l22-14 22 14z"/>
+        <path class="portrait-banner" d="M37 17h13l-4 4 4 4H37z"/>
+        <path class="portrait-weapon-rack" d="M19 50V37M25 50V35M19 41h12M41 50l-9-14M34 41h12"/>
+      `);
+    case 'watchtower':
+    case 'outpost':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c12-8 25-9 50-4v11H7z"/>
+        <path class="portrait-tower" d="M23 52l4-30h10l4 30z"/>
+        <path class="portrait-roof" d="M19 22l13-11 13 11z"/>
+        <path class="portrait-window" d="M29 30h7v7h-7z"/>
+        <path class="portrait-banner" d="M36 14h13l-4 4 4 4H36z"/>
+      `);
+    case 'wall':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 51c12-7 25-8 50-4v10H7z"/>
+        <path class="portrait-wall" d="M10 33h44v20H10z"/>
+        <path class="portrait-crenel" d="M12 25h8v8h-8zM25 25h8v8h-8zM38 25h8v8h-8z"/>
+        <path class="portrait-stone-line" d="M13 40h38M13 47h38M22 33v20M36 33v20"/>
+      `);
+    case 'road':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c12-7 25-8 50-4v11H7z"/>
+        <path class="portrait-road" d="M21 56c2-18 7-32 22-48"/>
+        <path class="portrait-road-edge" d="M12 55c4-18 10-34 26-49M31 57c1-17 4-29 18-46"/>
+        <path class="portrait-banner" d="M40 18h11l-3 4 3 4H40z"/>
+      `);
+    case 'shrine':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c11-8 24-9 50-4v11H7z"/>
+        <circle class="portrait-sun" cx="32" cy="20" r="8"/>
+        <path class="portrait-rays" d="M32 7v5M32 28v6M19 20h5M40 20h5M23 11l4 4M41 11l-4 4M23 29l4-4M41 29l-4-4"/>
+        <path class="portrait-column" d="M21 51V34M32 51V31M43 51V34"/>
+        <path class="portrait-plinth" d="M16 52h32M20 34h24"/>
+      `);
+    case 'portal':
+    case 'bonePit':
+    case 'graveForge':
+    case 'necropolis':
+      return portraitSvg(`
+        <path class="portrait-blight" d="M7 50c14-10 28-11 50-5v12H7z"/>
+        <path class="portrait-necro" d="M17 52V31l15-14 15 14v21z"/>
+        <path class="portrait-portal" d="M24 51c0-17 4-27 8-27s8 10 8 27z"/>
+        <path class="portrait-ribs" d="M20 40h24M23 46h18"/>
+        <path class="portrait-aura" d="M18 52c0-23 6-38 14-38s14 15 14 38z"/>
+      `);
+    default:
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c11-8 24-9 50-4v11H7z"/>
+        <path class="portrait-wall" d="M15 38h34v15H15z"/>
+        <path class="portrait-roof" d="M12 38l20-15 20 15z"/>
+        <path class="portrait-banner" d="M36 17h13l-4 4 4 4H36z"/>
+      `);
+  }
+}
+
+function portraitSvg(body) {
+  return `<svg class="portrait-svg" viewBox="0 0 64 64" focusable="false">
+    <rect class="portrait-vellum" x="2" y="2" width="60" height="60" rx="9"/>
+    <path class="portrait-sky" d="M6 41c7-13 19-22 32-22 9 0 15 4 20 10v29H6z"/>
+    ${body}
+  </svg>`;
+}
+
+function cssToken(value) {
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .toLowerCase();
 }
 
 function orderHeader() {

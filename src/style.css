@@ -2512,40 +2512,239 @@ button:hover:not(:disabled) {
   min-width: 0;
 }
 
-.selection-crest {
+.selection-portrait {
   position: relative;
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  overflow: hidden;
   border: 1px solid rgba(143, 36, 24, 0.34);
   border-radius: 7px;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.62), rgba(255,255,255,0.08)),
-    linear-gradient(180deg, #f7d273, #a46328);
-  color: #4a1c10;
-  font-family: var(--font-head);
-  font-size: 1.35rem;
-  font-weight: 900;
+    linear-gradient(135deg, rgba(255,255,255,0.70), rgba(255,255,255,0.08)),
+    linear-gradient(180deg, #f4d487, #a46328);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.72),
+    inset 0 -1px 0 rgba(83, 46, 18, 0.24),
     0 8px 16px rgba(92, 54, 24, 0.15);
 }
 
-.selection-crest::after {
+.selection-portrait::after {
   content: "";
   position: absolute;
-  inset: 0.32rem;
+  inset: 0.28rem;
   border: 1px solid rgba(255,255,255,0.45);
   border-radius: 4px;
   pointer-events: none;
 }
 
-.building-crest {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,0.62), rgba(255,255,255,0.08)),
-    linear-gradient(180deg, #d7c38a, #7c8a65);
-  color: #25351f;
+.portrait-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 2px rgba(47, 27, 12, 0.25));
+}
+
+.portrait-svg path,
+.portrait-svg circle,
+.portrait-svg rect {
+  stroke: rgba(55, 35, 18, 0.88);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.portrait-vellum {
+  fill: #f6dfa3;
+  stroke: rgba(143, 36, 24, 0.30);
+}
+
+.portrait-sky {
+  fill: rgba(227, 240, 226, 0.82);
+  stroke: none;
+}
+
+.portrait-hill {
+  fill: #a8bc67;
+  stroke: rgba(96, 116, 56, 0.62);
+}
+
+.portrait-blight {
+  fill: #6b8767;
+  stroke: rgba(36, 71, 45, 0.82);
+}
+
+.portrait-aura {
+  fill: rgba(140, 246, 133, 0.28);
+  stroke: rgba(74, 164, 82, 0.70);
+}
+
+.portrait-cloak,
+.portrait-hood {
+  fill: #4e704f;
+  stroke: #263f2b;
+}
+
+.portrait-body,
+.portrait-rider,
+.portrait-crew {
+  fill: #d0a85c;
+  stroke: #52331a;
+}
+
+.portrait-face {
+  fill: #f0c88a;
+  stroke: #70431f;
+}
+
+.portrait-helmet {
+  fill: #34424a;
+  stroke: #1a2429;
+}
+
+.portrait-shield {
+  fill: #9c2f22;
+  stroke: #4b190f;
+}
+
+.portrait-shield.tower {
+  fill: #b68d43;
+}
+
+.portrait-shield-line,
+.portrait-sword,
+.portrait-spear,
+.portrait-bow,
+.portrait-string,
+.portrait-arrow,
+.portrait-quiver,
+.portrait-tool,
+.portrait-beam,
+.portrait-arm,
+.portrait-frame,
+.portrait-road,
+.portrait-road-edge,
+.portrait-rays,
+.portrait-plinth,
+.portrait-staff,
+.portrait-weapon,
+.portrait-bone-arm,
+.portrait-gold-vein,
+.portrait-stone-line,
+.portrait-terrace,
+.portrait-crop,
+.portrait-log {
+  fill: none;
+}
+
+.portrait-bow,
+.portrait-string,
+.portrait-arrow,
+.portrait-spear,
+.portrait-sword,
+.portrait-tool,
+.portrait-weapon {
+  stroke: #533019;
+}
+
+.portrait-banner {
+  fill: #d9b350;
+  stroke: #6b3816;
+}
+
+.portrait-pack,
+.portrait-wall,
+.portrait-column,
+.portrait-tower,
+.portrait-window,
+.portrait-plinth,
+.portrait-crenel {
+  fill: #cfb46d;
+  stroke: #6b4b22;
+}
+
+.portrait-roof {
+  fill: #8f2e23;
+  stroke: #4d1a12;
+}
+
+.portrait-tree {
+  fill: #286c42;
+  stroke: #173f28;
+}
+
+.portrait-trunk,
+.portrait-log {
+  stroke: #65401f;
+}
+
+.portrait-mountain {
+  fill: #9b9b7b;
+  stroke: #5c5c46;
+}
+
+.portrait-mine,
+.portrait-necro {
+  fill: #5e5647;
+  stroke: #2b241c;
+}
+
+.portrait-gold-vein,
+.portrait-sun {
+  fill: #e6b84a;
+  stroke: #8d5f1a;
+}
+
+.portrait-road {
+  stroke: #b2874c;
+  stroke-width: 7;
+}
+
+.portrait-road-edge {
+  stroke: rgba(255,255,255,0.68);
+  stroke-width: 1.8;
+}
+
+.portrait-horse,
+.portrait-horse-neck {
+  fill: #7a5635;
+  stroke: #3f2a19;
+}
+
+.portrait-wheel {
+  fill: #d1aa67;
+  stroke: #55361d;
+}
+
+.portrait-shot {
+  fill: #6c6356;
+  stroke: #312920;
+}
+
+.portrait-skull {
+  fill: #d8d2b4;
+  stroke: #384235;
+}
+
+.portrait-crown,
+.portrait-portal {
+  fill: #8cf685;
+  stroke: #24572e;
+}
+
+.portrait-ribs {
+  fill: none;
+  stroke: #d8d2b4;
+}
+
+.faction-dead .portrait-vellum {
+  fill: #d6dfbf;
+  stroke: rgba(36, 91, 48, 0.46);
+}
+
+.faction-dead .portrait-sky {
+  fill: rgba(102, 136, 103, 0.40);
 }
 
 .command-stats {
@@ -3006,10 +3205,9 @@ button:hover:not(:disabled) {
     grid-template-columns: 1fr;
   }
 
-  .selection-crest {
-    width: 2.35rem;
-    height: 2.35rem;
-    font-size: 1.08rem;
+  .selection-portrait {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .recap-stats,
