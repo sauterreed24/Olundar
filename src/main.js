@@ -850,14 +850,9 @@ function openingOrderOverlay() {
   if (!directive || state.status !== 'playing') return null;
   const action = openingDirectiveAction(directive.current.id);
   if (!action) return null;
-
-  const unit = action.unitId ? state.units.find((item) => item.id === action.unitId) : null;
-  const building = action.buildingId ? state.buildings.find((item) => item.id === action.buildingId) : null;
-  const source = unit || building || null;
-  const target = Number.isFinite(action.x) && Number.isFinite(action.y)
-    ? { x: action.x, y: action.y }
-    : source ? { x: source.x, y: source.y } : null;
-  if (!target || !inMap(target.x, target.y)) return null;
+  const orderTarget = openingActionTarget(action);
+  if (!orderTarget) return null;
+  const { target, unit } = orderTarget;
 
   let path = [];
   let cost = null;
@@ -885,6 +880,27 @@ function openingOrderOverlay() {
     path,
     cost
   };
+}
+
+function openingActionTarget(action) {
+  const unit = action.unitId ? state.units.find((item) => item.id === action.unitId) : null;
+  const building = action.buildingId ? state.buildings.find((item) => item.id === action.buildingId) : null;
+  const source = unit || building || null;
+  const target = Number.isFinite(action.x) && Number.isFinite(action.y)
+    ? { x: action.x, y: action.y }
+    : source ? { x: source.x, y: source.y } : null;
+  if (!target || !inMap(target.x, target.y)) return null;
+  return { target, unit, building };
+}
+
+function openingDirectiveForTile(tile) {
+  if (state.status !== 'playing' || state.mode.type !== 'select') return null;
+  const directive = currentOpeningDirective();
+  if (!directive) return null;
+  const action = openingDirectiveAction(directive.current.id);
+  if (!action || action.canExecute === false || action.disabled) return null;
+  const orderTarget = openingActionTarget(action);
+  return orderTarget?.target.x === tile.x && orderTarget.target.y === tile.y ? action : null;
 }
 
 function pathKeyToTile(key) {
@@ -1445,6 +1461,12 @@ function canvasClicked(event) {
   lastTile = tile;
 
   if (state.status !== 'playing') return;
+
+  const openingAction = openingDirectiveForTile(tile);
+  if (openingAction) {
+    executeOpeningDirective(openingAction);
+    return;
+  }
 
   if (state.mode.type === 'build') {
     const result = startConstruction(state, state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
