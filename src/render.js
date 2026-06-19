@@ -296,6 +296,7 @@ function drawTiles(ctx, state, layout) {
       strokeTileDiamond(ctx, bounds, 'rgba(44, 33, 25, 0.12)', 1, 0.5);
     }
   }
+  drawElevationSeams(ctx, state, layout, sortedTiles);
   drawTerrainContinuity(ctx, state, layout, sortedTiles);
   drawTopographicContourInk(ctx, state, layout, sortedTiles);
   drawRiverbankHighlights(ctx, state, layout, sortedTiles);
@@ -540,6 +541,56 @@ function drawTileTopline(ctx, tile, bounds, visible, base) {
   ctx.globalAlpha = visible ? 0.12 : 0.06;
   strokeTileDiamond(ctx, bounds, shade(base, -40), Math.max(1, bounds.s * 0.01), 0.5);
   ctx.restore();
+}
+
+function drawElevationSeams(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain === 'river') continue;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const neighbor = tileAt(state, tile.x + dx, tile.y + dy);
+      if (!neighbor || !isRevealed(state, neighbor.x, neighbor.y) || neighbor.terrain === 'river') continue;
+      const elevationDelta = Math.abs((tile.elevation || 0) - (neighbor.elevation || 0));
+      const reliefDelta = Math.abs(terrainReliefRank(tile.terrain) - terrainReliefRank(neighbor.terrain)) * 0.055;
+      const strength = elevationDelta + reliefDelta;
+      if (strength < 0.16) continue;
+      const upper = (tile.elevation || 0) + terrainReliefRank(tile.terrain) * 0.025 >= (neighbor.elevation || 0) + terrainReliefRank(neighbor.terrain) * 0.025
+        ? { tile, dx, dy }
+        : { tile: neighbor, dx: -dx, dy: -dy };
+      const bounds = tileBounds(layout, upper.tile.x, upper.tile.y);
+      const [start, end] = frontierEdgePoints(bounds, upper.dx, upper.dy);
+      const visible = isVisible(state, tile.x, tile.y) && isVisible(state, neighbor.x, neighbor.y);
+      const width = Math.max(1.2, layout.tileSize * (0.018 + Math.min(0.26, strength) * 0.12));
+      const drop = layout.tileSize * (0.012 + Math.min(0.22, strength) * 0.055);
+
+      ctx.globalAlpha = visible ? Math.min(0.42, 0.14 + strength * 0.48) : Math.min(0.22, 0.07 + strength * 0.24);
+      ctx.strokeStyle = 'rgba(70, 43, 22, 0.68)';
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y + drop);
+      ctx.lineTo(end.x, end.y + drop);
+      ctx.stroke();
+
+      ctx.globalAlpha = visible ? Math.min(0.36, 0.12 + strength * 0.36) : Math.min(0.18, 0.05 + strength * 0.16);
+      ctx.strokeStyle = 'rgba(255, 241, 184, 0.74)';
+      ctx.lineWidth = Math.max(1, width * 0.42);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y - drop * 0.32);
+      ctx.lineTo(end.x, end.y - drop * 0.32);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function terrainReliefRank(terrain) {
+  if (terrain === 'mountains') return 4;
+  if (terrain === 'hills') return 3;
+  if (terrain === 'forest' || terrain === 'ruins') return 2;
+  if (terrain === 'marsh' || terrain === 'blight') return 1;
+  return 0;
 }
 
 function drawTerrainContinuity(ctx, state, layout, sortedTiles) {
