@@ -12,7 +12,7 @@ The tone is romantic catastrophe: ancient banners, desperate alliances, roads th
 
 The intended difficulty is moderate: challenging enough that poor scouting or poor economy hurts, but not so punishing that casual players are locked out.
 
-The visual target is a premium board-war map rather than placeholder strategy blocks: legible terrain relief, Roman-period shields and weapons, faction color accents, readable building silhouettes, and Deadwalker necrotic glow that communicates threat even at phone scale. The art must remain dependency-light and fast enough for GitHub Pages and older mobile browsers, so the shipped style uses handcrafted canvas vector sprites backed by a reference sprite sheet.
+The visual target is a premium imperial war table rather than placeholder strategy blocks or dashboard chrome: parchment fog, warm bronze and crimson command surfaces, lapis/jade accents, legible terrain relief, Roman-period shields and weapons, faction color accents, readable building silhouettes, and Deadwalker necrotic glow that communicates threat even at phone scale. The art must remain dependency-light and fast enough for GitHub Pages and older mobile browsers, so the shipped style uses handcrafted canvas vector sprites backed by a reference sprite sheet.
 
 ## Core pillars
 

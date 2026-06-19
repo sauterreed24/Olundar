@@ -1036,12 +1036,18 @@ check('github pages workflow publishes the playable app', () => {
 
 check('canvas renderer keeps premium tactical sprites readable', () => {
   const renderSource = readProjectFile('src/render.js');
+  const styleSource = readProjectFile('src/style.css');
 
   assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
+  assert(renderSource.includes('function drawUnchartedTile') && renderSource.includes('function drawImperialMapFrame'), 'The world map should use parchment fog and an imperial campaign-map frame.');
+  assert(renderSource.includes("tile.terrain === 'plains'") && renderSource.includes('quadraticCurveTo'), 'Terrain should include painterly texture beyond flat tile fills.');
   assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
   assert(renderSource.includes('function drawBannerPennon') && renderSource.includes('function drawUnitRim'), 'Units and buildings should keep faction accents and readable bases.');
   assert(renderSource.includes('function drawPortalSprite') && renderSource.includes('function drawNecroStructure'), 'Deadwalker structures should keep distinctive necrotic silhouettes.');
   assert(renderSource.includes('createRadialGradient') && renderSource.includes('rgba(156, 243, 138'), 'Deadwalkers should retain their necrotic glow language.');
+  assert(styleSource.includes('--crimson') && styleSource.includes('--lapis') && styleSource.includes('--bronze'), 'UI theme should keep an imperial multi-material palette.');
+  assert(styleSource.includes('.map-shell::before') && styleSource.includes('border-top-left-radius'), 'Map shell should keep decorative imperial frame treatment.');
+  assert(styleSource.includes('linear-gradient(90deg, rgba(55, 12, 11') && styleSource.includes('radial-gradient(circle at 86% 18%'), 'The first viewport should avoid generic black dashboard chrome.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {
