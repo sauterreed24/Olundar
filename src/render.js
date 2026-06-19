@@ -295,6 +295,8 @@ function drawTiles(ctx, state, layout) {
     }
   }
   drawTerrainContinuity(ctx, state, layout, sortedTiles);
+  drawTopographicContourInk(ctx, state, layout, sortedTiles);
+  drawRiverbankHighlights(ctx, state, layout, sortedTiles);
   drawRiverNetwork(ctx, state, layout, sortedTiles);
   drawRoadNetwork(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout);
@@ -329,12 +331,12 @@ function drawBiomeWash(ctx, state, layout, sortedTiles) {
     const visible = isVisible(state, tile.x, tile.y);
     const palette = terrainPalette(tile.terrain);
     const strength = tile.terrain === 'river'
-      ? 0.12
+      ? 0.15
       : tile.terrain === 'forest'
-        ? 0.20
+        ? 0.27
         : tile.terrain === 'hills' || tile.terrain === 'mountains'
-          ? 0.18
-          : 0.13;
+          ? 0.24
+          : 0.16;
     ctx.globalAlpha = visible ? strength : strength * 0.42;
     fillTileDiamond(ctx, {
       ...bounds,
@@ -358,8 +360,8 @@ function drawWorldLight(ctx, state, layout) {
     layout.frameY + layout.mapHeight * 0.10,
     Math.max(layout.mapWidth, layout.mapHeight) * 0.74
   );
-  glow.addColorStop(0, 'rgba(255, 244, 190, 0.25)');
-  glow.addColorStop(0.44, 'rgba(255, 230, 152, 0.08)');
+  glow.addColorStop(0, 'rgba(255, 244, 190, 0.18)');
+  glow.addColorStop(0.44, 'rgba(255, 230, 152, 0.05)');
   glow.addColorStop(1, 'rgba(255, 230, 152, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
@@ -370,7 +372,7 @@ function drawWorldLight(ctx, state, layout) {
   const shadeGradient = ctx.createLinearGradient(layout.frameX, layout.frameY, layout.frameX + layout.mapWidth, layout.frameY + layout.mapHeight);
   shadeGradient.addColorStop(0, 'rgba(63, 42, 18, 0)');
   shadeGradient.addColorStop(0.58, 'rgba(63, 42, 18, 0.03)');
-  shadeGradient.addColorStop(1, 'rgba(38, 31, 27, 0.15)');
+  shadeGradient.addColorStop(1, 'rgba(38, 31, 27, 0.18)');
   ctx.fillStyle = shadeGradient;
   ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
   if (state.turn > 1) {
@@ -478,6 +480,79 @@ function drawTerrainContinuity(ctx, state, layout, sortedTiles) {
       ctx.beginPath();
       ctx.moveTo(a.x, a.y - layout.halfTileHeight * 0.18);
       ctx.lineTo(b.x, b.y - layout.halfTileHeight * 0.18);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawTopographicContourInk(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain === 'river' || tile.terrain === 'blight') continue;
+    const reliefTerrain = ['hills', 'mountains', 'forest', 'ruins'].includes(tile.terrain);
+    if (!reliefTerrain && tile.elevation < 0.62) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const { x, y, s } = bounds;
+    const visible = isVisible(state, tile.x, tile.y);
+    const palette = terrainPalette(tile.terrain);
+    const bands = tile.terrain === 'mountains' ? 4 : tile.terrain === 'hills' ? 3 : 2;
+    ctx.save();
+    tileDiamondPath(ctx, bounds, s * 0.08);
+    ctx.clip();
+    for (let i = 0; i < bands; i += 1) {
+      const lift = 0.30 + i * 0.15 + tileNoise(tile, 120 + i) * 0.06;
+      const startY = y + s * (0.84 - lift);
+      const endY = y + s * (0.70 - lift * 0.68);
+      ctx.globalAlpha = visible ? 0.24 + i * 0.045 : 0.08 + i * 0.024;
+      ctx.strokeStyle = i % 2
+        ? colorMix(palette.light, '#fff8d3', 0.40)
+        : colorMix(palette.shadow, '#5a371f', 0.22);
+      ctx.lineWidth = Math.max(1, s * (0.019 + i * 0.004));
+      ctx.beginPath();
+      ctx.moveTo(x + s * (0.12 + tileNoise(tile, 130 + i) * 0.10), startY);
+      ctx.bezierCurveTo(
+        x + s * (0.32 + tileNoise(tile, 140 + i) * 0.10),
+        y + s * (0.40 - lift * 0.32),
+        x + s * (0.62 + tileNoise(tile, 150 + i) * 0.11),
+        y + s * (0.58 - lift * 0.36),
+        x + s * (0.88 - tileNoise(tile, 160 + i) * 0.10),
+        endY
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawRiverbankHighlights(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain !== 'river') continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const visible = isVisible(state, tile.x, tile.y);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const neighbor = tileAt(state, tile.x + dx, tile.y + dy);
+      if (!neighbor || neighbor.terrain === 'river' || !isRevealed(state, neighbor.x, neighbor.y)) continue;
+      const [start, end] = frontierEdgePoints(bounds, dx, dy);
+      ctx.globalAlpha = visible && isVisible(state, neighbor.x, neighbor.y) ? 0.38 : 0.16;
+      ctx.strokeStyle = 'rgba(17, 91, 128, 0.42)';
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.globalAlpha = visible ? 0.58 : 0.24;
+      ctx.strokeStyle = 'rgba(245, 255, 250, 0.82)';
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.020);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y - layout.tileSize * 0.012);
+      ctx.lineTo(end.x, end.y - layout.tileSize * 0.012);
       ctx.stroke();
     }
   }
@@ -747,9 +822,9 @@ function frontierEdgePoints(bounds, dx, dy) {
 
 function drawForestCrown(ctx, tile, x, y, s) {
   const seed = (tile.x * 17 + tile.y * 31) % 7;
-  if (seed > 4) return;
+  if (seed > 5) return;
   ctx.save();
-  ctx.globalAlpha = 0.88;
+  ctx.globalAlpha = 0.96;
   ctx.fillStyle = 'rgba(22, 59, 35, 0.22)';
   ctx.beginPath();
   ctx.ellipse(x + s * 0.54, y + s * 0.70, s * 0.34, s * 0.13, -0.15, 0, Math.PI * 2);
@@ -765,9 +840,9 @@ function drawForestCrown(ctx, tile, x, y, s) {
 }
 
 function drawRidgeCrown(ctx, tile, x, y, s) {
-  if ((tile.x * 11 + tile.y * 5) % 3 === 0) return;
+  if ((tile.x * 11 + tile.y * 5) % 4 === 0) return;
   ctx.save();
-  ctx.globalAlpha = 0.64;
+  ctx.globalAlpha = 0.76;
   ctx.strokeStyle = 'rgba(96, 70, 34, 0.72)';
   ctx.lineWidth = Math.max(2, s * 0.055);
   ctx.beginPath();
@@ -833,9 +908,9 @@ function drawRiverCrown(ctx, tile, x, y, s) {
 }
 
 function drawPlainsCrown(ctx, tile, x, y, s) {
-  if ((tile.x * 13 + tile.y * 7) % 4 !== 0) return;
+  if ((tile.x * 13 + tile.y * 7) % 3 !== 0) return;
   ctx.save();
-  ctx.globalAlpha = 0.20;
+  ctx.globalAlpha = 0.34;
   ctx.strokeStyle = 'rgba(94, 132, 50, 0.65)';
   ctx.lineWidth = Math.max(1, s * 0.024);
   for (let i = 0; i < 3; i += 1) {

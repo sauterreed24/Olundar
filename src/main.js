@@ -1691,10 +1691,42 @@ function openingDirectiveAction(stepId) {
   }
 
   if (['engineer', 'iron'].includes(stepId)) {
-    return recommendedBuildPreview(stepId);
+    return openingBlockedInfrastructureAction(recommendedBuildPreview(stepId));
   }
 
   return null;
+}
+
+function openingBlockedInfrastructureAction(action) {
+  if (!action || action.kind !== 'build' || action.canExecute) return action;
+  const builder = state.units.find((unit) => unit.id === action.unitId);
+  if (!builder?.hasActed) return action;
+  const readyUnits = getReadyOlundarUnits(state).filter((unit) => unit.id !== builder.id);
+  const guard = readyUnits.find((unit) => !UNIT_TYPES[unit.type].tags.includes('builder')) || readyUnits[0];
+  if (guard) {
+    return {
+      kind: 'fortify',
+      unitId: guard.id,
+      canExecute: true,
+      label: `Fortify ${guard.name}`,
+      meta: `${action.label} needs a fresh engineer next turn`,
+      executeLabel: 'Do order',
+      executeMeta: 'Hold the line before ending turn',
+      previewMeta: `Focus ${guard.name}`,
+      previewToast: `${guard.name} can fortify now while the engineer prepares the iron claim.`,
+      successToast: `${guard.name} fortified.`
+    };
+  }
+  return {
+    kind: 'end-turn',
+    canExecute: true,
+    label: 'End turn for fresh engineer',
+    meta: `${action.label} is ready for turn ${state.turn + 1}`,
+    executeLabel: 'Do order',
+    executeMeta: `Advance to turn ${state.turn + 1}`,
+    previewMeta: 'Review turn pass',
+    previewToast: `End the turn so ${builder.name} can claim iron with a fresh action.`
+  };
 }
 
 function focusOpeningDirectiveMeta(stepId) {
@@ -1933,6 +1965,25 @@ function executeOpeningDirective(action) {
     }
     render();
     if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+  if (action.kind === 'fortify') {
+    selectUnit(action.unitId);
+    const unit = state.units.find((item) => item.id === action.unitId);
+    if (unit) {
+      lastTile = { x: unit.x, y: unit.y };
+      hoverTile = lastTile;
+    }
+    const result = fortifyUnit(state, action.unitId);
+    const ok = handleResult(result, 'ui');
+    if (ok) toast(action.successToast || `${unit?.name || 'Unit'} fortified.`, 'good');
+    render();
+    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+  if (action.kind === 'end-turn') {
+    state.mode = { type: 'select' };
+    requestEndTurn(true);
     return;
   }
   previewOpeningDirective(action);
