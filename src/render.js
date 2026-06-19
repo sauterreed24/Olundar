@@ -177,7 +177,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawTiles(ctx, state, layout);
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
-  drawTacticalActionOverlay(ctx, state, layout);
+  drawTacticalActionOverlay(ctx, state, layout, hoverTile);
   drawMissionRoute(ctx, state, layout, routeOverlay);
   drawMissionFocus(ctx, state, layout, missionFocusOverlay);
   drawBuildSites(ctx, state, layout);
@@ -1407,7 +1407,7 @@ function drawRouteEndpoint(ctx, p, tileSize, color, target) {
   }
 }
 
-function drawTacticalActionOverlay(ctx, state, layout) {
+function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const unit = state.units.find((u) => u.id === state.selectedUnitId && u.faction === 'olundar');
   if (!unit || state.mode.type !== 'select') return;
   const def = getUnitDef(unit);
@@ -1415,11 +1415,14 @@ function drawTacticalActionOverlay(ctx, state, layout) {
   if (unit.hasActed) return;
   const reachable = collectReachableTiles(state, unit, def.move);
   const attackTiles = collectAttackTiles(state, unit, def.range);
+  const hoverMove = reachable.find((item) => sameTile(item, hoverTile)) || null;
   ctx.save();
+  drawCommandRangeFrontier(ctx, layout, reachable, def.move);
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
-    drawMoveReachTile(ctx, bounds, layout, item);
+    drawMoveReachTile(ctx, bounds, layout, item, def.move, hoverMove);
   }
+  drawCommandPathPreview(ctx, state, layout, unit, def.move, hoverMove);
   for (const item of attackTiles) {
     drawAttackReachTile(ctx, tileBounds(layout, item.x, item.y), layout, item.target);
   }
@@ -1458,13 +1461,94 @@ function collectAttackTiles(state, unit, range) {
   return tiles;
 }
 
-function drawMoveReachTile(ctx, bounds, layout, item) {
+function drawMoveReachTile(ctx, bounds, layout, item, maxMove, hoverMove = null) {
   const close = item.cost <= 1;
-  const fill = item.road ? 'rgba(118, 186, 210, 0.25)' : close ? 'rgba(244, 205, 105, 0.23)' : 'rgba(255, 244, 176, 0.20)';
-  const stroke = item.road ? 'rgba(47, 116, 141, 0.46)' : close ? 'rgba(151, 96, 29, 0.42)' : 'rgba(113, 85, 34, 0.26)';
-  fillTileDiamond(ctx, bounds, fill, 3);
-  strokeTileDiamond(ctx, bounds, stroke, Math.max(1, layout.tileSize * 0.018), 4);
-  drawTacticalMoveMarker(ctx, bounds, layout, item);
+  const hovered = sameTile(item, hoverMove);
+  const compact = layout.mapWidth < 560 || layout.tileSize < 44;
+  const fill = item.road
+    ? (hovered ? 'rgba(118, 205, 235, 0.36)' : 'rgba(118, 186, 210, 0.18)')
+    : close
+      ? (hovered ? 'rgba(255, 220, 122, 0.34)' : 'rgba(244, 205, 105, 0.17)')
+      : (hovered ? 'rgba(255, 230, 130, 0.30)' : 'rgba(255, 244, 176, 0.115)');
+  const stroke = item.road
+    ? 'rgba(47, 116, 141, 0.42)'
+    : close
+      ? 'rgba(151, 96, 29, 0.34)'
+      : 'rgba(113, 85, 34, 0.16)';
+  fillTileDiamond(ctx, bounds, fill, hovered ? 1.5 : 4);
+  if (shouldAnnotateMove(item, maxMove, hoverMove, compact)) {
+    strokeTileDiamond(ctx, bounds, hovered ? 'rgba(255, 238, 170, 0.92)' : stroke, Math.max(1, layout.tileSize * (hovered ? 0.038 : 0.016)), hovered ? 2 : 5);
+    drawTacticalMoveMarker(ctx, bounds, layout, item, { hovered, maxMove });
+  } else {
+    drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove);
+  }
+}
+
+function drawCommandRangeFrontier(ctx, layout, reachable, maxMove) {
+  const reachableSet = new Set(reachable.map((item) => tileKey(item.x, item.y)));
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  for (const item of reachable) {
+    if (!isCommandFrontierTile(item, reachableSet, maxMove)) continue;
+    const bounds = tileBounds(layout, item.x, item.y);
+    const road = item.road;
+    strokeTileDiamond(
+      ctx,
+      bounds,
+      road ? 'rgba(63, 148, 174, 0.24)' : 'rgba(163, 111, 38, 0.22)',
+      Math.max(1, layout.tileSize * 0.026),
+      2.5
+    );
+  }
+  ctx.restore();
+}
+
+function drawCommandPathPreview(ctx, state, layout, unit, maxMove, hoverMove) {
+  if (!hoverMove || sameTile(unit, hoverMove)) return;
+  const path = findPath(state, unit, hoverMove.x, hoverMove.y, maxMove);
+  if (!path?.path?.length) return;
+  const points = [{ x: unit.x, y: unit.y }, ...path.path.map((key) => tileFromKey(key))];
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = hoverMove.road ? 'rgba(66, 185, 219, 0.34)' : 'rgba(255, 202, 94, 0.34)';
+  ctx.shadowBlur = layout.tileSize * 0.12;
+  ctx.strokeStyle = 'rgba(62, 36, 18, 0.74)';
+  ctx.lineWidth = Math.max(4, layout.tileSize * 0.085);
+  drawRouteStroke(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y));
+  ctx.strokeStyle = hoverMove.road ? 'rgba(155, 229, 255, 0.90)' : 'rgba(255, 218, 126, 0.92)';
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.044);
+  drawRouteStroke(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y));
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const p = tileCenter(layout, points[i].x, points[i].y);
+    ctx.fillStyle = 'rgba(70, 38, 13, 0.82)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(3, layout.tileSize * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = hoverMove.road ? '#d9f6ff' : '#ffe4a0';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(2, layout.tileSize * 0.038), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  drawRouteEndpoint(ctx, tileCenter(layout, hoverMove.x, hoverMove.y), layout.tileSize, hoverMove.road ? '#9be5ff' : '#ffe08a', true);
+  ctx.restore();
+}
+
+function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
+  if (sameTile(item, hoverMove)) return true;
+  if (compact) return item.road || item.cost <= 1;
+  if (item.road || item.cost <= 2) return true;
+  return item.cost >= maxMove && tileNoise(item, 940) > 0.86;
+}
+
+function isCommandFrontierTile(item, reachableSet, maxMove) {
+  if (item.cost >= maxMove) return true;
+  return [
+    [item.x + 1, item.y],
+    [item.x - 1, item.y],
+    [item.x, item.y + 1],
+    [item.x, item.y - 1]
+  ].some(([x, y]) => !reachableSet.has(tileKey(x, y)));
 }
 
 function drawAttackReachTile(ctx, bounds, layout, target) {
@@ -1496,17 +1580,18 @@ function drawAttackReachTile(ctx, bounds, layout, target) {
   }
 }
 
-function drawTacticalMoveMarker(ctx, bounds, layout, item) {
+function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
   const close = item.cost <= 1;
-  const prominent = item.road || item.cost <= 2;
+  const hovered = Boolean(options.hovered);
+  const prominent = hovered || item.road || item.cost <= 2;
   const markerY = bounds.cy + layout.halfTileHeight * 0.35;
-  const poleHeight = layout.tileSize * (item.road ? 0.30 : 0.24);
+  const poleHeight = layout.tileSize * (hovered ? 0.34 : item.road ? 0.30 : 0.24);
   const poleX = bounds.cx - layout.tileSize * 0.09;
-  const bannerColor = item.road ? '#9be5ff' : close ? '#ffe08a' : '#f4c866';
+  const bannerColor = item.road ? '#9be5ff' : close || hovered ? '#ffe08a' : '#f4c866';
   const rimColor = item.road ? 'rgba(27, 93, 122, 0.78)' : 'rgba(117, 77, 25, 0.68)';
   ctx.save();
-  ctx.shadowColor = item.road ? 'rgba(53, 145, 176, 0.28)' : 'rgba(214, 151, 48, 0.22)';
-  ctx.shadowBlur = layout.tileSize * 0.08;
+  ctx.shadowColor = item.road ? 'rgba(53, 145, 176, 0.30)' : 'rgba(214, 151, 48, 0.24)';
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.14 : 0.08);
   ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
   if (prominent) {
     ctx.strokeStyle = 'rgba(61, 39, 18, 0.62)';
@@ -1525,15 +1610,15 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item) {
     ctx.fill();
     ctx.stroke();
   }
-  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item);
+  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item, hovered);
   if (item.road) drawRoadChevron(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout);
   else drawFootstepPair(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   ctx.restore();
 }
 
-function drawMoveCostCartouche(ctx, x, y, layout, item) {
-  const w = Math.max(16, layout.tileSize * 0.24);
-  const h = Math.max(10, layout.tileSize * 0.16);
+function drawMoveCostCartouche(ctx, x, y, layout, item, large = false) {
+  const w = Math.max(16, layout.tileSize * (large ? 0.34 : 0.24));
+  const h = Math.max(10, layout.tileSize * (large ? 0.20 : 0.16));
   ctx.save();
   roundRectPath(ctx, x - w * 0.5, y - h * 0.5, w, h, h * 0.48);
   ctx.fillStyle = item.road ? 'rgba(230, 250, 255, 0.92)' : 'rgba(255, 247, 211, 0.92)';
@@ -1542,10 +1627,26 @@ function drawMoveCostCartouche(ctx, x, y, layout, item) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = item.road ? '#174a60' : '#733f16';
-  ctx.font = `900 ${Math.max(8, layout.tileSize * 0.13)}px system-ui, sans-serif`;
+  ctx.font = `900 ${Math.max(8, layout.tileSize * (large ? 0.15 : 0.13))}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(String(Math.round(item.cost)), x, y + h * 0.02);
+  ctx.restore();
+}
+
+function drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove) {
+  const frontier = item.cost >= maxMove;
+  const size = layout.tileSize * (frontier ? 0.070 : 0.048);
+  const y = bounds.cy + layout.halfTileHeight * (frontier ? 0.18 : 0.25);
+  ctx.save();
+  ctx.globalAlpha = frontier ? 0.74 : 0.54;
+  ctx.strokeStyle = item.road ? 'rgba(44, 119, 145, 0.34)' : 'rgba(138, 92, 30, 0.28)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(bounds.cx - size, y);
+  ctx.quadraticCurveTo(bounds.cx, y - size * 0.45, bounds.cx + size, y);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -2881,6 +2982,18 @@ function tileCenter(layout, x, y) {
     x: layout.originX + (tx - ty) * layout.halfTileWidth,
     y: layout.originY + (tx + ty) * layout.halfTileHeight
   };
+}
+
+function sameTile(a, b) {
+  return Boolean(a && b && a.x === b.x && a.y === b.y);
+}
+
+function tileKey(x, y) {
+  return `${x},${y}`;
+}
+
+function tileFromKey(key) {
+  return { x: key % MAP_WIDTH, y: Math.floor(key / MAP_WIDTH) };
 }
 
 function tileBounds(layout, x, y) {
