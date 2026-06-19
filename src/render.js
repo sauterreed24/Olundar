@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan } from './map.js';
-import { buildingAt, canBuildOn, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
   plains: '#b7c979',
@@ -1891,6 +1891,7 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const hoverMove = reachable.find((item) => sameTile(item, hoverTile)) || null;
   ctx.save();
   drawCommandRangeFrontier(ctx, layout, reachable, def.move);
+  drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
     drawMoveReachTile(ctx, bounds, layout, item, def.move, hoverMove);
@@ -1910,8 +1911,16 @@ function collectReachableTiles(state, unit, move) {
       const path = findPath(state, unit, x, y, move);
       if (!path) continue;
       const tile = tileAt(state, x, y);
-      const road = !!state.buildings.find((building) => building.type === 'road' && building.x === x && building.y === y);
-      tiles.push({ x, y, cost: path.cost, terrain: tile?.terrain || 'plains', road });
+      const road = Boolean(tile?.road || state.buildings.find((building) => building.type === 'road' && building.x === x && building.y === y));
+      tiles.push({
+        x,
+        y,
+        cost: path.cost,
+        terrain: tile?.terrain || 'plains',
+        road,
+        supplied: isTileSupplied(state, x, y),
+        frontier: path.cost >= move
+      });
     }
   }
   tiles.sort((a, b) => a.cost - b.cost);
@@ -1940,11 +1949,15 @@ function drawMoveReachTile(ctx, bounds, layout, item, maxMove, hoverMove = null)
   const compact = layout.mapWidth < 560 || layout.tileSize < 44;
   const fill = item.road
     ? (hovered ? 'rgba(118, 205, 235, 0.36)' : 'rgba(118, 186, 210, 0.18)')
+    : item.supplied
+      ? (hovered ? 'rgba(186, 245, 140, 0.27)' : 'rgba(186, 245, 140, 0.13)')
     : close
       ? (hovered ? 'rgba(255, 220, 122, 0.34)' : 'rgba(244, 205, 105, 0.17)')
       : (hovered ? 'rgba(255, 230, 130, 0.30)' : 'rgba(255, 244, 176, 0.115)');
   const stroke = item.road
     ? 'rgba(47, 116, 141, 0.42)'
+    : item.supplied
+      ? 'rgba(66, 125, 62, 0.30)'
     : close
       ? 'rgba(151, 96, 29, 0.34)'
       : 'rgba(113, 85, 34, 0.16)';
@@ -1968,10 +1981,38 @@ function drawCommandRangeFrontier(ctx, layout, reachable, maxMove) {
     strokeTileDiamond(
       ctx,
       bounds,
-      road ? 'rgba(63, 148, 174, 0.24)' : 'rgba(163, 111, 38, 0.22)',
-      Math.max(1, layout.tileSize * 0.026),
-      2.5
+      road ? 'rgba(63, 148, 174, 0.28)' : item.supplied ? 'rgba(83, 150, 71, 0.26)' : 'rgba(163, 111, 38, 0.22)',
+      Math.max(1, layout.tileSize * (road || item.supplied ? 0.032 : 0.026)),
+      2.2
     );
+  }
+  ctx.restore();
+}
+
+function drawCommandSupplyMesh(ctx, layout, reachable, hoverMove = null) {
+  const suppliedTiles = reachable.filter((item) => item.supplied || item.road);
+  if (!suppliedTiles.length) return;
+  const suppliedSet = new Set(suppliedTiles.map((item) => tileKey(item.x, item.y)));
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const item of suppliedTiles) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    const hovered = sameTile(item, hoverMove);
+    ctx.globalAlpha = item.road ? (hovered ? 0.92 : 0.62) : (hovered ? 0.72 : 0.42);
+    ctx.strokeStyle = item.road ? 'rgba(161, 231, 255, 0.74)' : 'rgba(214, 238, 157, 0.58)';
+    ctx.lineWidth = Math.max(1, layout.tileSize * (item.road ? 0.030 : 0.020));
+    for (const [nx, ny] of [[item.x + 1, item.y], [item.x, item.y + 1]]) {
+      if (!suppliedSet.has(tileKey(nx, ny))) continue;
+      const next = tileCenter(layout, nx, ny);
+      ctx.beginPath();
+      ctx.moveTo(bounds.cx, bounds.cy);
+      ctx.lineTo(next.x, next.y);
+      ctx.stroke();
+    }
+    if (item.supplied && shouldDrawSupplySeal(item)) {
+      drawSupplySeal(ctx, bounds, layout, hovered);
+    }
   }
   ctx.restore();
 }
@@ -2061,7 +2102,7 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
   const poleHeight = layout.tileSize * (hovered ? 0.34 : item.road ? 0.30 : 0.24);
   const poleX = bounds.cx - layout.tileSize * 0.09;
   const bannerColor = item.road ? '#9be5ff' : close || hovered ? '#ffe08a' : '#f4c866';
-  const rimColor = item.road ? 'rgba(27, 93, 122, 0.78)' : 'rgba(117, 77, 25, 0.68)';
+  const rimColor = item.road ? 'rgba(27, 93, 122, 0.78)' : item.supplied ? 'rgba(69, 118, 47, 0.68)' : 'rgba(117, 77, 25, 0.68)';
   ctx.save();
   ctx.shadowColor = item.road ? 'rgba(53, 145, 176, 0.30)' : 'rgba(214, 151, 48, 0.24)';
   ctx.shadowBlur = layout.tileSize * (hovered ? 0.14 : 0.08);
@@ -2085,6 +2126,7 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
   }
   drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item, hovered);
   if (item.road) drawRoadChevron(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout);
+  else if (item.supplied) drawSupplyLaurel(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   else drawFootstepPair(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   ctx.restore();
 }
@@ -2094,12 +2136,12 @@ function drawMoveCostCartouche(ctx, x, y, layout, item, large = false) {
   const h = Math.max(10, layout.tileSize * (large ? 0.20 : 0.16));
   ctx.save();
   roundRectPath(ctx, x - w * 0.5, y - h * 0.5, w, h, h * 0.48);
-  ctx.fillStyle = item.road ? 'rgba(230, 250, 255, 0.92)' : 'rgba(255, 247, 211, 0.92)';
-  ctx.strokeStyle = item.road ? 'rgba(47, 116, 141, 0.64)' : 'rgba(151, 96, 29, 0.56)';
+  ctx.fillStyle = item.road ? 'rgba(230, 250, 255, 0.92)' : item.supplied ? 'rgba(246, 255, 223, 0.92)' : 'rgba(255, 247, 211, 0.92)';
+  ctx.strokeStyle = item.road ? 'rgba(47, 116, 141, 0.64)' : item.supplied ? 'rgba(81, 138, 60, 0.56)' : 'rgba(151, 96, 29, 0.56)';
   ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = item.road ? '#174a60' : '#733f16';
+  ctx.fillStyle = item.road ? '#174a60' : item.supplied ? '#315f25' : '#733f16';
   ctx.font = `900 ${Math.max(8, layout.tileSize * (large ? 0.15 : 0.13))}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -2113,7 +2155,7 @@ function drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove) {
   const y = bounds.cy + layout.halfTileHeight * (frontier ? 0.18 : 0.25);
   ctx.save();
   ctx.globalAlpha = frontier ? 0.74 : 0.54;
-  ctx.strokeStyle = item.road ? 'rgba(44, 119, 145, 0.34)' : 'rgba(138, 92, 30, 0.28)';
+  ctx.strokeStyle = item.road ? 'rgba(44, 119, 145, 0.34)' : item.supplied ? 'rgba(85, 138, 62, 0.30)' : 'rgba(138, 92, 30, 0.28)';
   ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -2141,6 +2183,50 @@ function drawRoadChevron(ctx, cx, cy, layout) {
   ctx.restore();
 }
 
+function drawSupplyLaurel(ctx, cx, cy, layout, close) {
+  const size = layout.tileSize * (close ? 0.075 : 0.064);
+  ctx.save();
+  ctx.strokeStyle = close ? 'rgba(63, 111, 43, 0.58)' : 'rgba(70, 120, 52, 0.46)';
+  ctx.fillStyle = close ? 'rgba(210, 232, 142, 0.70)' : 'rgba(198, 224, 130, 0.52)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + side * size * 0.32, cy + size * 0.68);
+    ctx.quadraticCurveTo(cx + side * size * 1.12, cy - size * 0.02, cx + side * size * 0.38, cy - size * 0.62);
+    ctx.stroke();
+    for (let i = 0; i < 3; i += 1) {
+      const lx = cx + side * size * (0.40 + i * 0.15);
+      const ly = cy + size * (0.42 - i * 0.34);
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, size * 0.20, size * 0.09, side * -0.58, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawSupplySeal(ctx, bounds, layout, prominent = false) {
+  const r = Math.max(3, layout.tileSize * (prominent ? 0.070 : 0.052));
+  const cx = bounds.cx + layout.tileSize * 0.24;
+  const cy = bounds.cy - layout.halfTileHeight * 0.28;
+  ctx.save();
+  ctx.globalAlpha = prominent ? 0.90 : 0.64;
+  ctx.fillStyle = 'rgba(248, 255, 226, 0.84)';
+  ctx.strokeStyle = 'rgba(70, 118, 45, 0.58)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(62, 112, 42, 0.76)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.58, cy + r * 0.18);
+  ctx.quadraticCurveTo(cx, cy - r * 0.62, cx + r * 0.58, cy + r * 0.18);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawFootstepPair(ctx, cx, cy, layout, close) {
   const size = layout.tileSize * (close ? 0.060 : 0.052);
   ctx.save();
@@ -2151,6 +2237,10 @@ function drawFootstepPair(ctx, cx, cy, layout, close) {
     ctx.fill();
   }
   ctx.restore();
+}
+
+function shouldDrawSupplySeal(item) {
+  return item.road || item.cost <= 2 || item.frontier || tileNoise(item, 955) > 0.72;
 }
 
 function drawCommandHalo(ctx, layout, unit, active) {
