@@ -1153,6 +1153,35 @@ button:disabled {
   color: var(--muted);
 }
 
+.mission-site-receipt {
+  display: grid;
+  gap: 0.16rem;
+  margin-top: 0.65rem;
+  padding: 0.52rem 0.58rem;
+  border: 1px solid rgba(186, 245, 140, 0.3);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(82, 105, 55, 0.22), rgba(0,0,0,0.18));
+}
+
+.mission-site-receipt strong {
+  color: var(--good);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.mission-site-receipt span {
+  color: #f9e6a8;
+  font-weight: 800;
+}
+
+.mission-site-receipt p,
+.mission-site-receipt small {
+  margin: 0;
+  color: #ddd0ae;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
 .crisis {
   border-color: rgba(240, 200, 102, 0.28);
   background: linear-gradient(180deg, rgba(45, 32, 28, 0.94), rgba(15, 18, 24, 0.94));
