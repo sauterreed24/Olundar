@@ -118,6 +118,7 @@ let missionArchiveGroupMode = 'flat';
 let missionArchiveDetailMode = 'details';
 let focusedArchivedMissionId = null;
 let battleImpact = null;
+let turnReport = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -167,6 +168,11 @@ function renderTopBar() {
   ].join('');
   renderAudioButton();
   turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+}
+
+function mappedPercent() {
+  const revealed = Array.isArray(state.revealed) ? state.revealed.filter(Boolean).length : 0;
+  return Math.round((revealed / (MAP_WIDTH * MAP_HEIGHT)) * 100);
 }
 
 function renderAudioButton() {
@@ -839,7 +845,7 @@ function renderSelection() {
       <div class="command-stats">
         <span class="stat-chip"><b>${readyUnits}</b><small>Ready units</small></span>
         <span class="stat-chip"><b>${state.turn}</b><small>Turn</small></span>
-        <span class="stat-chip"><b>${Math.round((state.explored.size / (MAP_WIDTH * MAP_HEIGHT)) * 100)}%</b><small>Mapped</small></span>
+        <span class="stat-chip"><b>${mappedPercent()}%</b><small>Mapped</small></span>
       </div>
     `;
     return;
@@ -863,6 +869,7 @@ function renderActions() {
   actionPanel.innerHTML = '';
   actionPanel.appendChild(orderHeader());
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
+  if (turnReport) actionPanel.appendChild(turnReportCard());
 
   if (state.status !== 'playing') {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
@@ -1434,6 +1441,7 @@ function handleResult(result, successCue = null) {
     playAudioCue('error');
     return false;
   }
+  turnReport = null;
   if (successCue === 'attack') captureBattleImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
@@ -1484,6 +1492,126 @@ function battleImpactCard() {
   return card;
 }
 
+function captureTurnSnapshot() {
+  const resources = state.factions.olundar.resources;
+  return {
+    latestMessage: state.messages[0] || null,
+    resources: Object.fromEntries(Object.entries(resources).map(([key, value]) => [key, Math.floor(value || 0)])),
+    mapped: mappedPercent(),
+    deadUnits: state.units.filter((unit) => unit.faction === 'dead').length,
+    deadBuildings: state.buildings.filter((building) => building.faction === 'dead').length
+  };
+}
+
+function buildTurnReport(before, previousTurn) {
+  const resources = state.factions.olundar.resources;
+  const resourceDeltas = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']
+    .map((key) => {
+      const beforeValue = before.resources[key] || 0;
+      const currentValue = Math.floor(resources[key] || 0);
+      return { key, label: RESOURCE_NAMES[key], delta: currentValue - beforeValue, currentValue };
+    })
+    .filter((item) => item.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const boundary = before.latestMessage ? state.messages.indexOf(before.latestMessage) : -1;
+  const messages = (boundary >= 0 ? state.messages.slice(0, boundary) : state.messages.slice(0, 4))
+    .filter((message) => message && message.turn >= previousTurn)
+    .slice(0, 4);
+  const readyUnits = getReadyOlundarUnits(state).length;
+  const mapped = mappedPercent();
+  const deadUnits = state.units.filter((unit) => unit.faction === 'dead').length;
+  const deadBuildings = state.buildings.filter((building) => building.faction === 'dead').length;
+  const deadPressureDelta = (deadUnits + deadBuildings) - (before.deadUnits + before.deadBuildings);
+  const dangerMessage = messages.find((message) => ['bad', 'danger'].includes(message.tone));
+  const goodMessage = messages.find((message) => message.tone === 'good');
+  const summaryMessage = dangerMessage || goodMessage || messages[0];
+  const tone = state.status === 'lost'
+    ? 'bad'
+    : state.status === 'won'
+      ? 'good'
+      : dangerMessage || deadPressureDelta > 0
+        ? 'bad'
+        : goodMessage || resourceDeltas.some((item) => item.delta > 0)
+          ? 'good'
+          : 'info';
+  const deltas = resourceDeltas.slice(0, 4).map((item) => ({
+    label: item.label,
+    value: `${item.delta > 0 ? '+' : ''}${item.delta}`,
+    tone: item.delta > 0 ? 'good' : 'bad'
+  }));
+  const readyClause = readyUnits
+    ? `${readyUnits} Olundaran force${readyUnits === 1 ? '' : 's'} await fresh orders.`
+    : 'No idle Olundaran forces remain.';
+  const pressureClause = deadPressureDelta > 0
+    ? `Deadwalker pressure rose by ${deadPressureDelta}.`
+    : deadPressureDelta < 0
+      ? `Deadwalker pressure fell by ${Math.abs(deadPressureDelta)}.`
+      : '';
+  const storesClause = resourceDeltas.length
+    ? `Stores shifted ${resourceDeltas.slice(0, 3).map((item) => `${item.delta > 0 ? '+' : ''}${item.delta} ${item.label}`).join(', ')}.`
+    : '';
+  const summary = summaryMessage
+    ? summaryMessage.text
+    : [pressureClause, storesClause, readyClause].filter(Boolean).join(' ');
+  return {
+    title: `Turn ${previousTurn} -> ${state.turn}`,
+    tone,
+    summary,
+    toast: `Turn ${state.turn}: ${summary}`,
+    metrics: [
+      { label: 'Ready', value: String(readyUnits) },
+      { label: 'Mapped', value: `${mapped}%${mapped !== before.mapped ? ` (${mapped > before.mapped ? '+' : ''}${mapped - before.mapped})` : ''}` },
+      { label: 'Population', value: `${state.factions.olundar.population}/${state.factions.olundar.housing}` },
+      { label: 'Dead pressure', value: `${deadUnits + deadBuildings}${deadPressureDelta ? ` (${deadPressureDelta > 0 ? '+' : ''}${deadPressureDelta})` : ''}` }
+    ],
+    deltas,
+    messages
+  };
+}
+
+function turnReportCard() {
+  const card = document.createElement('article');
+  card.className = `turn-report ${turnReport.tone}`;
+  const metrics = turnReport.metrics.map((item) => `
+    <span><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>
+  `).join('');
+  const deltas = turnReport.deltas.length ? `
+    <div class="turn-report-deltas">
+      ${turnReport.deltas.map((item) => `<span class="${escapeHtml(item.tone)}"><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>`).join('')}
+    </div>
+  ` : '';
+  const messages = turnReport.messages.length ? `
+    <div class="turn-report-notes">
+      ${turnReport.messages.map((message) => `<p class="${escapeHtml(message.tone || 'info')}">${escapeHtml(message.text)}</p>`).join('')}
+    </div>
+  ` : '';
+  card.innerHTML = `
+    <div class="turn-report-head">
+      <span>Campaign Report</span>
+      <strong>${escapeHtml(turnReport.title)}</strong>
+      <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
+    </div>
+    <p>${escapeHtml(turnReport.summary)}</p>
+    <div class="turn-report-metrics">${metrics}</div>
+    ${deltas}
+    ${messages}
+  `;
+  return card;
+}
+
+function focusTurnReportOnMobile() {
+  if (!turnReport || window.innerWidth > 980) return;
+  const report = actionPanel.querySelector('.turn-report');
+  if (!report) return;
+  const topbar = document.querySelector('.topbar');
+  const offset = Math.ceil(topbar?.getBoundingClientRect().height || 0) + 10;
+  const top = Math.max(0, window.scrollY + report.getBoundingClientRect().top - offset);
+  window.scrollTo({
+    top,
+    behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth'
+  });
+}
+
 function requestEndTurn(force = false) {
   if (!force && state.pendingEndTurn === state.turn) force = true;
   const warnings = getEndTurnWarnings(state);
@@ -1496,11 +1624,15 @@ function requestEndTurn(force = false) {
   }
   state.pendingEndTurn = null;
   state.mode = { type: 'select' };
+  const before = captureTurnSnapshot();
+  const previousTurn = state.turn;
   battleImpact = null;
   endTurn(state);
-  toast('Turn resolved. The world moves.');
+  turnReport = buildTurnReport(before, previousTurn);
+  toast(turnReport.toast, turnReport.tone === 'bad' ? 'bad' : 'info');
   playAudioCue('turn');
   render();
+  focusTurnReportOnMobile();
 }
 
 function selectNextReadyUnit() {
@@ -1566,6 +1698,7 @@ function loadSerializedGame(raw, slot = null) {
     missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
     battleImpact = null;
+    turnReport = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -1607,6 +1740,7 @@ function importSaveFile(raw, fileName = '') {
     missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
     battleImpact = null;
+    turnReport = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1903,6 +2037,7 @@ function startConfiguredCampaign(form) {
   missionArchiveDetailMode = 'details';
   focusedArchivedMissionId = null;
   battleImpact = null;
+  turnReport = null;
   focusFirstReadyUnit();
   closeCampaignRecap();
   closeCampaignSetup();
@@ -2340,6 +2475,9 @@ actionPanel.addEventListener('click', (event) => {
   if (!(target instanceof HTMLElement)) return;
   if (target.dataset.action === 'clear-battle-impact') {
     battleImpact = null;
+    render();
+  } else if (target.dataset.action === 'clear-turn-report') {
+    turnReport = null;
     render();
   }
 });
