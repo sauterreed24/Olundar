@@ -958,6 +958,19 @@ button:disabled {
   line-height: 1.3;
 }
 
+.mission-actions {
+  grid-column: 2;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.18rem;
+}
+
+.mission-actions button {
+  min-width: 4.4rem;
+  padding: 0.34rem 0.55rem;
+  font-size: 0.72rem;
+}
+
 .mission-history {
   margin-top: 0.55rem;
 }

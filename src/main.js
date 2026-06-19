@@ -306,6 +306,9 @@ function renderAftermathMissions() {
             <span>${escapeHtml(mission.required)}</span>
             <strong>${escapeHtml(mission.name)}</strong>
             <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}${mission.context ? ` / ${escapeHtml(mission.context)}` : ''}. ${escapeHtml(mission.reward)}</small>
+            <div class="mission-actions">
+              <button type="button" data-action="focus-mission" data-mission-id="${escapeHtml(mission.id)}">Focus</button>
+            </div>
           </article>
         `).join('')}
       </div>
@@ -317,6 +320,20 @@ function renderAftermathMissions() {
       </div>
     ` : ''}
   `;
+}
+
+function focusMissionTarget(missionId) {
+  const mission = getAftermathMissions(state).active.find((item) => item.id === missionId);
+  if (!mission) {
+    toast('That mission is no longer active.', 'bad');
+    return;
+  }
+  activeMapLens = 'missions';
+  hoverTile = { x: mission.x, y: mission.y };
+  lastTile = hoverTile;
+  toast(`${mission.name} target ${mission.target}.`, 'info');
+  render();
+  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function renderObjectives() {
@@ -1243,6 +1260,12 @@ document.querySelector('#newTop').addEventListener('click', () => newCampaign())
 document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
 document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
+
+missionPanel.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action="focus-mission"]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  focusMissionTarget(target.dataset.missionId);
+});
 
 setupOverlay.addEventListener('click', (event) => {
   if (event.target === setupOverlay) closeCampaignSetup();

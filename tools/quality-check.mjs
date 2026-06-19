@@ -414,7 +414,13 @@ check('crisis aftermath creates delayed follow-up rulings', () => {
 });
 
 check('aftermath missions turn rulings into map objectives', () => {
+  const mainSource = readProjectFile('src/main.js');
+  const styleSource = readProjectFile('src/style.css');
   const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
+  assert(mainSource.includes('data-action="focus-mission"') && mainSource.includes('function focusMissionTarget'), 'Mission cards should expose a target focus control.');
+  assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
+  assert(styleSource.includes('.mission-actions'), 'Mission focus controls need compact card styling.');
+
   const state = createGame('quality-aftermath-missions');
   state.turn = 8;
   state.flags.firstAllySeen = true;
