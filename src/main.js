@@ -119,6 +119,7 @@ let battleImpact = null;
 initAudioPreference();
 applyPlayerSettings(playerSettings);
 registerPwa();
+focusFirstReadyUnit();
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
@@ -1309,6 +1310,16 @@ function selectNextReadyUnit() {
   render();
 }
 
+function focusFirstReadyUnit() {
+  const [unit] = getReadyOlundarUnits(state);
+  if (!unit) return;
+  state.selectedUnitId = unit.id;
+  state.selectedBuildingId = null;
+  state.mode = { type: 'select' };
+  lastTile = { x: unit.x, y: unit.y };
+  hoverTile = null;
+}
+
 function readSaveSlots() {
   return parseSaveSlots(localStorage.getItem(SAVE_SLOTS_KEY));
 }
@@ -1681,6 +1692,7 @@ function startConfiguredCampaign(form) {
   missionArchiveDetailMode = 'details';
   focusedArchivedMissionId = null;
   battleImpact = null;
+  focusFirstReadyUnit();
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
