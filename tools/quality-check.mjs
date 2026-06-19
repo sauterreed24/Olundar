@@ -1022,6 +1022,27 @@ check('pwa install shell references real app assets', () => {
   }
 });
 
+check('github pages workflow publishes the playable app', () => {
+  const workflow = readProjectFile('.github/workflows/pages.yml');
+
+  assert(workflow.includes('Deploy Olundar to GitHub Pages'), 'Pages workflow should be named for Olundar deployment.');
+  assert(workflow.includes('branches: [main]'), 'Pages workflow should publish from main.');
+  assert(workflow.includes('npm run quality:check'), 'Pages workflow should run the quality gate before deploy.');
+  assert(workflow.includes('actions/configure-pages@v5'), 'Pages workflow should configure GitHub Pages.');
+  assert(workflow.includes('actions/upload-pages-artifact@v3') && workflow.includes('path: .'), 'Pages workflow should upload the static app root.');
+  assert(workflow.includes('actions/deploy-pages@v4'), 'Pages workflow should deploy through GitHub Pages.');
+});
+
+check('canvas renderer keeps premium tactical sprites readable', () => {
+  const renderSource = readProjectFile('src/render.js');
+
+  assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
+  assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
+  assert(renderSource.includes('function drawBannerPennon') && renderSource.includes('function drawUnitRim'), 'Units and buildings should keep faction accents and readable bases.');
+  assert(renderSource.includes('function drawPortalSprite') && renderSource.includes('function drawNecroStructure'), 'Deadwalker structures should keep distinctive necrotic silhouettes.');
+  assert(renderSource.includes('createRadialGradient') && renderSource.includes('rgba(156, 243, 138'), 'Deadwalkers should retain their necrotic glow language.');
+});
+
 check('scenario and difficulty presets change campaign shape', () => {
   const founding = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-scenario' });
   const dawnroad = createGame({ scenarioId: 'dawnroad', difficultyId: 'standard', seed: 'quality-scenario' });

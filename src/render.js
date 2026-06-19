@@ -13,6 +13,31 @@ const TERRAIN_COLORS = {
   blight: '#54515e'
 };
 
+const TERRAIN_HIGHLIGHTS = {
+  plains: '#d7d08a',
+  forest: '#6faf65',
+  hills: '#dbc07a',
+  mountains: '#dde1df',
+  river: '#bfe9ff',
+  marsh: '#8ecf97',
+  ruins: '#d6c8a0',
+  blight: '#9cf38a'
+};
+
+const UNIT_ACCENTS = {
+  scout: '#7ab87a',
+  legionary: '#d6dde5',
+  spearGuard: '#e6d38c',
+  archer: '#d79858',
+  cavalry: '#d0a071',
+  engineer: '#b8c0c5',
+  onager: '#c99552',
+  boneThrall: '#d8d8c8',
+  corpseArcher: '#9cf38a',
+  graveKnight: '#aeb8ba',
+  lichBoss: '#9cf38a'
+};
+
 const FACTION_COLORS = Object.fromEntries(Object.values(FACTIONS).map((faction) => [faction.id, faction.color]));
 const LENS_COLORS = {
   dead: '#9cf38a',
@@ -112,6 +137,7 @@ function drawTiles(ctx, state, layout) {
     const base = TERRAIN_COLORS[tile.terrain] || '#777';
     ctx.fillStyle = shade(base, (tile.elevation - 0.5) * 36 + (visible ? 0 : -22));
     ctx.fillRect(x, y, layout.tileSize, layout.tileSize);
+    drawTileRelief(ctx, tile, x, y, layout.tileSize, visible);
     drawTerrainTexture(ctx, tile, x, y, layout.tileSize, visible);
     if (tile.road) drawRoad(ctx, x, y, layout.tileSize, visible);
     if (tile.blight > 0 && tile.terrain !== 'blight') drawBlightVeins(ctx, x, y, layout.tileSize, tile.blight, visible);
@@ -119,6 +145,36 @@ function drawTiles(ctx, state, layout) {
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, layout.tileSize - 1, layout.tileSize - 1);
   }
+}
+
+function drawTileRelief(ctx, tile, x, y, s, visible) {
+  const highlight = TERRAIN_HIGHLIGHTS[tile.terrain] || '#ffffff';
+  ctx.save();
+  const gradient = ctx.createLinearGradient(x, y, x + s, y + s);
+  gradient.addColorStop(0, visible ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.05)');
+  gradient.addColorStop(0.45, 'rgba(255,255,255,0)');
+  gradient.addColorStop(1, visible ? 'rgba(0,0,0,0.24)' : 'rgba(0,0,0,0.32)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x, y, s, s);
+
+  if (visible && tile.elevation > 0.58 && tile.terrain !== 'river') {
+    ctx.globalAlpha = Math.min(0.34, 0.08 + tile.elevation * 0.22);
+    ctx.strokeStyle = highlight;
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.16, y + s * (0.72 - tile.elevation * 0.16));
+    ctx.quadraticCurveTo(x + s * 0.46, y + s * (0.52 - tile.elevation * 0.10), x + s * 0.84, y + s * (0.64 - tile.elevation * 0.13));
+    ctx.stroke();
+  }
+
+  if (visible && tile.moisture > 0.68 && tile.terrain !== 'mountains') {
+    ctx.globalAlpha = Math.min(0.18, (tile.moisture - 0.58) * 0.22);
+    ctx.fillStyle = '#d9f6ff';
+    ctx.beginPath();
+    ctx.ellipse(x + s * 0.72, y + s * 0.28, s * 0.15, s * 0.05, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawTerrainTexture(ctx, tile, x, y, s, visible) {
@@ -133,12 +189,25 @@ function drawTerrainTexture(ctx, tile, x, y, s, visible) {
       triangle(ctx, px, py, s * 0.18, '#1f5b36');
       ctx.fillRect(px - s * 0.025, py + s * 0.12, s * 0.05, s * 0.14);
     }
+    ctx.globalAlpha = alpha * 0.56;
+    ctx.strokeStyle = '#8fcf7a';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.18, y + s * 0.82);
+    ctx.lineTo(x + s * 0.82, y + s * 0.20);
+    ctx.stroke();
   } else if (tile.terrain === 'hills') {
     ctx.strokeStyle = '#5e4d33';
     ctx.lineWidth = Math.max(1, s * 0.06);
     ctx.beginPath();
     ctx.arc(x + s * 0.35, y + s * 0.62, s * 0.24, Math.PI, 0);
     ctx.arc(x + s * 0.65, y + s * 0.65, s * 0.22, Math.PI, 0);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(245, 226, 159, 0.68)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.22, y + s * 0.76);
+    ctx.quadraticCurveTo(x + s * 0.48, y + s * 0.55, x + s * 0.82, y + s * 0.76);
     ctx.stroke();
   } else if (tile.terrain === 'mountains') {
     ctx.fillStyle = '#dad5c5';
@@ -155,12 +224,24 @@ function drawTerrainTexture(ctx, tile, x, y, s, visible) {
     ctx.lineTo(x + s * 0.72, y + s * 0.82);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.45, y + s * 0.2);
+    ctx.lineTo(x + s * 0.36, y + s * 0.82);
+    ctx.stroke();
   } else if (tile.terrain === 'river') {
     ctx.strokeStyle = '#b6e0ff';
     ctx.lineWidth = Math.max(1, s * 0.08);
     ctx.beginPath();
     ctx.moveTo(x + s * 0.1, y + s * 0.55);
     ctx.bezierCurveTo(x + s * 0.35, y + s * 0.3, x + s * 0.65, y + s * 0.8, x + s * 0.9, y + s * 0.45);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.16, y + s * 0.49);
+    ctx.bezierCurveTo(x + s * 0.38, y + s * 0.34, x + s * 0.62, y + s * 0.70, x + s * 0.84, y + s * 0.43);
     ctx.stroke();
   } else if (tile.terrain === 'marsh') {
     ctx.strokeStyle = '#233b2d';
@@ -176,6 +257,9 @@ function drawTerrainTexture(ctx, tile, x, y, s, visible) {
     ctx.fillRect(x + s * 0.25, y + s * 0.25, s * 0.14, s * 0.42);
     ctx.fillRect(x + s * 0.52, y + s * 0.18, s * 0.14, s * 0.50);
     ctx.fillRect(x + s * 0.2, y + s * 0.68, s * 0.55, s * 0.08);
+    ctx.fillStyle = '#d6c8a0';
+    ctx.fillRect(x + s * 0.28, y + s * 0.21, s * 0.08, s * 0.06);
+    ctx.fillRect(x + s * 0.55, y + s * 0.14, s * 0.08, s * 0.06);
   } else if (tile.terrain === 'blight') {
     drawBlightVeins(ctx, x, y, s, Math.max(5, tile.blight), true);
     ctx.fillStyle = 'rgba(170, 238, 140, 0.15)';
@@ -189,11 +273,25 @@ function drawTerrainTexture(ctx, tile, x, y, s, visible) {
 function drawRoad(ctx, x, y, s, visible) {
   ctx.save();
   ctx.globalAlpha = visible ? 0.7 : 0.35;
-  ctx.strokeStyle = '#c9b47a';
-  ctx.lineWidth = Math.max(2, s * 0.12);
+  ctx.strokeStyle = 'rgba(54, 39, 23, 0.74)';
+  ctx.lineWidth = Math.max(3, s * 0.18);
   ctx.beginPath();
   ctx.moveTo(x, y + s * 0.52);
   ctx.lineTo(x + s, y + s * 0.52);
+  ctx.stroke();
+  ctx.strokeStyle = '#c9b47a';
+  ctx.lineWidth = Math.max(2, s * 0.09);
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.50);
+  ctx.lineTo(x + s, y + s * 0.50);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 238, 170, 0.45)';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.08, y + s * 0.45);
+  ctx.lineTo(x + s * 0.92, y + s * 0.45);
+  ctx.moveTo(x + s * 0.08, y + s * 0.57);
+  ctx.lineTo(x + s * 0.92, y + s * 0.57);
   ctx.stroke();
   ctx.restore();
 }
@@ -524,28 +622,30 @@ function drawBuildingSprite(ctx, building, x, y, s) {
   ctx.shadowBlur = s * 0.08;
   ctx.shadowOffsetY = s * 0.05;
   if (building.type === 'portal') {
-    ctx.fillStyle = 'rgba(20,10,28,0.85)';
-    ellipse(ctx, x + s * 0.5, y + s * 0.53, s * 0.34, s * 0.42);
-    ctx.strokeStyle = '#9cf38a';
-    ctx.lineWidth = Math.max(2, s * 0.07);
-    ctx.beginPath();
-    ctx.arc(x + s * 0.5, y + s * 0.5, s * 0.28, 0.2, Math.PI * 1.75);
-    ctx.stroke();
-    ctx.strokeStyle = '#f4f0ff';
-    ctx.lineWidth = Math.max(1, s * 0.025);
-    ctx.beginPath();
-    ctx.arc(x + s * 0.5, y + s * 0.5, s * 0.18, Math.PI, Math.PI * 2.3);
-    ctx.stroke();
+    drawPortalSprite(ctx, x, y, s);
   } else if (building.type === 'city') {
+    ctx.fillStyle = '#6f6d62';
+    ctx.fillRect(x + s * 0.16, y + s * 0.52, s * 0.68, s * 0.26);
     ctx.fillStyle = color;
-    ctx.fillRect(x + s * 0.2, y + s * 0.44, s * 0.6, s * 0.35);
+    ctx.fillRect(x + s * 0.24, y + s * 0.42, s * 0.52, s * 0.32);
     ctx.fillStyle = '#6b4d38';
-    roof(ctx, x + s * 0.16, y + s * 0.45, s * 0.68, s * 0.24);
+    roof(ctx, x + s * 0.20, y + s * 0.43, s * 0.60, s * 0.24);
     ctx.fillStyle = '#222a33';
     ctx.fillRect(x + s * 0.45, y + s * 0.62, s * 0.12, s * 0.17);
+    ctx.fillStyle = '#f9e6a8';
+    for (const px of [0.31, 0.66]) ctx.fillRect(x + s * px, y + s * 0.54, s * 0.07, s * 0.07);
+    drawBannerPennon(ctx, x + s * 0.72, y + s * 0.24, s * 0.34, color);
   } else if (building.type === 'watchtower') {
     ctx.fillStyle = '#5e452e';
     ctx.fillRect(x + s * 0.42, y + s * 0.28, s * 0.16, s * 0.48);
+    ctx.strokeStyle = '#2b1d12';
+    ctx.lineWidth = Math.max(1, s * 0.035);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.41, y + s * 0.42);
+    ctx.lineTo(x + s * 0.59, y + s * 0.74);
+    ctx.moveTo(x + s * 0.59, y + s * 0.42);
+    ctx.lineTo(x + s * 0.41, y + s * 0.74);
+    ctx.stroke();
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(x + s * 0.3, y + s * 0.3);
@@ -554,25 +654,32 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     ctx.closePath();
     ctx.fill();
     ctx.fillRect(x + s * 0.29, y + s * 0.28, s * 0.42, s * 0.14);
+    drawBannerPennon(ctx, x + s * 0.63, y + s * 0.12, s * 0.22, color);
   } else if (building.type === 'wall') {
     ctx.fillStyle = '#8a8e91';
     for (let i = 0; i < 4; i += 1) ctx.fillRect(x + s * (0.08 + i * 0.22), y + s * 0.35, s * 0.16, s * 0.42);
+    ctx.fillStyle = '#c5c7c8';
+    for (let i = 0; i < 5; i += 1) ctx.fillRect(x + s * (0.06 + i * 0.19), y + s * 0.28, s * 0.10, s * 0.10);
+    ctx.strokeStyle = 'rgba(20,20,20,0.35)';
+    ctx.lineWidth = Math.max(1, s * 0.02);
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * (0.20 + i * 0.24), y + s * 0.40);
+      ctx.lineTo(x + s * (0.20 + i * 0.24), y + s * 0.76);
+      ctx.stroke();
+    }
   } else if (building.type === 'road') {
     // Road drawn as terrain overlay.
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
-    ctx.fillStyle = '#192119';
-    ctx.fillRect(x + s * 0.22, y + s * 0.40, s * 0.56, s * 0.35);
-    ctx.fillStyle = '#9cf38a';
-    ctx.beginPath();
-    ctx.arc(x + s * 0.5, y + s * 0.38, s * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.fillRect(x + s * 0.42, y + s * 0.45, s * 0.16, s * 0.3);
+    drawNecroStructure(ctx, building, x, y, s);
   } else {
     ctx.fillStyle = '#493728';
     ctx.fillRect(x + s * 0.22, y + s * 0.48, s * 0.56, s * 0.3);
     ctx.fillStyle = color;
     roof(ctx, x + s * 0.18, y + s * 0.48, s * 0.64, s * 0.20);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(x + s * 0.32, y + s * 0.58, s * 0.08, s * 0.08);
+    ctx.fillRect(x + s * 0.60, y + s * 0.58, s * 0.08, s * 0.08);
   }
   if (building.turnsLeft > 0) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -587,6 +694,79 @@ function drawBuildingSprite(ctx, building, x, y, s) {
   ctx.restore();
 }
 
+function drawPortalSprite(ctx, x, y, s) {
+  const cx = x + s * 0.5;
+  const cy = y + s * 0.52;
+  const glow = ctx.createRadialGradient(cx, cy, s * 0.05, cx, cy, s * 0.48);
+  glow.addColorStop(0, 'rgba(156, 243, 138, 0.55)');
+  glow.addColorStop(0.42, 'rgba(74, 188, 107, 0.22)');
+  glow.addColorStop(1, 'rgba(11, 13, 15, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x, y, s, s);
+  ctx.fillStyle = 'rgba(20,10,28,0.92)';
+  ellipse(ctx, cx, cy, s * 0.34, s * 0.43);
+  ctx.strokeStyle = '#9cf38a';
+  ctx.lineWidth = Math.max(2, s * 0.07);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, s * 0.29, s * 0.40, 0.12, 0.2, Math.PI * 1.82);
+  ctx.stroke();
+  ctx.strokeStyle = '#f4f0ff';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, s * 0.18, s * 0.27, -0.15, Math.PI, Math.PI * 2.3);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(156, 243, 138, 0.75)';
+  for (const [px, py, r] of [[0.30, 0.30, 0.035], [0.72, 0.38, 0.028], [0.38, 0.78, 0.024]]) {
+    ctx.beginPath();
+    ctx.arc(x + s * px, y + s * py, s * r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawNecroStructure(ctx, building, x, y, s) {
+  const elite = building.type === 'necropolis';
+  ctx.fillStyle = '#161d18';
+  ctx.fillRect(x + s * 0.20, y + s * 0.42, s * 0.60, s * 0.34);
+  ctx.fillStyle = elite ? '#2b3037' : '#20271f';
+  roof(ctx, x + s * 0.17, y + s * 0.42, s * 0.66, s * 0.20);
+  ctx.fillStyle = '#9cf38a';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.5, y + s * 0.36, s * (elite ? 0.18 : 0.14), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#050608';
+  ctx.fillRect(x + s * 0.42, y + s * 0.48, s * 0.16, s * 0.28);
+  ctx.strokeStyle = 'rgba(156, 243, 138, 0.8)';
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.28, y + s * 0.35);
+  ctx.lineTo(x + s * 0.20, y + s * 0.18);
+  ctx.moveTo(x + s * 0.72, y + s * 0.35);
+  ctx.lineTo(x + s * 0.82, y + s * 0.18);
+  ctx.stroke();
+  if (building.type === 'graveForge') {
+    ctx.fillStyle = '#ff8a62';
+    ctx.beginPath();
+    ctx.arc(x + s * 0.66, y + s * 0.62, s * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawBannerPennon(ctx, x, y, h, color) {
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, h * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y + h);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y + h * 0.08);
+  ctx.lineTo(x + h * 0.42, y + h * 0.18);
+  ctx.lineTo(x, y + h * 0.34);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawUnitSprite(ctx, unit, x, y, s, state) {
   const def = UNIT_TYPES[unit.type];
   const color = FACTION_COLORS[unit.faction] || '#eee';
@@ -599,6 +779,7 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   ctx.shadowOffsetY = s * 0.04;
   ctx.fillStyle = enemy ? '#171717' : '#202632';
   ellipse(ctx, cx, y + s * 0.78, s * 0.28, s * 0.09);
+  drawUnitRim(ctx, unit, cx, y + s * 0.78, s, enemy ? '#9cf38a' : color);
   if (def.tags.includes('undead')) {
     drawUndead(ctx, unit, x, y, s);
   } else if (unit.type === 'cavalry') {
@@ -623,29 +804,68 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   ctx.restore();
 }
 
+function drawUnitRim(ctx, unit, cx, cy, s, color) {
+  ctx.save();
+  ctx.strokeStyle = unit.faction === 'dead' ? 'rgba(156, 243, 138, 0.7)' : color;
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.globalAlpha = unit.faction === 'dead' ? 0.62 : 0.45;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, s * 0.31, s * 0.10, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawLivingSoldier(ctx, unit, color, x, y, s) {
   const cx = x + s * 0.5;
+  const accent = UNIT_ACCENTS[unit.type] || '#d6dde5';
+  const armor = unit.type === 'legionary' || unit.type === 'spearGuard';
+  ctx.strokeStyle = '#2b2218';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+
+  ctx.fillStyle = armor ? '#c7ccd1' : color;
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.38, y + s * 0.43);
+  ctx.lineTo(x + s * 0.62, y + s * 0.43);
+  ctx.lineTo(x + s * 0.68, y + s * 0.72);
+  ctx.lineTo(x + s * 0.32, y + s * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  ctx.fillRect(x + s * 0.41, y + s * 0.51, s * 0.18, s * 0.18);
+  ctx.fillStyle = '#6b4d38';
+  ctx.fillRect(x + s * 0.38, y + s * 0.70, s * 0.08, s * 0.12);
+  ctx.fillRect(x + s * 0.54, y + s * 0.70, s * 0.08, s * 0.12);
+
   ctx.fillStyle = '#d2c2a0';
   ctx.beginPath();
-  ctx.arc(cx, y + s * 0.33, s * 0.12, 0, Math.PI * 2);
+  ctx.arc(cx, y + s * 0.31, s * 0.115, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = color;
-  ctx.fillRect(x + s * 0.38, y + s * 0.45, s * 0.24, s * 0.25);
+  drawHelmet(ctx, cx, y + s * 0.27, s, armor ? '#aeb7bd' : '#2b3a2f', accent);
+
   if (unit.type === 'legionary' || unit.type === 'spearGuard') {
-    ctx.fillStyle = '#b6bec8';
+    drawLegionShield(ctx, x + s * 0.28, y + s * 0.56, s, unit.type === 'spearGuard' ? '#d9c56f' : '#b6bec8', color);
     ctx.beginPath();
-    ctx.moveTo(x + s * 0.33, y + s * 0.42);
-    ctx.lineTo(x + s * 0.25, y + s * 0.62);
-    ctx.lineTo(x + s * 0.34, y + s * 0.78);
-    ctx.lineTo(x + s * 0.44, y + s * 0.62);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#2b2218';
-    ctx.lineWidth = Math.max(1, s * 0.035);
-    ctx.beginPath();
-    ctx.moveTo(x + s * 0.68, y + s * 0.23);
-    ctx.lineTo(x + s * 0.68, y + s * 0.8);
+    ctx.moveTo(x + s * 0.70, y + s * 0.20);
+    ctx.lineTo(x + s * 0.70, y + s * 0.82);
     ctx.stroke();
+    if (unit.type === 'legionary') {
+      ctx.strokeStyle = '#d6dde5';
+      ctx.lineWidth = Math.max(1, s * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.66, y + s * 0.42);
+      ctx.lineTo(x + s * 0.82, y + s * 0.30);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#d6dde5';
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.70, y + s * 0.16);
+      ctx.lineTo(x + s * 0.76, y + s * 0.26);
+      ctx.lineTo(x + s * 0.64, y + s * 0.26);
+      ctx.closePath();
+      ctx.fill();
+    }
   } else if (unit.type === 'archer') {
     ctx.strokeStyle = '#4b2f1d';
     ctx.lineWidth = Math.max(1, s * 0.04);
@@ -657,6 +877,12 @@ function drawLivingSoldier(ctx, unit, color, x, y, s) {
     ctx.moveTo(x + s * 0.67, y + s * 0.28);
     ctx.lineTo(x + s * 0.67, y + s * 0.72);
     ctx.stroke();
+    ctx.strokeStyle = '#f0c866';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.46, y + s * 0.51);
+    ctx.lineTo(x + s * 0.76, y + s * 0.42);
+    ctx.stroke();
   } else if (unit.type === 'engineer') {
     ctx.strokeStyle = '#322318';
     ctx.lineWidth = Math.max(2, s * 0.05);
@@ -666,6 +892,8 @@ function drawLivingSoldier(ctx, unit, color, x, y, s) {
     ctx.stroke();
     ctx.fillStyle = '#a9a9a9';
     ctx.fillRect(x + s * 0.73, y + s * 0.22, s * 0.16, s * 0.08);
+    ctx.fillStyle = '#5e452e';
+    ctx.fillRect(x + s * 0.28, y + s * 0.58, s * 0.16, s * 0.12);
   } else if (unit.type === 'scout') {
     ctx.fillStyle = '#2b3a2f';
     ctx.beginPath();
@@ -674,24 +902,80 @@ function drawLivingSoldier(ctx, unit, color, x, y, s) {
     ctx.lineTo(x + s * 0.68, y + s * 0.5);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = '#7ab87a';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.30, y + s * 0.69);
+    ctx.lineTo(x + s * 0.70, y + s * 0.43);
+    ctx.stroke();
   }
   drawSmallGlyph(ctx, UNIT_TYPES[unit.type].glyph, cx, y + s * 0.62, s, '#111');
 }
 
-function drawCavalry(ctx, color, x, y, s) {
-  ctx.fillStyle = '#5b3a24';
-  ctx.fillRect(x + s * 0.22, y + s * 0.48, s * 0.48, s * 0.2);
+function drawHelmet(ctx, cx, y, s, metal, plume) {
+  ctx.fillStyle = metal;
   ctx.beginPath();
-  ctx.arc(x + s * 0.72, y + s * 0.44, s * 0.12, 0, Math.PI * 2);
+  ctx.arc(cx, y + s * 0.03, s * 0.12, Math.PI, 0);
+  ctx.lineTo(cx + s * 0.12, y + s * 0.07);
+  ctx.lineTo(cx - s * 0.12, y + s * 0.07);
+  ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = plume;
+  ctx.fillRect(cx - s * 0.035, y - s * 0.08, s * 0.07, s * 0.08);
+}
+
+function drawLegionShield(ctx, cx, cy, s, face, trim) {
+  ctx.fillStyle = trim;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.12, cy - s * 0.18);
+  ctx.quadraticCurveTo(cx, cy - s * 0.26, cx + s * 0.12, cy - s * 0.18);
+  ctx.lineTo(cx + s * 0.10, cy + s * 0.17);
+  ctx.quadraticCurveTo(cx, cy + s * 0.25, cx - s * 0.10, cy + s * 0.17);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.08, cy - s * 0.14);
+  ctx.quadraticCurveTo(cx, cy - s * 0.20, cx + s * 0.08, cy - s * 0.14);
+  ctx.lineTo(cx + s * 0.07, cy + s * 0.13);
+  ctx.quadraticCurveTo(cx, cy + s * 0.18, cx - s * 0.07, cy + s * 0.13);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#f9e6a8';
+  ctx.beginPath();
+  ctx.arc(cx, cy, s * 0.035, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCavalry(ctx, color, x, y, s) {
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  ctx.fillStyle = '#5b3a24';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.48, y + s * 0.57, s * 0.29, s * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + s * 0.74, y + s * 0.45, s * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#2b1d12';
+  for (const px of [0.32, 0.46, 0.62, 0.70]) {
+    ctx.fillRect(x + s * px, y + s * 0.66, s * 0.035, s * 0.14);
+  }
   ctx.fillStyle = color;
   ctx.fillRect(x + s * 0.42, y + s * 0.30, s * 0.18, s * 0.22);
+  ctx.fillStyle = '#d2c2a0';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.51, y + s * 0.25, s * 0.08, 0, Math.PI * 2);
+  ctx.fill();
   ctx.strokeStyle = '#322318';
   ctx.lineWidth = Math.max(1, s * 0.035);
   ctx.beginPath();
   ctx.moveTo(x + s * 0.55, y + s * 0.25);
   ctx.lineTo(x + s * 0.70, y + s * 0.75);
   ctx.stroke();
+  drawBannerPennon(ctx, x + s * 0.66, y + s * 0.24, s * 0.22, color);
   drawSmallGlyph(ctx, 'C', x + s * 0.5, y + s * 0.61, s, '#111');
 }
 
@@ -700,10 +984,21 @@ function drawOnager(ctx, color, x, y, s) {
   ctx.fillRect(x + s * 0.25, y + s * 0.48, s * 0.5, s * 0.18);
   ctx.strokeStyle = '#2b1d12';
   ctx.lineWidth = Math.max(2, s * 0.05);
+  ctx.strokeRect(x + s * 0.25, y + s * 0.48, s * 0.5, s * 0.18);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.28, y + s * 0.66);
+  ctx.lineTo(x + s * 0.72, y + s * 0.48);
+  ctx.moveTo(x + s * 0.72, y + s * 0.66);
+  ctx.lineTo(x + s * 0.28, y + s * 0.48);
+  ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(x + s * 0.38, y + s * 0.5);
   ctx.lineTo(x + s * 0.68, y + s * 0.25);
   ctx.stroke();
+  ctx.fillStyle = '#8a8e91';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.72, y + s * 0.22, s * 0.055, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(x + s * 0.35, y + s * 0.72, s * 0.09, 0, Math.PI * 2);
@@ -715,8 +1010,27 @@ function drawOnager(ctx, color, x, y, s) {
 function drawUndead(ctx, unit, x, y, s) {
   const cx = x + s * 0.5;
   const elite = unit.type === 'graveKnight' || unit.type === 'lichBoss';
+  const glow = ctx.createRadialGradient(cx, y + s * 0.50, s * 0.06, cx, y + s * 0.50, s * 0.36);
+  glow.addColorStop(0, 'rgba(156, 243, 138, 0.28)');
+  glow.addColorStop(1, 'rgba(156, 243, 138, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + s * 0.12, y + s * 0.12, s * 0.76, s * 0.76);
   ctx.fillStyle = elite ? '#2c3335' : '#d8d8c8';
-  ctx.fillRect(x + s * 0.38, y + s * 0.45, s * 0.24, s * 0.27);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.38, y + s * 0.43);
+  ctx.lineTo(x + s * 0.62, y + s * 0.43);
+  ctx.lineTo(x + s * 0.66, y + s * 0.72);
+  ctx.lineTo(x + s * 0.34, y + s * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = elite ? '#9cf38a' : '#b7b7a8';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.42, y + s * (0.50 + i * 0.06));
+    ctx.lineTo(x + s * 0.58, y + s * (0.50 + i * 0.06));
+    ctx.stroke();
+  }
   ctx.fillStyle = '#e6e5d5';
   ctx.beginPath();
   ctx.arc(cx, y + s * 0.32, s * 0.13, 0, Math.PI * 2);
@@ -732,11 +1046,24 @@ function drawUndead(ctx, unit, x, y, s) {
     ctx.beginPath();
     ctx.arc(x + s * 0.67, y + s * 0.5, s * 0.20, -Math.PI / 2, Math.PI / 2);
     ctx.stroke();
+    ctx.strokeStyle = '#d8d8c8';
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.44, y + s * 0.52);
+    ctx.lineTo(x + s * 0.76, y + s * 0.43);
+    ctx.stroke();
   } else {
     ctx.beginPath();
     ctx.moveTo(x + s * 0.66, y + s * 0.28);
     ctx.lineTo(x + s * 0.72, y + s * 0.76);
     ctx.stroke();
+    if (elite) {
+      ctx.strokeStyle = '#d8d8c8';
+      ctx.lineWidth = Math.max(1, s * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.34, y + s * 0.45);
+      ctx.lineTo(x + s * 0.26, y + s * 0.70);
+      ctx.stroke();
+    }
   }
   if (unit.type === 'lichBoss') {
     ctx.fillStyle = '#9cf38a';
