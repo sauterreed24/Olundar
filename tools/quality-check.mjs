@@ -1038,6 +1038,7 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   const renderSource = readProjectFile('src/render.js');
   const mainSource = readProjectFile('src/main.js');
   const styleSource = readProjectFile('src/style.css');
+  const indexSource = readProjectFile('index.html');
 
   assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
   assert(renderSource.includes('function drawTerrainGround') && renderSource.includes('function drawGeographyOverlays') && renderSource.includes('function drawForestCrown'), 'Terrain should use a layered illustrated geography pass rather than flat square fills.');
@@ -1047,6 +1048,8 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(renderSource.includes('function getCameraBounds') && renderSource.includes('canvas.__olundarState'), 'The map should use a focused tactical camera instead of shrinking the full world into tiny tokens.');
   assert(renderSource.includes('Math.max(10, Math.min(16, revealedWidth + 2))') && renderSource.includes('Math.min(6, Math.floor(layout.tileSize * 0.18))'), 'The map should hold a close tactical camera and keep minimap scale bounded.');
   assert(mainSource.includes('function focusFirstReadyUnit') && mainSource.includes('focusFirstReadyUnit();'), 'New campaigns should open on an actionable selected unit, not an unfocused board.');
+  assert(indexSource.indexOf('id="selectionPanel"') < indexSource.indexOf('id="councilPanel"') && indexSource.indexOf('id="actionPanel"') < indexSource.indexOf('id="councilPanel"'), 'The side rail should put selected-unit command surfaces before advisory panels.');
+  assert(mainSource.includes('visibleSteps') && mainSource.includes('guide-more'), 'The first-turn guide should stay compact instead of pushing commands below the fold.');
   assert(mainSource.includes('const idealHeight = width * 0.8'), 'The default battlefield should use a taller map-first command viewport.');
   assert(renderSource.includes("tile.terrain === 'plains'") && renderSource.includes('quadraticCurveTo'), 'Terrain should include painterly texture beyond flat tile fills.');
   assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
@@ -1060,6 +1063,7 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(styleSource.includes('.map-shell::before') && styleSource.includes('border-top-left-radius'), 'Map shell should keep decorative imperial frame treatment.');
   assert(styleSource.includes('.map-lens-bar') && styleSource.includes('position: absolute') && styleSource.includes('backdrop-filter: blur(8px)'), 'Map lens controls should float over the battlefield instead of consuming playfield layout space.');
   assert(styleSource.includes('.map-help') && styleSource.includes('bottom: 0.72rem') && styleSource.includes('flex-wrap: nowrap'), 'Map help should be a compact battlefield overlay.');
+  assert(styleSource.includes('.command-card') && styleSource.includes('.order-card') && styleSource.includes('overflow-x: auto'), 'Command panels and mobile chrome should prioritize immediate play over always-on documentation.');
   assert(styleSource.includes('.objectives li') && styleSource.includes('color: #3b2817'), 'Objectives should remain readable against the light vellum panel.');
   assert(styleSource.includes('.toast.bad') && styleSource.includes('color: #661b15'), 'Toast confirmations should stay readable in the light theme.');
   assert(styleSource.includes('rgba(255, 249, 224') && styleSource.includes('radial-gradient(circle at 82% 17%'), 'The first viewport should avoid generic black dashboard chrome.');
