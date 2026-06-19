@@ -403,6 +403,7 @@ function missionView(state, mission) {
     route: missionRoutePreview(state, mission),
     completed: Boolean(mission.completedTurn),
     completedTurn: mission.completedTurn || null,
+    completedBy: mission.completedBy || '',
     reward: mission.completedTurn && mission.resultText ? mission.resultText : mission.rewardText || 'A small campaign reward follows completion.'
   };
 }

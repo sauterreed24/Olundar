@@ -422,11 +422,14 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('data-action="focus-mission-unit"') && mainSource.includes('function focusMissionUnit'), 'Mission cards should let players jump to the recommended unit.');
   assert(mainSource.includes('data-action="dispatch-mission"') && mainSource.includes('function dispatchMission'), 'Reachable mission routes should expose a direct dispatch action.');
   assert(mainSource.includes('mission.route.reachableThisTurn') && mainSource.includes('moveUnit(state, unit.id, mission.x, mission.y)'), 'Mission dispatch should only use reachable route previews and normal movement rules.');
+  assert(mainSource.includes('missionResultBannerMarkup') && mainSource.includes('captureMissionResult'), 'Mission dispatch should show a compact post-completion result banner.');
+  assert(mainSource.includes('data-action="close-mission-result"') && mainSource.includes('missionFollowUpText'), 'Mission result banners should be dismissible and summarize follow-up markers.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
   assert(styleSource.includes('.mission-actions'), 'Mission focus controls need compact card styling.');
   assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
+  assert(styleSource.includes('.mission-result'), 'Mission completion result banners need compact styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 
   const state = createGame('quality-aftermath-missions');
@@ -467,6 +470,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   missions = getAftermathMissions(state);
   assert(!missions.active.some((mission) => mission.id === active.id), 'Completed aftermath missions should leave the active list.');
   assert(missions.recent.some((mission) => mission.id === active.id && mission.completed), 'Completed aftermath missions should appear in recent history.');
+  assert(missions.recent.some((mission) => mission.id === active.id && mission.completedBy === engineer.name), 'Completed aftermath missions should expose the completing unit for result banners.');
   assert(state.factions.olundar.resources.morale > beforeMorale, 'Completing a repair mission should improve morale beyond the aftermath ruling.');
   const completedLens = getStrategicMapLens(state, 'missions');
   assert(completedLens.markers.some((marker) => marker.kind === 'missionComplete' && marker.x === active.x && marker.y === active.y), 'Missions lens should retain recent completion markers.');

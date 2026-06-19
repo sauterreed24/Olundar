@@ -85,6 +85,7 @@ let playerSettings = readSettings();
 let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
 let focusedMissionId = null;
+let missionResultBanner = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -290,8 +291,9 @@ function renderCrisisCouncil() {
 
 function renderAftermathMissions() {
   const missions = getAftermathMissions(state);
-  missionPanel.hidden = !missions.visible;
-  if (!missions.visible) {
+  const visible = missions.visible || Boolean(missionResultBanner);
+  missionPanel.hidden = !visible;
+  if (!visible) {
     missionPanel.innerHTML = '';
     return;
   }
@@ -300,6 +302,7 @@ function renderAftermathMissions() {
       <h2>${escapeHtml(missions.title)}</h2>
       <p>${escapeHtml(missions.summary)}</p>
     </div>
+    ${missionResultBanner ? missionResultBannerMarkup() : ''}
     ${missions.active.length ? `
       <div class="mission-list">
         ${missions.active.map((mission) => `
@@ -387,12 +390,47 @@ function dispatchMission(missionId) {
   if (handleResult(result, 'move')) {
     const completed = !getAftermathMissions(state).active.some((item) => item.id === mission.id);
     if (completed) {
+      captureMissionResult(mission.id);
       focusedMissionId = null;
       toast(`${mission.name} completed by ${unit.name}.`, 'good');
     }
   }
   render();
   canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function captureMissionResult(missionId) {
+  const completed = getAftermathMissions(state).recent.find((mission) => mission.id === missionId);
+  if (!completed) return;
+  missionResultBanner = {
+    id: completed.id,
+    name: completed.name,
+    completedTurn: completed.completedTurn,
+    completedBy: completed.completedBy || 'Olundar',
+    context: completed.context,
+    reward: completed.reward,
+    followUp: missionFollowUpText(completed.reward)
+  };
+}
+
+function missionFollowUpText(text = '') {
+  const match = String(text).match(/A follow-up marker opens at ([^:]+): ([^.]+)\./);
+  return match ? `Next marker: ${match[2]} at ${match[1]}.` : '';
+}
+
+function missionResultBannerMarkup() {
+  return `
+    <article class="mission-result">
+      <div>
+        <span>T${escapeHtml(missionResultBanner.completedTurn)} Result</span>
+        <strong>${escapeHtml(missionResultBanner.name)}</strong>
+      </div>
+      <p><b>${escapeHtml(missionResultBanner.completedBy)}</b>${missionResultBanner.context ? ` secured ${escapeHtml(missionResultBanner.context)}.` : ' completed the field task.'}</p>
+      <small>${escapeHtml(missionResultBanner.reward)}</small>
+      ${missionResultBanner.followUp ? `<em>${escapeHtml(missionResultBanner.followUp)}</em>` : ''}
+      <button type="button" data-action="close-mission-result" aria-label="Dismiss mission result">Close</button>
+    </article>
+  `;
 }
 
 function focusedMissionRouteOverlay() {
@@ -876,6 +914,7 @@ function loadSerializedGame(raw, slot = null) {
     state = deserializeState(raw);
     activeSaveSlotId = slot?.id || null;
     focusedMissionId = null;
+    missionResultBanner = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -908,6 +947,7 @@ function importSaveFile(raw, fileName = '') {
     state = imported.state;
     activeSaveSlotId = imported.slot.id;
     focusedMissionId = null;
+    missionResultBanner = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1195,6 +1235,7 @@ function startConfiguredCampaign(form) {
   lastTile = { x: 7, y: 16 };
   lastAutoRecapKey = null;
   focusedMissionId = null;
+  missionResultBanner = null;
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
@@ -1344,6 +1385,10 @@ missionPanel.addEventListener('click', (event) => {
   if (target.dataset.action === 'focus-mission') focusMissionTarget(target.dataset.missionId);
   else if (target.dataset.action === 'focus-mission-unit') focusMissionUnit(target.dataset.missionId);
   else if (target.dataset.action === 'dispatch-mission') dispatchMission(target.dataset.missionId);
+  else if (target.dataset.action === 'close-mission-result') {
+    missionResultBanner = null;
+    render();
+  }
 });
 
 setupOverlay.addEventListener('click', (event) => {

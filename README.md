@@ -13,7 +13,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Siege Operations that track midgame victory work: onagers, survival pacts, Deadwalker strongholds, Vorgath, and the Bone Portal.
 - Crisis Council events for refugee caravans, thin granaries, night raids, and emergency councils, with rulings that change resources, morale, population, troops, fortifications, or relations.
 - Chained crisis aftermaths that turn earlier hard rulings into delayed petitions, public strain, diplomatic memory, repairs, or battlefield opportunities.
-- Aftermath Missions that place crisis follow-through tasks on the map, such as escort roads, repair scars, raider trails, and accord routes, with visible site art, focus controls, route previews, focused route overlays, dispatch actions, route chains, and terrain-specific rewards.
+- Aftermath Missions that place crisis follow-through tasks on the map, such as escort roads, repair scars, raider trails, and accord routes, with visible site art, focus controls, route previews, focused route overlays, dispatch actions, result banners, route chains, and terrain-specific rewards.
 - Campaign recap overlay for victory, defeat, and imported saves with stats, objective milestones, and practical next steps.
 - Diplomacy Ledger that keeps contacts, pacts, trade, aid, pressure, and rivalries visible over long campaigns.
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
@@ -35,7 +35,7 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
 - Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, result banners, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -66,7 +66,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
 - Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, alliance vision, and active aftermath missions.
 - When the **Crisis Council** appears, choose one ruling per event; some rulings create delayed aftermath cards a few turns later, unaffordable choices are disabled, and recent rulings stay visible for a few turns.
-- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
+- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; completed dispatches show a compact result banner with the reward and follow-up marker when one opens; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
 - Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
@@ -132,7 +132,7 @@ olundar_game/
 - Living-faction war aims must appear in diplomacy and steer pre-pact AI defense, raiding, or scouting.
 - Allied field orders must be pact-gated and steer allied AI toward reinforcement or Deadwalker harassment.
 - Crisis Council events stay out of the first-turn opening, then trigger from live famine, contact, Deadwalker, and coalition pressure; rulings must spend costs once, create real campaign consequences, and schedule delayed aftermaths that resolve only once.
-- Aftermath missions must be generated by selected aftermath rulings, appear on the Missions lens with distinct canvas site markers and card-level focus controls, preview the recommended eligible unit and same-turn reachability, draw a focused route overlay from revealed path data, dispatch reachable missions through the normal movement rule path, complete through unit movement, expose spawned sites and route-chain steps, and pay terrain-specific rewards.
+- Aftermath missions must be generated by selected aftermath rulings, appear on the Missions lens with distinct canvas site markers and card-level focus controls, preview the recommended eligible unit and same-turn reachability, draw a focused route overlay from revealed path data, dispatch reachable missions through the normal movement rule path, show a compact result banner after dispatch, complete through unit movement, expose spawned sites and route-chain steps, and pay terrain-specific rewards.
 - Strategic map lenses must expose revealed blight, roads, Olundar supply reach, and pact ally vision without breaking fog of war.
 - Siege Operations stay out of the first-turn opening, then track onagers, pacts, revealed strongholds, and stronghold destruction rewards.
 - War Council and objective progress reflect early strategic pressure.
@@ -147,5 +147,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Add a compact post-dispatch result banner that summarizes the mission reward and any follow-up waypoint without requiring log reading.
+1. Add a small mission outcome archive filter so completed field tasks can be reviewed beyond the current four-turn recent window.
 2. Add longer promise-demand chains where answered obligations unlock joint war plans, tribute bargains, or hostage diplomacy.
