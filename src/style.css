@@ -708,6 +708,19 @@ button:disabled {
   background: rgba(255, 226, 156, 0.08);
 }
 
+.map-help .next-directive {
+  border-color: rgba(255, 218, 128, 0.44);
+  background:
+    linear-gradient(180deg, rgba(255, 225, 146, 0.24), rgba(143, 36, 24, 0.16));
+  color: #ffe7ad;
+}
+
+.map-help .next-directive b {
+  margin-right: 0.22rem;
+  color: #fff4ca;
+  text-transform: uppercase;
+}
+
 .side {
   display: flex;
   flex-direction: column;
@@ -2194,6 +2207,59 @@ button:disabled {
   background: linear-gradient(135deg, rgba(255, 138, 138, 0.14), rgba(5, 7, 11, 0.5));
 }
 
+.opening-doctrine {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0 0 0.72rem;
+  padding: 0.64rem 0.68rem;
+  border: 1px solid rgba(118, 178, 255, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(118, 178, 255, 0.14), rgba(5, 7, 11, 0.52)),
+    radial-gradient(circle at 100% 0%, rgba(240, 200, 102, 0.12), transparent 8rem);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+.opening-doctrine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.opening-doctrine-head span,
+.opening-doctrine small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.opening-doctrine-head b {
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: #f9e6a8;
+  font-size: 0.72rem;
+}
+
+.opening-doctrine > strong {
+  color: #f9e6a8;
+  font-size: 0.96rem;
+}
+
+.opening-doctrine p {
+  margin: 0;
+  color: #ddd0ae;
+  font-size: 0.78rem;
+  line-height: 1.32;
+}
+
+.doctrine-actions {
+  margin-top: 0.18rem;
+}
+
 .turn-report {
   display: grid;
   gap: 0.55rem;
@@ -3034,6 +3100,32 @@ button:hover:not(:disabled) {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.46), 0 10px 20px rgba(92, 58, 24, 0.10);
 }
 
+.opening-doctrine {
+  border-color: rgba(39, 100, 126, 0.28);
+  background:
+    linear-gradient(145deg, rgba(239, 250, 251, 0.98), rgba(207, 229, 220, 0.9)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.82), transparent 8rem);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 10px 20px rgba(45, 82, 78, 0.11);
+}
+
+.opening-doctrine-head span,
+.opening-doctrine small {
+  color: #5d6a4d;
+}
+
+.opening-doctrine-head b {
+  background: rgba(255, 255, 255, 0.56);
+  color: #184b5c;
+}
+
+.opening-doctrine > strong {
+  color: #6b3518;
+}
+
+.opening-doctrine p {
+  color: #3d2b1b;
+}
+
 .turn-report {
   border-color: rgba(149, 94, 38, 0.28);
   background:
@@ -3171,6 +3263,17 @@ button:hover:not(:disabled) {
 
 .map-help span {
   background: rgba(255, 255, 255, 0.62);
+}
+
+.map-help .next-directive {
+  border-color: rgba(143, 36, 24, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 246, 217, 0.96), rgba(226, 189, 112, 0.86));
+  color: #7d281b;
+}
+
+.map-help .next-directive b {
+  color: #9b2c1e;
 }
 
 .map-intel {
