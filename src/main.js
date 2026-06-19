@@ -92,6 +92,10 @@ const MISSION_ARCHIVE_GROUP_MODES = [
   { id: 'routes', label: 'Routes' },
   { id: 'rulings', label: 'Rulings' }
 ];
+const MISSION_ARCHIVE_DETAIL_MODES = [
+  { id: 'details', label: 'Details' },
+  { id: 'summary', label: 'Summary' }
+];
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
@@ -108,6 +112,7 @@ let missionArchiveTypeFilter = 'all';
 let missionArchiveSearch = '';
 let missionArchiveSortOrder = 'newest';
 let missionArchiveGroupMode = 'flat';
+let missionArchiveDetailMode = 'details';
 let focusedArchivedMissionId = null;
 
 initAudioPreference();
@@ -357,14 +362,15 @@ function missionHistoryMarkup(missions) {
   const search = normalizedMissionArchiveSearch();
   const sortOrder = selectedMissionArchiveSortOrder();
   const groupMode = selectedMissionArchiveGroupMode();
+  const detailMode = selectedMissionArchiveDetailMode();
   const archive = filter === 'archive' ? sortedArchiveMissions(filteredArchiveMissions(missions.archive, typeFilter, search), sortOrder) : [];
   const history = filter === 'archive' ? archive : missions.recent;
   const title = filter === 'archive' ? missionArchiveTitle(typeFilter, archive.length, missions.archiveCount) : `Completed (${missions.recentCount})`;
-  const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search || sortOrder !== 'newest' || groupMode !== 'flat')
-    ? `<small class="mission-history-note">${escapeHtml(missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode))} (${archive.length}/${missions.archiveCount}).</small>`
+  const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search || sortOrder !== 'newest' || groupMode !== 'flat' || detailMode !== 'details')
+    ? `<small class="mission-history-note">${escapeHtml(missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode, detailMode))} (${archive.length}/${missions.archiveCount}).</small>`
     : '';
   const historyMarkup = filter === 'archive' && groupMode !== 'flat'
-    ? missionArchiveGroupedRecordsMarkup(history)
+    ? missionArchiveGroupedRecordsMarkup(history, detailMode)
     : history.map((mission) => missionHistoryRecordMarkup(mission)).join('');
 
   return `
@@ -380,6 +386,7 @@ function missionHistoryMarkup(missions) {
       ${filter === 'archive' ? missionArchiveSearchMarkup(search) : ''}
       ${filter === 'archive' ? missionArchiveSortMarkup(sortOrder) : ''}
       ${filter === 'archive' ? missionArchiveGroupMarkup(groupMode) : ''}
+      ${filter === 'archive' && groupMode !== 'flat' ? missionArchiveDetailMarkup(detailMode) : ''}
       ${history.length ? historyMarkup : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
     </div>
@@ -424,7 +431,16 @@ function missionArchiveGroupMarkup(selected) {
   `;
 }
 
-function missionArchiveGroupedRecordsMarkup(missions) {
+function missionArchiveDetailMarkup(selected) {
+  return `
+    <div class="mission-archive-detail-mode" role="group" aria-label="Archive group detail level">
+      ${MISSION_ARCHIVE_DETAIL_MODES.map((item) => `<button type="button" data-action="set-mission-archive-detail" data-detail="${escapeHtml(item.id)}" aria-pressed="${selected === item.id}">${escapeHtml(item.label)}</button>`).join('')}
+    </div>
+  `;
+}
+
+function missionArchiveGroupedRecordsMarkup(missions, detailMode = 'details') {
+  const showRecords = detailMode !== 'summary';
   return missionArchiveGroups(missions).map((group) => `
     <section class="mission-archive-group">
       <div class="mission-archive-group-head">
@@ -432,7 +448,7 @@ function missionArchiveGroupedRecordsMarkup(missions) {
         <span>${escapeHtml(group.summary)}</span>
       </div>
       ${selectedMissionArchiveGroupMode() === 'rulings' ? missionArchiveGroupSummaryMarkup(group.records) : ''}
-      ${group.records.map((mission) => missionHistoryRecordMarkup(mission)).join('')}
+      ${showRecords ? group.records.map((mission) => missionHistoryRecordMarkup(mission)).join('') : ''}
     </section>
   `).join('');
 }
@@ -544,6 +560,10 @@ function selectedMissionArchiveGroupMode() {
   return MISSION_ARCHIVE_GROUP_MODES.some((item) => item.id === missionArchiveGroupMode) ? missionArchiveGroupMode : 'flat';
 }
 
+function selectedMissionArchiveDetailMode() {
+  return MISSION_ARCHIVE_DETAIL_MODES.some((item) => item.id === missionArchiveDetailMode) ? missionArchiveDetailMode : 'details';
+}
+
 function missionArchiveTypeLabel(typeFilter = 'all') {
   return MISSION_ARCHIVE_TYPE_FILTERS.find((item) => item.id === typeFilter)?.label || 'All';
 }
@@ -556,6 +576,10 @@ function missionArchiveGroupLabel(groupMode = 'flat') {
   if (groupMode === 'routes') return 'route groups';
   if (groupMode === 'rulings') return 'ruling groups';
   return 'flat list';
+}
+
+function missionArchiveDetailLabel(detailMode = 'details') {
+  return detailMode === 'summary' ? 'summary only' : 'full details';
 }
 
 function missionArchiveTitle(typeFilter, visibleCount, archiveCount) {
@@ -588,11 +612,12 @@ function missionArchiveFilterLabel(typeFilter, search) {
   return [typeFilter !== 'all' ? missionArchiveTypeLabel(typeFilter) : '', search ? `"${search}"` : ''].filter(Boolean).join(' + ') || 'All';
 }
 
-function missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode) {
+function missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode, detailMode) {
   return [
     typeFilter !== 'all' || search ? `Filtered: ${missionArchiveFilterLabel(typeFilter, search)}` : '',
     `Sorted: ${missionArchiveSortLabel(sortOrder)}`,
-    groupMode !== 'flat' ? `Grouped: ${missionArchiveGroupLabel(groupMode)}` : ''
+    groupMode !== 'flat' ? `Grouped: ${missionArchiveGroupLabel(groupMode)}` : '',
+    groupMode !== 'flat' ? `Detail: ${missionArchiveDetailLabel(detailMode)}` : ''
   ].filter(Boolean).join('; ');
 }
 
@@ -1262,6 +1287,7 @@ function loadSerializedGame(raw, slot = null) {
     missionArchiveSearch = '';
     missionArchiveSortOrder = 'newest';
     missionArchiveGroupMode = 'flat';
+    missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
@@ -1301,6 +1327,7 @@ function importSaveFile(raw, fileName = '') {
     missionArchiveSearch = '';
     missionArchiveSortOrder = 'newest';
     missionArchiveGroupMode = 'flat';
+    missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
@@ -1595,6 +1622,7 @@ function startConfiguredCampaign(form) {
   missionArchiveSearch = '';
   missionArchiveSortOrder = 'newest';
   missionArchiveGroupMode = 'flat';
+  missionArchiveDetailMode = 'details';
   focusedArchivedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
@@ -1762,6 +1790,10 @@ missionPanel.addEventListener('click', (event) => {
   }
   else if (target.dataset.action === 'set-mission-archive-group') {
     missionArchiveGroupMode = MISSION_ARCHIVE_GROUP_MODES.some((item) => item.id === target.dataset.group) ? target.dataset.group : 'flat';
+    render();
+  }
+  else if (target.dataset.action === 'set-mission-archive-detail') {
+    missionArchiveDetailMode = MISSION_ARCHIVE_DETAIL_MODES.some((item) => item.id === target.dataset.detail) ? target.dataset.detail : 'details';
     render();
   }
   else if (target.dataset.action === 'clear-mission-archive-search') {
