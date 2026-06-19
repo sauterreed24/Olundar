@@ -1710,6 +1710,8 @@ function focusOpeningDirective(stepId) {
     previewOpeningDirective(recommendation);
     return;
   }
+  const readyOlundar = state.units.filter((unit) => unit.faction === 'olundar' && !unit.hasActed);
+  const allOlundar = state.units.filter((unit) => unit.faction === 'olundar');
   const byTag = (tag) => openingUnitByTag(tag);
   let targetUnit = null;
   let targetBuilding = null;
@@ -1836,16 +1838,20 @@ function recommendedBuildPreview(stepId) {
       const result = canBuildOn(state, type, site.x, site.y);
       if (!result.ok) continue;
       return {
-        kind: 'build-preview',
+        kind: 'build',
         unitId: engineer.id,
         buildingType: type,
         x: site.x,
         y: site.y,
-        canExecute: false,
-        label: `Survey ${BUILDING_TYPES[type].name}`,
+        canExecute: !engineer.hasActed,
+        disabled: engineer.hasActed,
+        label: `Start ${BUILDING_TYPES[type].name}`,
         meta: `${site.x},${site.y} sector | ${formatCost(BUILDING_TYPES[type].cost)}`,
+        executeLabel: 'Do order',
+        executeMeta: `${BUILDING_TYPES[type].name} at ${site.x},${site.y}`,
         previewMeta: `Preview ${BUILDING_TYPES[type].name} site`,
-        previewToast: `${engineer.name} can start ${BUILDING_TYPES[type].name} at ${site.x},${site.y}.`
+        previewToast: `${engineer.name} can start ${BUILDING_TYPES[type].name} at ${site.x},${site.y}.`,
+        successToast: `${BUILDING_TYPES[type].name} started at ${site.x},${site.y}.`
       };
     }
   }
@@ -1878,7 +1884,7 @@ function previewOpeningDirective(action) {
     const unit = state.units.find((item) => item.id === action.unitId);
     if (unit) selectUnit(unit.id);
   }
-  if (action.kind === 'build-preview') {
+  if (action.kind === 'build' || action.kind === 'build-preview') {
     state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
   }
   if (Number.isFinite(action.x) && Number.isFinite(action.y)) {
@@ -1909,6 +1915,24 @@ function executeOpeningDirective(action) {
     if (ok) toast(`${UNIT_TYPES[action.unitType].name} queued.`, 'good');
     render();
     if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+  if (action.kind === 'build') {
+    selectUnit(action.unitId);
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+    const result = startConstruction(state, action.unitId, action.buildingType, action.x, action.y);
+    const ok = handleResult(result, 'build');
+    if (ok) {
+      if (result.building?.id) selectBuilding(result.building.id);
+      lastTile = { x: action.x, y: action.y };
+      hoverTile = lastTile;
+      toast(action.successToast || `${BUILDING_TYPES[action.buildingType].name} started.`, 'good');
+    } else {
+      state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
+    }
+    render();
+    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
     return;
   }
   previewOpeningDirective(action);
