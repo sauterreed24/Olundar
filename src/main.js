@@ -992,6 +992,8 @@ function renderActions() {
   if (doctrineCard) actionPanel.appendChild(doctrineCard);
   const envoyCard = diplomacyOpportunityCard();
   if (envoyCard) actionPanel.appendChild(envoyCard);
+  const pactCommandCard = pactFieldCommandCard();
+  if (pactCommandCard) actionPanel.appendChild(pactCommandCard);
 
   if (state.status !== 'playing') {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
@@ -2055,6 +2057,98 @@ function focusDiplomacyOpportunity(factionId) {
   const card = diplomacyPanel.querySelector(`.diplo-card.known`);
   const target = [...diplomacyPanel.querySelectorAll('.diplo-card.known')].find((item) => item.textContent.includes(state.factions[factionId]?.name || '')) || card;
   target?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
+function pactFieldCommandCard() {
+  const opportunity = currentPactFieldCommand();
+  if (!opportunity || state.status !== 'playing') return null;
+  const { entry, recommendation } = opportunity;
+  const activeOrder = entry.fieldOrder || entry.fieldOrders.find((order) => order.active);
+  const card = document.createElement('article');
+  card.className = 'opening-doctrine diplomacy-doctrine pact-command';
+  card.innerHTML = `
+    <div class="opening-doctrine-head">
+      <span>Pact Field Command</span>
+      <b>${escapeHtml(opportunity.badge)}</b>
+    </div>
+    <strong>${escapeHtml(entry.name)}: ${escapeHtml(activeOrder?.name || 'Awaiting order')}</strong>
+    <p>${escapeHtml(opportunity.detail)}</p>
+    <small>${escapeHtml(opportunity.phase)}</small>
+    <div class="doctrine-recommendation">
+      <span>Recommended Pact Order</span>
+      <strong>${escapeHtml(recommendation.name)}</strong>
+      <small>${escapeHtml(recommendation.text)}</small>
+    </div>
+  `;
+  const actions = commandActions('doctrine-actions pact-actions');
+  for (const order of entry.fieldOrders) {
+    const active = Boolean(order.active);
+    actions.appendChild(orderButton(order.name, active ? 'Active order' : order.text, () => runAction(() => executePactFieldOrder(entry, order), 'diplomacy'), {
+      disabled: active || order.disabled,
+      title: order.disabledReason || order.text,
+      tone: order.id === recommendation.id ? 'primary' : 'secondary'
+    }));
+  }
+  actions.appendChild(orderButton('Show ally lens', 'Shared sight and pact positions', () => focusDiplomacyOpportunity(entry.id)));
+  card.appendChild(actions);
+  return card;
+}
+
+function currentPactFieldCommand() {
+  const ledger = getDiplomacyLedger(state);
+  const pactEntries = ledger.entries
+    .filter((entry) => entry.discovered && entry.pact && !entry.atWar && entry.fieldOrders.length)
+    .sort((a, b) => {
+      const aRecommended = recommendedPactFieldOrderId(a);
+      const bRecommended = recommendedPactFieldOrderId(b);
+      return Number(a.fieldOrder?.id === aRecommended) - Number(b.fieldOrder?.id === bRecommended);
+    });
+  const entry = pactEntries[0];
+  if (!entry) return null;
+  const recommendationId = recommendedPactFieldOrderId(entry);
+  const recommendation = entry.fieldOrders.find((order) => order.id === recommendationId)
+    || entry.fieldOrders.find((order) => !order.active)
+    || entry.fieldOrders[0];
+  return {
+    entry,
+    recommendation,
+    badge: `${pactEntries.length} pact${pactEntries.length === 1 ? '' : 's'}`,
+    phase: pactCommandKnownDeadPressure() ? 'Alliance into warfront' : 'Alliance into patrols',
+    detail: pactCommandKnownDeadPressure()
+      ? 'Deadwalker pressure is visible. Give this ally a live field order so shared vision becomes coordinated movement.'
+      : 'A Survival Pact is active. Set the allied behavior now so this civilization protects roads, reinforces Olundar, or prepares the eastern push.'
+  };
+}
+
+function recommendedPactFieldOrderId(entry) {
+  if (pactCommandCapitalThreat()) return 'reinforceCapital';
+  if (pactCommandKnownDeadPressure()) return 'harassDeadworks';
+  if (entry.id === 'dawn') return 'defendRoads';
+  return state.turn <= 8 ? 'defendRoads' : 'reinforceCapital';
+}
+
+function pactCommandKnownDeadPressure() {
+  return Boolean(state.flags.firstDeadwalkerSeen)
+    || state.units.some((unit) => unit.faction === 'dead' && isVisible(state, unit.x, unit.y))
+    || state.buildings.some((building) => building.faction === 'dead' && isVisible(state, building.x, building.y));
+}
+
+function pactCommandCapitalThreat() {
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  if (!capital) return false;
+  return state.units.some((unit) => unit.faction === 'dead'
+    && isVisible(state, unit.x, unit.y)
+    && Math.abs(unit.x - capital.x) + Math.abs(unit.y - capital.y) <= 8);
+}
+
+function executePactFieldOrder(entry, order) {
+  const result = setFieldOrder(state, entry.id, order.id);
+  if (!result.ok) return result;
+  activeMapLens = 'alliance';
+  return {
+    ...result,
+    reason: `${entry.name}: ${order.name}. Alliance lens shows the shared front.`
+  };
 }
 
 function openingDirectiveAction(stepId) {
