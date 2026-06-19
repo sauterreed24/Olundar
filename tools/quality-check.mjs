@@ -1041,9 +1041,12 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
 
   assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
   assert(renderSource.includes('function drawTerrainGround') && renderSource.includes('function drawGeographyOverlays') && renderSource.includes('function drawForestCrown'), 'Terrain should use a layered illustrated geography pass rather than flat square fills.');
+  assert(renderSource.includes('ISO_TILE_Y_RATIO') && renderSource.includes('function tileCenter') && renderSource.includes('function tileDiamondPath'), 'The world renderer should use a projected strategy-map geometry rather than rectangular spreadsheet tiles.');
+  assert(renderSource.includes('function drawTileSkirt') && renderSource.includes('function drawContinentUnderpaint') && renderSource.includes('function drawTileTopline'), 'Projected terrain should include raised faces, soft landmass underpaint, and top highlights.');
   assert(renderSource.includes('function drawUnchartedTile') && renderSource.includes('function drawImperialMapFrame'), 'The world map should use parchment fog and an imperial campaign-map frame.');
   assert(renderSource.includes('function getCameraBounds') && renderSource.includes('canvas.__olundarState'), 'The map should use a focused tactical camera instead of shrinking the full world into tiny tokens.');
-  assert(renderSource.includes('Math.max(14, revealedWidth + 4)') && renderSource.includes('Math.min(6, Math.floor(layout.tileSize * 0.18))'), 'The map should hold a close tactical camera and keep minimap scale bounded.');
+  assert(renderSource.includes('Math.max(10, Math.min(16, revealedWidth + 2))') && renderSource.includes('Math.min(6, Math.floor(layout.tileSize * 0.18))'), 'The map should hold a close tactical camera and keep minimap scale bounded.');
+  assert(mainSource.includes('function focusFirstReadyUnit') && mainSource.includes('focusFirstReadyUnit();'), 'New campaigns should open on an actionable selected unit, not an unfocused board.');
   assert(mainSource.includes('const idealHeight = width * 0.8'), 'The default battlefield should use a taller map-first command viewport.');
   assert(renderSource.includes("tile.terrain === 'plains'") && renderSource.includes('quadraticCurveTo'), 'Terrain should include painterly texture beyond flat tile fills.');
   assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
