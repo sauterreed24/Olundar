@@ -425,6 +425,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionResultBannerMarkup') && mainSource.includes('captureMissionResult'), 'Mission dispatch should show a compact post-completion result banner.');
   assert(mainSource.includes('data-action="close-mission-result"') && mainSource.includes('missionFollowUpText'), 'Mission result banners should be dismissible and summarize follow-up markers.');
   assert(mainSource.includes('missionHistoryFilter') && mainSource.includes('data-action="set-mission-history"'), 'Completed mission outcomes should have a recent/archive filter.');
+  assert(mainSource.includes('missionArchiveTypeFilter') && mainSource.includes('data-action="set-mission-archive-type"'), 'Archived mission outcomes should be filterable by site type.');
   assert(mainSource.includes('data-action="focus-completed-mission"') && mainSource.includes('focusCompletedMissionSite'), 'Completed mission outcomes should be able to focus their map site.');
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
   assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
@@ -436,6 +437,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
   assert(styleSource.includes('.mission-result'), 'Mission completion result banners need compact styling.');
   assert(styleSource.includes('.mission-history-tools'), 'Mission outcome archive filters need compact styling.');
+  assert(styleSource.includes('.mission-type-filter'), 'Mission archive type filters need compact styling.');
   assert(styleSource.includes('.mission-site-receipt'), 'Focused archived mission receipts need compact tile-panel styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 

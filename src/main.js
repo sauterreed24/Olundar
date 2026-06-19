@@ -76,6 +76,14 @@ const recapOverlay = document.querySelector('#recapOverlay');
 const recapPanel = document.querySelector('#recapPanel');
 const audioTop = document.querySelector('#audioTop');
 
+const MISSION_ARCHIVE_TYPE_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'repair', label: 'Repairs' },
+  { id: 'escort', label: 'Escorts' },
+  { id: 'raid', label: 'Raids' },
+  { id: 'accord', label: 'Accords' }
+];
+
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
 let hoverTile = null;
@@ -87,6 +95,7 @@ let activeMapLens = 'normal';
 let focusedMissionId = null;
 let missionResultBanner = null;
 let missionHistoryFilter = 'recent';
+let missionArchiveTypeFilter = 'all';
 let focusedArchivedMissionId = null;
 
 initAudioPreference();
@@ -332,10 +341,12 @@ function renderAftermathMissions() {
 function missionHistoryMarkup(missions) {
   if (!missions.recent.length && !missions.archive.length) return '';
   const filter = missionHistoryFilter === 'archive' || (!missions.recent.length && missions.archive.length) ? 'archive' : 'recent';
-  const history = filter === 'archive' ? missions.archive : missions.recent;
-  const title = filter === 'archive' ? `Archive (${missions.archiveCount})` : `Completed (${missions.recentCount})`;
-  const archiveNote = filter === 'archive' && missions.archiveOverflow
-    ? `<small class="mission-history-note">Showing newest ${missions.archive.length} of ${missions.archiveCount} archived outcomes.</small>`
+  const typeFilter = selectedMissionArchiveType();
+  const archive = filter === 'archive' ? filteredArchiveMissions(missions.archive, typeFilter) : [];
+  const history = filter === 'archive' ? archive : missions.recent;
+  const title = filter === 'archive' ? missionArchiveTitle(typeFilter, archive.length, missions.archiveCount) : `Completed (${missions.recentCount})`;
+  const archiveNote = filter === 'archive' && typeFilter !== 'all'
+    ? `<small class="mission-history-note">Filtered: ${escapeHtml(missionArchiveTypeLabel(typeFilter))} (${archive.length}/${missions.archiveCount}).</small>`
     : '';
 
   return `
@@ -347,10 +358,45 @@ function missionHistoryMarkup(missions) {
           <button type="button" data-action="set-mission-history" data-filter="archive" aria-pressed="${filter === 'archive'}" ${missions.archiveCount ? '' : 'disabled'}>Archive</button>
         </div>
       </div>
+      ${filter === 'archive' ? missionArchiveTypeFilterMarkup(missions.archive, typeFilter) : ''}
       ${history.length ? history.map((mission) => missionHistoryRecordMarkup(mission)).join('') : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
     </div>
   `;
+}
+
+function missionArchiveTypeFilterMarkup(archive, selected) {
+  if (!archive.length) return '';
+  return `
+    <div class="mission-type-filter" role="group" aria-label="Archive mission type filter">
+      ${MISSION_ARCHIVE_TYPE_FILTERS.map((item) => {
+        const count = archiveTypeCount(archive, item.id);
+        return `<button type="button" data-action="set-mission-archive-type" data-filter="${escapeHtml(item.id)}" aria-pressed="${selected === item.id}" ${item.id !== 'all' && !count ? 'disabled' : ''}>${escapeHtml(item.label)} <span>${count}</span></button>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function filteredArchiveMissions(archive, typeFilter = 'all') {
+  if (typeFilter === 'all') return archive;
+  return archive.filter((mission) => mission.type === typeFilter);
+}
+
+function archiveTypeCount(archive, typeFilter = 'all') {
+  return filteredArchiveMissions(archive, typeFilter).length;
+}
+
+function selectedMissionArchiveType() {
+  return MISSION_ARCHIVE_TYPE_FILTERS.some((item) => item.id === missionArchiveTypeFilter) ? missionArchiveTypeFilter : 'all';
+}
+
+function missionArchiveTypeLabel(typeFilter = 'all') {
+  return MISSION_ARCHIVE_TYPE_FILTERS.find((item) => item.id === typeFilter)?.label || 'All';
+}
+
+function missionArchiveTitle(typeFilter, visibleCount, archiveCount) {
+  if (typeFilter === 'all') return `Archive (${archiveCount})`;
+  return `${missionArchiveTypeLabel(typeFilter)} (${visibleCount})`;
 }
 
 function missionHistoryRecordMarkup(mission) {
@@ -1007,6 +1053,7 @@ function loadSerializedGame(raw, slot = null) {
     focusedMissionId = null;
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
+    missionArchiveTypeFilter = 'all';
     focusedArchivedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
@@ -1042,6 +1089,7 @@ function importSaveFile(raw, fileName = '') {
     focusedMissionId = null;
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
+    missionArchiveTypeFilter = 'all';
     focusedArchivedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
@@ -1332,6 +1380,7 @@ function startConfiguredCampaign(form) {
   focusedMissionId = null;
   missionResultBanner = null;
   missionHistoryFilter = 'recent';
+  missionArchiveTypeFilter = 'all';
   focusedArchivedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
@@ -1485,6 +1534,12 @@ missionPanel.addEventListener('click', (event) => {
   else if (target.dataset.action === 'focus-completed-mission') focusCompletedMissionSite(target.dataset.missionId);
   else if (target.dataset.action === 'set-mission-history') {
     missionHistoryFilter = target.dataset.filter === 'archive' ? 'archive' : 'recent';
+    render();
+  }
+  else if (target.dataset.action === 'set-mission-archive-type') {
+    const next = MISSION_ARCHIVE_TYPE_FILTERS.some((item) => item.id === target.dataset.filter) ? target.dataset.filter : 'all';
+    missionArchiveTypeFilter = next;
+    if (next !== 'all' && focusedArchivedMission()?.type !== next) focusedArchivedMissionId = null;
     render();
   }
   else if (target.dataset.action === 'close-mission-result') {
