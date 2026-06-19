@@ -67,6 +67,8 @@ const actionPanel = document.querySelector('#actionPanel');
 const diplomacyPanel = document.querySelector('#diplomacyPanel');
 const logPanel = document.querySelector('#logPanel');
 const tilePanel = document.querySelector('#tilePanel');
+const mobileIntelDrawer = document.querySelector('#mobileIntelDrawer');
+const mobileIntelDrawerSummary = document.querySelector('#mobileIntelDrawerSummary');
 const modeBanner = document.querySelector('#modeBanner');
 const toastEl = document.querySelector('#toast');
 const setupOverlay = document.querySelector('#setupOverlay');
@@ -120,6 +122,8 @@ let missionArchiveDetailMode = 'details';
 let focusedArchivedMissionId = null;
 let battleImpact = null;
 let turnReport = null;
+let mobileIntelDrawerTouched = false;
+let syncingMobileIntelDrawer = false;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -158,6 +162,7 @@ function render() {
   renderTilePanel();
   renderMapIntel();
   renderMode();
+  renderMobileIntelDrawer();
   maybeOpenOutcomeRecap();
 }
 
@@ -1464,6 +1469,52 @@ function renderMode() {
   } else {
     modeBanner.hidden = true;
   }
+}
+
+function renderMobileIntelDrawer() {
+  if (!mobileIntelDrawer) return;
+  const council = getWarCouncil(state);
+  const guide = getFirstTurnsGuide(state);
+  const deadPressure = council.stats.find((stat) => stat.label === 'Dead pressure')?.value || 'Unknown';
+  const opening = guide.visible ? `${guide.completed}/${guide.total} opening` : `${getReadyOlundarUnits(state).length} ready`;
+  if (mobileIntelDrawerSummary) {
+    mobileIntelDrawerSummary.textContent = `${mappedPercent()}% mapped - ${opening} - Dead ${deadPressure.toLowerCase()}`;
+  }
+  syncMobileIntelDrawer();
+}
+
+function syncMobileIntelDrawer() {
+  if (!mobileIntelDrawer) return;
+  if (!isMobileIntelDrawerMode()) {
+    mobileIntelDrawerTouched = false;
+    setMobileIntelDrawerOpen(true);
+    return;
+  }
+  if (!mobileIntelDrawerTouched) {
+    setMobileIntelDrawerOpen(mobileIntelNeedsAttention());
+  }
+}
+
+function mobileIntelNeedsAttention() {
+  if (state.status !== 'playing') return true;
+  return panelHasVisibleContent(crisisPanel) || panelHasVisibleContent(missionPanel) || panelHasVisibleContent(operationsPanel);
+}
+
+function panelHasVisibleContent(panel) {
+  return Boolean(panel && !panel.hidden && panel.textContent.trim());
+}
+
+function isMobileIntelDrawerMode() {
+  return window.innerWidth <= 620;
+}
+
+function setMobileIntelDrawerOpen(open) {
+  if (!mobileIntelDrawer || mobileIntelDrawer.open === open) return;
+  syncingMobileIntelDrawer = true;
+  mobileIntelDrawer.open = open;
+  window.setTimeout(() => {
+    syncingMobileIntelDrawer = false;
+  }, 0);
 }
 
 function canvasClicked(event) {
@@ -3147,6 +3198,11 @@ canvas.addEventListener('mouseleave', () => {
   render();
 });
 
+mobileIntelDrawer?.addEventListener('toggle', () => {
+  if (!syncingMobileIntelDrawer && isMobileIntelDrawerMode()) {
+    mobileIntelDrawerTouched = true;
+  }
+});
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !recapOverlay.hidden) {
