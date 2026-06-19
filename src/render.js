@@ -269,6 +269,7 @@ function drawTiles(ctx, state, layout) {
   const sortedTiles = state.map.tiles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
   drawContinentUnderpaint(ctx, state, layout, sortedTiles);
   drawBiomeWash(ctx, state, layout, sortedTiles);
+  drawRegionalAtmosphere(ctx, state, layout, sortedTiles);
   drawElevationCastShadows(ctx, state, layout, sortedTiles);
   for (const tile of sortedTiles) {
     const bounds = tileBounds(layout, tile.x, tile.y);
@@ -302,6 +303,7 @@ function drawTiles(ctx, state, layout) {
   drawRoadNetwork(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout);
   drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles);
+  drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
   drawRevealedFrontierRim(ctx, state, layout);
 }
 
@@ -348,6 +350,93 @@ function drawBiomeWash(ctx, state, layout, sortedTiles) {
     }, palette.shadow, layout.tileSize * -0.03);
   }
   ctx.restore();
+}
+
+function drawRegionalAtmosphere(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y)) continue;
+    const visible = isVisible(state, tile.x, tile.y);
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const seed = tileNoise(tile, 801);
+    const cx = bounds.cx + layout.halfTileWidth * (seed - 0.5) * 0.42;
+    const cy = bounds.cy + layout.halfTileHeight * (tileNoise(tile, 802) - 0.5) * 0.55;
+    const radius = layout.tileSize * regionalAtmosphereRadius(tile.terrain, seed);
+    const atmosphere = regionalAtmosphereColor(tile.terrain, visible);
+    ctx.globalCompositeOperation = atmosphere.mode;
+    ctx.globalAlpha = atmosphere.alpha;
+    const wash = ctx.createRadialGradient(cx, cy, layout.tileSize * 0.16, cx, cy, radius);
+    wash.addColorStop(0, atmosphere.core);
+    wash.addColorStop(0.58, atmosphere.mid);
+    wash.addColorStop(1, atmosphere.edge);
+    ctx.fillStyle = wash;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+  }
+  ctx.restore();
+}
+
+function regionalAtmosphereRadius(terrain, seed) {
+  if (terrain === 'river') return 1.35 + seed * 0.30;
+  if (terrain === 'forest' || terrain === 'marsh') return 1.20 + seed * 0.24;
+  if (terrain === 'hills' || terrain === 'mountains') return 1.28 + seed * 0.26;
+  if (terrain === 'blight') return 1.50 + seed * 0.36;
+  return 1.04 + seed * 0.20;
+}
+
+function regionalAtmosphereColor(terrain, visible) {
+  const alphaScale = visible ? 1 : 0.42;
+  if (terrain === 'river') {
+    return {
+      mode: 'screen',
+      alpha: 0.18 * alphaScale,
+      core: 'rgba(214, 248, 255, 0.42)',
+      mid: 'rgba(74, 164, 202, 0.16)',
+      edge: 'rgba(74, 164, 202, 0)'
+    };
+  }
+  if (terrain === 'forest') {
+    return {
+      mode: 'multiply',
+      alpha: 0.22 * alphaScale,
+      core: 'rgba(22, 72, 38, 0.34)',
+      mid: 'rgba(31, 91, 49, 0.16)',
+      edge: 'rgba(31, 91, 49, 0)'
+    };
+  }
+  if (terrain === 'hills' || terrain === 'mountains') {
+    return {
+      mode: 'multiply',
+      alpha: 0.18 * alphaScale,
+      core: 'rgba(126, 83, 37, 0.30)',
+      mid: 'rgba(159, 111, 55, 0.14)',
+      edge: 'rgba(159, 111, 55, 0)'
+    };
+  }
+  if (terrain === 'marsh') {
+    return {
+      mode: 'multiply',
+      alpha: 0.20 * alphaScale,
+      core: 'rgba(44, 94, 60, 0.28)',
+      mid: 'rgba(99, 139, 77, 0.14)',
+      edge: 'rgba(99, 139, 77, 0)'
+    };
+  }
+  if (terrain === 'blight') {
+    return {
+      mode: 'screen',
+      alpha: 0.23 * alphaScale,
+      core: 'rgba(156, 243, 138, 0.24)',
+      mid: 'rgba(74, 188, 107, 0.10)',
+      edge: 'rgba(74, 188, 107, 0)'
+    };
+  }
+  return {
+    mode: 'screen',
+    alpha: 0.12 * alphaScale,
+    core: 'rgba(255, 230, 148, 0.26)',
+    mid: 'rgba(247, 204, 113, 0.08)',
+    edge: 'rgba(247, 204, 113, 0)'
+  };
 }
 
 function drawWorldLight(ctx, state, layout) {
@@ -776,6 +865,222 @@ function drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles) {
       ctx.fillRect(x + s * 0.54, y + s * 0.28, Math.max(1, s * 0.022), s * 0.40);
     }
   }
+  ctx.restore();
+}
+
+function drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isVisible(state, tile.x, tile.y)) continue;
+    if (buildingAt(state, tile.x, tile.y) || unitAt(state, tile.x, tile.y)) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const { x, y, s } = bounds;
+    const seed = tileNoise(tile, 930);
+    ctx.save();
+    tileDiamondPath(ctx, bounds, s * 0.04);
+    ctx.clip();
+    if (tile.road && seed > 0.34) {
+      drawRoadMilestone(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'plains' && seed > 0.66) {
+      drawPlainsEstateVignette(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'forest' && seed > 0.28) {
+      drawForestDepthVignette(ctx, tile, x, y, s);
+    } else if ((tile.terrain === 'hills' || tile.terrain === 'mountains') && seed > 0.38) {
+      drawHillOutcropVignette(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'river' && seed > 0.22) {
+      drawRiverLifeVignette(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'marsh' && seed > 0.28) {
+      drawMarshPoolVignette(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'ruins' && seed > 0.18) {
+      drawRuinObeliskVignette(ctx, tile, x, y, s);
+    } else if (tile.terrain === 'blight' && seed > 0.20) {
+      drawBlightRelicVignette(ctx, tile, x, y, s);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawPlainsEstateVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = 'rgba(121, 145, 57, 0.54)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  for (let i = 0; i < 4; i += 1) {
+    const rowY = y + s * (0.56 + i * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.16, rowY);
+    ctx.quadraticCurveTo(x + s * 0.40, rowY - s * 0.07, x + s * 0.68, rowY);
+    ctx.stroke();
+  }
+  if (tileNoise(tile, 951) > 0.54) {
+    ctx.globalAlpha = 0.78;
+    ctx.fillStyle = 'rgba(244, 218, 144, 0.88)';
+    ctx.fillRect(x + s * 0.62, y + s * 0.45, s * 0.16, s * 0.12);
+    ctx.fillStyle = 'rgba(134, 49, 35, 0.86)';
+    roof(ctx, x + s * 0.59, y + s * 0.45, s * 0.22, s * 0.08);
+    ctx.strokeStyle = 'rgba(74, 48, 27, 0.42)';
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.strokeRect(x + s * 0.62, y + s * 0.45, s * 0.16, s * 0.12);
+  }
+  ctx.restore();
+}
+
+function drawForestDepthVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.68;
+  const grove = [
+    [0.34, 0.57, 0.70, '#16452a'],
+    [0.50, 0.48, 0.82, '#235d35'],
+    [0.66, 0.60, 0.62, '#1d4f31']
+  ];
+  if (tileNoise(tile, 963) > 0.58) grove.push([0.76, 0.50, 0.52, '#2b7340']);
+  for (const [px, py, scale, color] of grove) {
+    triangle(ctx, x + s * px, y + s * py, s * 0.16 * scale, color);
+    ctx.fillStyle = 'rgba(74, 45, 26, 0.78)';
+    ctx.fillRect(x + s * (px - 0.016), y + s * (py + 0.10 * scale), s * 0.032, s * 0.10);
+  }
+  ctx.globalAlpha = 0.24;
+  ctx.fillStyle = 'rgba(9, 34, 22, 0.68)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.56, y + s * 0.75, s * 0.34, s * 0.08, -0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHillOutcropVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  const mountain = tile.terrain === 'mountains';
+  ctx.globalAlpha = mountain ? 0.72 : 0.55;
+  const rock = mountain ? '#d9d6c8' : '#a9824a';
+  const shadeRock = mountain ? '#777d7a' : '#6f4a2c';
+  ctx.fillStyle = shadeRock;
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.22, y + s * 0.74);
+  ctx.lineTo(x + s * 0.42, y + s * (mountain ? 0.34 : 0.48));
+  ctx.lineTo(x + s * 0.66, y + s * 0.76);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = rock;
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.30, y + s * 0.72);
+  ctx.lineTo(x + s * 0.43, y + s * (mountain ? 0.36 : 0.50));
+  ctx.lineTo(x + s * 0.50, y + s * 0.73);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 241, 190, 0.48)';
+  ctx.lineWidth = Math.max(1, s * 0.016);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.43, y + s * (mountain ? 0.38 : 0.51));
+  ctx.lineTo(x + s * 0.35, y + s * 0.71);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRiverLifeVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.54;
+  ctx.strokeStyle = 'rgba(245, 255, 250, 0.84)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  for (let i = 0; i < 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (0.20 + i * 0.30), y + s * (0.55 + i * 0.05));
+    ctx.bezierCurveTo(
+      x + s * (0.34 + i * 0.20),
+      y + s * 0.38,
+      x + s * (0.52 + i * 0.14),
+      y + s * 0.75,
+      x + s * (0.78 + i * 0.08),
+      y + s * 0.50
+    );
+    ctx.stroke();
+  }
+  if (tileNoise(tile, 972) > 0.56) {
+    ctx.globalAlpha = 0.78;
+    ctx.fillStyle = 'rgba(102, 72, 38, 0.78)';
+    ctx.beginPath();
+    ctx.ellipse(x + s * 0.58, y + s * 0.56, s * 0.15, s * 0.035, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 242, 185, 0.64)';
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMarshPoolVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.40;
+  ctx.fillStyle = 'rgba(184, 225, 174, 0.46)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.54, y + s * 0.65, s * 0.24, s * 0.07, -0.20, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(37, 80, 50, 0.62)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  for (let i = 0; i < 4; i += 1) {
+    const px = x + s * (0.28 + i * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(px, y + s * 0.76);
+    ctx.quadraticCurveTo(px + s * 0.02, y + s * 0.54, px + s * 0.10, y + s * 0.66);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRuinObeliskVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.66;
+  ctx.fillStyle = 'rgba(94, 78, 58, 0.78)';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.36, y + s * 0.70);
+  ctx.lineTo(x + s * 0.42, y + s * 0.30);
+  ctx.lineTo(x + s * 0.50, y + s * 0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(230, 211, 160, 0.80)';
+  ctx.fillRect(x + s * 0.28, y + s * 0.72, s * 0.34, s * 0.045);
+  ctx.strokeStyle = 'rgba(255, 244, 201, 0.46)';
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.42, y + s * 0.34);
+  ctx.lineTo(x + s * 0.39, y + s * 0.69);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBlightRelicVignette(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.70;
+  ctx.strokeStyle = 'rgba(156, 243, 138, 0.54)';
+  ctx.lineWidth = Math.max(1, s * 0.024);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.34, y + s * 0.72);
+  ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.38, x + s * 0.66, y + s * 0.72);
+  ctx.moveTo(x + s * 0.42, y + s * 0.60);
+  ctx.lineTo(x + s * 0.58, y + s * 0.60);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(16, 26, 18, 0.72)';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.50, y + s * 0.74, s * 0.22, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRoadMilestone(ctx, tile, x, y, s) {
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = 'rgba(245, 226, 170, 0.90)';
+  ctx.strokeStyle = 'rgba(85, 56, 30, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  const mx = x + s * (0.28 + tileNoise(tile, 981) * 0.42);
+  const my = y + s * (0.42 + tileNoise(tile, 982) * 0.22);
+  roundRectPath(ctx, mx - s * 0.035, my - s * 0.075, s * 0.07, s * 0.15, s * 0.018);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(143, 36, 24, 0.76)';
+  ctx.fillRect(mx - s * 0.018, my - s * 0.030, s * 0.036, s * 0.018);
   ctx.restore();
 }
 
