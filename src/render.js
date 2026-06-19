@@ -3631,7 +3631,7 @@ export function describeSelection(state) {
     return {
       title: `${building.name}`,
       subtitle: `${FACTIONS[building.faction].name} · ${def.name} · Tier ${(building.upgraded || 0) + 1}`,
-      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${building.turnsLeft} turns.` : ' Upgrades improve durability, vision, and strategic output.'}${queue}`,
+      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${formatTurnCount(building.turnsLeft)}.` : ' Upgrades improve durability, vision, and strategic output.'}${queue}`,
       faction: building.faction,
       unit: null,
       building
@@ -3649,6 +3649,10 @@ export function describeTilePanel(state, x, y) {
   const blight = summary.blight ? `<p><strong>Blight:</strong> ${summary.blight}/9</p>` : '';
   const road = summary.road ? '<p><strong>Road:</strong> movement network present.</p>' : '';
   return `<h3>${summary.title}</h3><p>${summary.text}</p><p><strong>Elevation:</strong> ${summary.elevation} · <strong>Moisture:</strong> ${summary.moisture}</p>${blight}${road}${unit}${building}`;
+}
+
+function formatTurnCount(turns) {
+  return `${turns} turn${turns === 1 ? '' : 's'}`;
 }
 
 function drawHealthBar(ctx, x, y, w, h, pct, options = {}) {
