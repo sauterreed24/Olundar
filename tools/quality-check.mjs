@@ -429,12 +429,13 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionArchiveTypeFilter') && mainSource.includes('data-action="set-mission-archive-type"'), 'Archived mission outcomes should be filterable by site type.');
   assert(mainSource.includes('missionArchiveSearch') && mainSource.includes('data-action="search-mission-archive"'), 'Archived mission outcomes should support compact text search.');
   assert(mainSource.includes('missionArchiveSortOrder') && mainSource.includes('data-action="set-mission-archive-sort"'), 'Archived mission outcomes should support newest/oldest sort controls.');
-  assert(mainSource.includes('missionArchiveGroupMode') && mainSource.includes('data-action="set-mission-archive-group"'), 'Archived mission outcomes should support route-chain grouping controls.');
+  assert(mainSource.includes('missionArchiveGroupMode') && mainSource.includes('data-action="set-mission-archive-group"') && mainSource.includes("{ id: 'rulings', label: 'Rulings' }"), 'Archived mission outcomes should support route-chain and ruling-origin grouping controls.');
   assert(mainSource.includes('data-action="focus-completed-mission"') && mainSource.includes('focusCompletedMissionSite'), 'Completed mission outcomes should be able to focus their map site.');
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
   assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
   assert(rulesSource.includes('routeName: mission.routeName') && rulesSource.includes('chainTag: mission.chainTag'), 'Mission views should expose route-chain metadata for archive grouping.');
+  assert(rulesSource.includes('missionOriginFromRuling') && rulesSource.includes('originLabel: config.originLabel'), 'Aftermath missions should preserve their originating ruling labels.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(renderSource.includes('function drawMissionFocus') && renderSource.includes('missionFocusOverlay'), 'Focused completed mission sites should draw a dedicated map overlay.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
@@ -475,6 +476,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   const active = missions.active.find((mission) => mission.name === 'Repair the Raid Roads');
   assert(missions.visible && active, 'Repair aftermath should create an active map mission.');
   assert(active.required === 'Engineer' && active.target.includes(','), 'Repair mission should expose requirement and target.');
+  assert(active.originLabel === 'Repair Streets' && active.originSourceLabel === 'After Raise Night Watch', 'Repair missions should expose the aftermath ruling and earlier trigger that created them.');
   assert(active.route?.unitName && active.route.reachableThisTurn && active.route.text.includes('complete this turn'), 'Repair mission should preview the eligible unit and same-turn route.');
   const engineer = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'engineer');
   assert(active.route.path.length >= 2 && active.route.path[0].x === engineer.x && active.route.path.at(-1).x === active.x, 'Repair mission route should expose a revealed path from unit to target.');
@@ -524,6 +526,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   const firstRoute = routeMissions.active.find((mission) => mission.name === 'Escort Frontier Families');
   assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
   assert(firstRoute.routeName === 'Frontier Family Route' && firstRoute.chainTag === 'frontierFamilies' && firstRoute.chainStep === 1, 'Route missions should expose route-chain metadata for grouped history review.');
+  assert(firstRoute.originLabel === 'Frontier Families' && firstRoute.originSourceLabel === 'After Escort to Allies', 'Route missions should expose the aftermath ruling that created the field route.');
   assert(firstRoute.route?.unitName && firstRoute.route.cost !== null, 'Route missions should expose nearest eligible unit and route cost.');
   assert(firstRoute.route.path.length >= 2, 'Route mission previews should include route overlay path points.');
   const routeLens = getStrategicMapLens(routeState, 'missions');
@@ -538,6 +541,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   routeMissions = getAftermathMissions(routeState);
   const followUp = routeMissions.active.find((mission) => mission.name === 'Secure the Safe Mile');
   assert(followUp && followUp.context.includes('Safe-mile camp') && followUp.context.includes('Route 2/2'), 'Completing a route mission should spawn a second safe-mile waypoint.');
+  assert(followUp.originLabel === firstRoute.originLabel && followUp.originSourceLabel === firstRoute.originSourceLabel, 'Route follow-up missions should inherit the original ruling metadata.');
   const completedFirstRoute = routeState.crises.missions.find((mission) => mission.id === firstRoute.id);
   assert(completedFirstRoute.terrainRewardText && completedFirstRoute.resultText.includes('follow-up marker'), 'Completed route missions should record terrain rewards and follow-up text.');
   assert(resourceTotal(routeState) > beforeRouteResources, 'Terrain rewards should add resources beyond the base mission result.');
