@@ -3,25 +3,25 @@ import { idx, manhattan } from './map.js';
 import { buildingAt, canBuildOn, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isVisible, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
-  plains: '#8caf62',
-  forest: '#386c45',
-  hills: '#9a875a',
-  mountains: '#7f8284',
-  river: '#407fb4',
-  marsh: '#4d765c',
-  ruins: '#9a9079',
-  blight: '#54515e'
+  plains: '#b7c86f',
+  forest: '#3f7e43',
+  hills: '#bd9654',
+  mountains: '#8f928b',
+  river: '#3e98c7',
+  marsh: '#5a8a63',
+  ruins: '#b5a17a',
+  blight: '#64546c'
 };
 
 const TERRAIN_HIGHLIGHTS = {
-  plains: '#d7d08a',
-  forest: '#6faf65',
-  hills: '#dbc07a',
+  plains: '#f1dc8c',
+  forest: '#77ba64',
+  hills: '#f0c36e',
   mountains: '#dde1df',
   river: '#bfe9ff',
-  marsh: '#8ecf97',
-  ruins: '#d6c8a0',
-  blight: '#9cf38a'
+  marsh: '#9ed49c',
+  ruins: '#ead38f',
+  blight: '#a9f28c'
 };
 
 const UNIT_ACCENTS = {
@@ -73,7 +73,7 @@ export function pointToTile(canvas, clientX, clientY) {
   };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null) {
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -88,8 +88,40 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawUnits(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
+  drawBattleImpact(ctx, state, layout, battleImpact);
+  drawImperialMapFrame(ctx, layout);
   drawMiniMap(ctx, state, layout, lensId);
   drawStatusRibbon(ctx, state, layout);
+}
+
+function drawBattleImpact(ctx, state, layout, impact) {
+  if (!impact || !isVisible(state, impact.x, impact.y)) return;
+  const x = layout.offsetX + impact.x * layout.tileSize;
+  const y = layout.offsetY + impact.y * layout.tileSize;
+  const s = layout.tileSize;
+  const color = impact.tone === 'bad' ? '#ff8a8a' : impact.tone === 'good' ? '#baf58c' : '#f0c866';
+  const fill = impact.tone === 'bad'
+    ? 'rgba(255, 138, 138, 0.20)'
+    : impact.tone === 'good'
+      ? 'rgba(186, 245, 140, 0.18)'
+      : 'rgba(240, 200, 102, 0.18)';
+  const label = impact.portalReforms ? 'REFORM' : impact.targetDestroyed ? 'BREAK' : `-${impact.damage || 0}`;
+  ctx.save();
+  ctx.lineWidth = Math.max(2, s * 0.08);
+  ctx.strokeStyle = 'rgba(5, 7, 10, 0.84)';
+  ctx.strokeRect(x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84);
+  ctx.strokeStyle = color;
+  ctx.strokeRect(x + s * 0.13, y + s * 0.13, s * 0.74, s * 0.74);
+  ctx.fillStyle = fill;
+  ctx.fillRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64);
+  ctx.fillStyle = 'rgba(5, 7, 10, 0.86)';
+  ctx.fillRect(x + s * 0.18, y + s * 0.04, s * 0.64, s * 0.24);
+  ctx.fillStyle = color;
+  ctx.font = `900 ${Math.max(8, s * 0.20)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + s * 0.5, y + s * 0.16);
+  ctx.restore();
 }
 
 function drawMissionFocus(ctx, state, layout, overlay) {
@@ -117,10 +149,24 @@ function drawMissionFocus(ctx, state, layout, overlay) {
 
 function drawBackdrop(ctx, canvas) {
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, '#101723');
-  gradient.addColorStop(1, '#080a0f');
+  gradient.addColorStop(0, '#6f4729');
+  gradient.addColorStop(0.45, '#3b2418');
+  gradient.addColorStop(1, '#151313');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = '#f0c36e';
+  ctx.lineWidth = 1;
+  const gap = Math.max(32, Math.floor(canvas.width / 34));
+  for (let x = -gap; x < canvas.width + gap; x += gap) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + canvas.height * 0.24, canvas.height);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawTiles(ctx, state, layout) {
@@ -129,8 +175,7 @@ function drawTiles(ctx, state, layout) {
     const y = layout.offsetY + tile.y * layout.tileSize;
     const revealed = isRevealed(state, tile.x, tile.y);
     if (!revealed) {
-      ctx.fillStyle = '#050608';
-      ctx.fillRect(x, y, layout.tileSize, layout.tileSize);
+      drawUnchartedTile(ctx, tile, x, y, layout.tileSize);
       continue;
     }
     const visible = isVisible(state, tile.x, tile.y);
@@ -141,9 +186,24 @@ function drawTiles(ctx, state, layout) {
     drawTerrainTexture(ctx, tile, x, y, layout.tileSize, visible);
     if (tile.road) drawRoad(ctx, x, y, layout.tileSize, visible);
     if (tile.blight > 0 && tile.terrain !== 'blight') drawBlightVeins(ctx, x, y, layout.tileSize, tile.blight, visible);
-    ctx.strokeStyle = visible ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.35)';
+    ctx.strokeStyle = visible ? 'rgba(58, 40, 21, 0.10)' : 'rgba(44, 33, 25, 0.18)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, layout.tileSize - 1, layout.tileSize - 1);
+  }
+}
+
+function drawUnchartedTile(ctx, tile, x, y, s) {
+  const base = ((tile.x * 17 + tile.y * 31) % 11) / 10;
+  const warmth = Math.floor(91 + base * 7);
+  ctx.fillStyle = `rgb(${warmth}, ${Math.floor(66 + base * 5)}, ${Math.floor(45 + base * 4)})`;
+  ctx.fillRect(x, y, s, s);
+  if ((tile.x * 5 + tile.y * 7) % 19 === 0) {
+    ctx.strokeStyle = 'rgba(255, 218, 128, 0.12)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.18, y + s * 0.72);
+    ctx.quadraticCurveTo(x + s * 0.46, y + s * 0.42, x + s * 0.84, y + s * 0.60);
+    ctx.stroke();
   }
 }
 
@@ -181,7 +241,24 @@ function drawTerrainTexture(ctx, tile, x, y, s, visible) {
   const alpha = visible ? 0.55 : 0.26;
   ctx.save();
   ctx.globalAlpha = alpha;
-  if (tile.terrain === 'forest') {
+  if (tile.terrain === 'plains') {
+    ctx.strokeStyle = 'rgba(63, 117, 52, 0.45)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    for (let i = 0; i < 4; i += 1) {
+      const px = x + s * (0.18 + i * 0.19);
+      const py = y + s * (0.42 + ((tile.x * 3 + tile.y + i) % 4) * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(px, py + s * 0.16);
+      ctx.quadraticCurveTo(px + s * 0.04, py + s * 0.05, px + s * 0.12, py);
+      ctx.stroke();
+    }
+    if ((tile.x + tile.y) % 5 === 0) {
+      ctx.fillStyle = 'rgba(255, 229, 150, 0.46)';
+      ctx.beginPath();
+      ctx.arc(x + s * 0.72, y + s * 0.32, s * 0.035, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (tile.terrain === 'forest') {
     ctx.fillStyle = '#173d27';
     for (let i = 0; i < 3; i += 1) {
       const px = x + s * (0.25 + i * 0.25);
@@ -617,6 +694,10 @@ function drawUnits(ctx, state, layout) {
 function drawBuildingSprite(ctx, building, x, y, s) {
   const def = BUILDING_TYPES[building.type];
   const color = FACTION_COLORS[building.faction] || '#eee';
+  const grow = s * 0.04;
+  x -= grow;
+  y -= grow;
+  s += grow * 2;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = s * 0.08;
@@ -624,17 +705,23 @@ function drawBuildingSprite(ctx, building, x, y, s) {
   if (building.type === 'portal') {
     drawPortalSprite(ctx, x, y, s);
   } else if (building.type === 'city') {
-    ctx.fillStyle = '#6f6d62';
-    ctx.fillRect(x + s * 0.16, y + s * 0.52, s * 0.68, s * 0.26);
+    ctx.fillStyle = '#6f695b';
+    ctx.fillRect(x + s * 0.12, y + s * 0.57, s * 0.76, s * 0.24);
+    ctx.fillStyle = '#cbc0a0';
+    for (let i = 0; i < 5; i += 1) ctx.fillRect(x + s * (0.14 + i * 0.15), y + s * 0.49, s * 0.10, s * 0.09);
     ctx.fillStyle = color;
-    ctx.fillRect(x + s * 0.24, y + s * 0.42, s * 0.52, s * 0.32);
-    ctx.fillStyle = '#6b4d38';
-    roof(ctx, x + s * 0.20, y + s * 0.43, s * 0.60, s * 0.24);
-    ctx.fillStyle = '#222a33';
-    ctx.fillRect(x + s * 0.45, y + s * 0.62, s * 0.12, s * 0.17);
-    ctx.fillStyle = '#f9e6a8';
-    for (const px of [0.31, 0.66]) ctx.fillRect(x + s * px, y + s * 0.54, s * 0.07, s * 0.07);
-    drawBannerPennon(ctx, x + s * 0.72, y + s * 0.24, s * 0.34, color);
+    ctx.fillRect(x + s * 0.24, y + s * 0.38, s * 0.52, s * 0.34);
+    ctx.fillStyle = '#8d3327';
+    roof(ctx, x + s * 0.18, y + s * 0.39, s * 0.64, s * 0.22);
+    ctx.fillStyle = 'rgba(255, 226, 156, 0.88)';
+    ctx.fillRect(x + s * 0.36, y + s * 0.50, s * 0.07, s * 0.08);
+    ctx.fillRect(x + s * 0.57, y + s * 0.50, s * 0.07, s * 0.08);
+    ctx.fillStyle = '#221714';
+    ctx.fillRect(x + s * 0.45, y + s * 0.61, s * 0.12, s * 0.20);
+    ctx.strokeStyle = 'rgba(255, 226, 156, 0.72)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.strokeRect(x + s * 0.22, y + s * 0.36, s * 0.56, s * 0.46);
+    drawBannerPennon(ctx, x + s * 0.74, y + s * 0.20, s * 0.38, color);
   } else if (building.type === 'watchtower') {
     ctx.fillStyle = '#5e452e';
     ctx.fillRect(x + s * 0.42, y + s * 0.28, s * 0.16, s * 0.48);
@@ -769,6 +856,10 @@ function drawBannerPennon(ctx, x, y, h, color) {
 
 function drawUnitSprite(ctx, unit, x, y, s, state) {
   const def = UNIT_TYPES[unit.type];
+  const grow = s * 0.07;
+  x -= grow;
+  y -= grow;
+  s += grow * 2;
   const color = FACTION_COLORS[unit.faction] || '#eee';
   const enemy = unit.faction !== 'olundar' && isEnemy(state, 'olundar', unit.faction);
   const cx = x + s * 0.5;
@@ -1085,18 +1176,53 @@ function drawFog(ctx, state, layout) {
       const sx = layout.offsetX + x * layout.tileSize;
       const sy = layout.offsetY + y * layout.tileSize;
       if (!isRevealed(state, x, y)) {
-        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        const s = layout.tileSize;
+        ctx.fillStyle = 'rgba(32, 21, 18, 0.34)';
         ctx.fillRect(sx, sy, layout.tileSize, layout.tileSize);
-        if ((x + y) % 2 === 0) {
-          ctx.fillStyle = 'rgba(255,255,255,0.025)';
-          ctx.fillRect(sx + layout.tileSize * 0.2, sy + layout.tileSize * 0.2, layout.tileSize * 0.6, layout.tileSize * 0.6);
+        if ((x * 7 + y * 11) % 41 === 0) {
+          const veil = ctx.createRadialGradient(sx + s * 0.58, sy + s * 0.52, s * 0.12, sx + s * 0.58, sy + s * 0.52, s * 1.15);
+          veil.addColorStop(0, 'rgba(238, 208, 145, 0.20)');
+          veil.addColorStop(1, 'rgba(238, 208, 145, 0)');
+          ctx.fillStyle = veil;
+          ctx.fillRect(sx - s, sy - s, s * 2.2, s * 2.2);
+        }
+        if ((x * 11 + y * 13) % 47 === 0) {
+          ctx.strokeStyle = 'rgba(255, 229, 166, 0.12)';
+          ctx.lineWidth = Math.max(1, s * 0.035);
+          ctx.beginPath();
+          ctx.arc(sx + s * 0.5, sy + s * 0.5, s * 0.20, 0.2, Math.PI * 1.35);
+          ctx.stroke();
         }
       } else if (!isVisible(state, x, y)) {
-        ctx.fillStyle = 'rgba(2,6,12,0.46)';
+        ctx.fillStyle = 'rgba(58, 42, 28, 0.38)';
         ctx.fillRect(sx, sy, layout.tileSize, layout.tileSize);
+        ctx.fillStyle = 'rgba(222, 190, 128, 0.08)';
+        ctx.fillRect(sx + layout.tileSize * 0.08, sy + layout.tileSize * 0.08, layout.tileSize * 0.84, layout.tileSize * 0.84);
       }
     }
   }
+}
+
+function drawImperialMapFrame(ctx, layout) {
+  const x = layout.offsetX;
+  const y = layout.offsetY;
+  const w = layout.mapWidth;
+  const h = layout.mapHeight;
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 221, 142, 0.86)';
+  ctx.lineWidth = Math.max(2, s * 0.09);
+  ctx.strokeRect(x - s * 0.08, y - s * 0.08, w + s * 0.16, h + s * 0.16);
+  ctx.strokeStyle = 'rgba(89, 47, 23, 0.92)';
+  ctx.lineWidth = Math.max(2, s * 0.04);
+  ctx.strokeRect(x + s * 0.05, y + s * 0.05, w - s * 0.10, h - s * 0.10);
+  ctx.fillStyle = 'rgba(255, 221, 142, 0.78)';
+  for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(2, s * 0.12), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawSelection(ctx, state, layout, hoverTile) {
@@ -1137,11 +1263,14 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const x0 = layout.offsetX + layout.mapWidth - w - 8;
   const y0 = layout.offsetY + 8;
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(x0 - 4, y0 - 4, w + 8, h + 8);
+  ctx.fillStyle = 'rgba(43, 25, 16, 0.82)';
+  ctx.fillRect(x0 - 7, y0 - 7, w + 14, h + 14);
+  ctx.strokeStyle = 'rgba(255, 221, 142, 0.72)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x0 - 7, y0 - 7, w + 14, h + 14);
   for (const tile of state.map.tiles) {
-    let color = '#030304';
-    if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#333943';
+    let color = '#6f4d32';
+    if (isRevealed(state, tile.x, tile.y)) color = isVisible(state, tile.x, tile.y) ? (TERRAIN_COLORS[tile.terrain] || '#777') : '#5b4938';
     ctx.fillStyle = color;
     ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale, scale);
   }
@@ -1157,8 +1286,8 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
     ctx.fillStyle = FACTION_COLORS[building.faction] || '#fff';
     ctx.fillRect(x0 + building.x * scale - 1, y0 + building.y * scale - 1, scale + 2, scale + 2);
   }
-  ctx.strokeStyle = '#f5e8b7';
-  ctx.strokeRect(x0 - 4, y0 - 4, w + 8, h + 8);
+  ctx.strokeStyle = '#fff0ba';
+  ctx.strokeRect(x0 - 3, y0 - 3, w + 6, h + 6);
   ctx.restore();
 }
 

@@ -33,6 +33,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
 - Terrain effects: movement cost, sight bonuses/penalties, defense, resource logic, blight attrition, and road logistics.
 - Attack forecasts that show damage, range, target HP, terrain/fortify defense, siege bonuses, and portal reformation before the player commits.
+- Last Strike combat feedback that summarizes the attacker, target, damage, HP change, portal reformation, and a visible impact marker on the struck map tile.
 - Player units: Pathfinder Scout, Shield Legionary, Spear Guard, Archer, Equite Cavalry, Field Engineer, and Onager Crew.
 - Buildings: City Center, Farms, Lumber Camps, Mines, Barracks, Archery Yard, Stable, Workshop, Watchtower, Walls, Roads, Shrine, and Outpost.
 - Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
@@ -42,9 +43,9 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
-- Upgraded canvas-rendered tactical sprites with shields, weapons, cavalry silhouettes, siege gear, Deadwalker glow, richer buildings, terrain relief, and a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
+- Upgraded imperial war-table presentation with parchment fog, brighter Civilizations-style terrain, bronze/crimson/lapis UI materials, tactical sprites with shields, weapons, cavalry silhouettes, siege gear, Deadwalker glow, richer buildings, terrain relief, and a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
 - GitHub Pages deployment through `.github/workflows/pages.yml` so the latest `main` build can be played in a browser from GitHub.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, GitHub Pages deployability, enhanced canvas sprite rendering, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, result banners, mission outcome archives, archive type filters, archive text search, archive sort controls, archive route and ruling grouping, archive reward summaries, archive detail toggles, archived-site map focus, completed-site receipts, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, GitHub Pages deployability, enhanced canvas sprite rendering, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, result banners, mission outcome archives, archive type filters, archive text search, archive sort controls, archive route and ruling grouping, archive reward summaries, archive detail toggles, archived-site map focus, completed-site receipts, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, Last Strike combat impact feedback, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -63,6 +64,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Click an Olundaran unit, then click a tile to move.
 - Select an Olundaran unit and hover or click a visible hostile target to preview damage, range, and target HP.
 - Click a visible hostile unit or building in range to attack.
+- After an attack, read **Last Strike** in Orders and use the highlighted map tile to confirm exactly what was hit.
 - Select an engineer and choose a building order, then click the engineer’s tile or an adjacent valid tile.
 - Select a city or military building to train units.
 - Select an Olundaran building to upgrade it when resources allow.
@@ -136,7 +138,7 @@ olundar_game/
 - Player settings normalize audio volume, motion, and map-scale choices.
 - PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
 - GitHub Pages workflow must publish the static app from `main` only after the quality gate passes.
-- Canvas renderer must keep polished terrain relief, unit kit silhouettes, Deadwalker glow, and building detail visible without external assets.
+- Canvas renderer must keep parchment fog, an imperial campaign-map frame, polished terrain relief, unit kit silhouettes, Deadwalker glow, and building detail visible without external assets.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Campaign recaps summarize active imports, victories, defeats, objective milestones, and after-action advice from live state.
 - Diplomacy ledger entries track uncontacted civilizations, active pacts/trade, aid or pressure history, duplicate accord prevention, and rivalries.
@@ -154,6 +156,7 @@ olundar_game/
 - Construction validates placement and completes.
 - Building upgrades spend resources and improve long-term planning.
 - Combat forecasts match real attack damage without mutating state.
+- Successful attacks must expose readable Last Strike feedback and canvas impact markers.
 - Combat damages units and enforces the boss-before-portal rule.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.

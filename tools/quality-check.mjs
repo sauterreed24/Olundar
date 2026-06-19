@@ -1036,12 +1036,18 @@ check('github pages workflow publishes the playable app', () => {
 
 check('canvas renderer keeps premium tactical sprites readable', () => {
   const renderSource = readProjectFile('src/render.js');
+  const styleSource = readProjectFile('src/style.css');
 
   assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
+  assert(renderSource.includes('function drawUnchartedTile') && renderSource.includes('function drawImperialMapFrame'), 'The world map should use parchment fog and an imperial campaign-map frame.');
+  assert(renderSource.includes("tile.terrain === 'plains'") && renderSource.includes('quadraticCurveTo'), 'Terrain should include painterly texture beyond flat tile fills.');
   assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
   assert(renderSource.includes('function drawBannerPennon') && renderSource.includes('function drawUnitRim'), 'Units and buildings should keep faction accents and readable bases.');
   assert(renderSource.includes('function drawPortalSprite') && renderSource.includes('function drawNecroStructure'), 'Deadwalker structures should keep distinctive necrotic silhouettes.');
   assert(renderSource.includes('createRadialGradient') && renderSource.includes('rgba(156, 243, 138'), 'Deadwalkers should retain their necrotic glow language.');
+  assert(styleSource.includes('--crimson') && styleSource.includes('--lapis') && styleSource.includes('--bronze'), 'UI theme should keep an imperial multi-material palette.');
+  assert(styleSource.includes('.map-shell::before') && styleSource.includes('border-top-left-radius'), 'Map shell should keep decorative imperial frame treatment.');
+  assert(styleSource.includes('linear-gradient(90deg, rgba(55, 12, 11') && styleSource.includes('radial-gradient(circle at 86% 18%'), 'The first viewport should avoid generic black dashboard chrome.');
 });
 
 check('scenario and difficulty presets change campaign shape', () => {
@@ -1115,6 +1121,13 @@ check('building upgrades improve long-term planning', () => {
 });
 
 check('combat can damage enemies and protects portal before boss death', () => {
+  const mainSource = readProjectFile('src/main.js');
+  const renderSource = readProjectFile('src/render.js');
+  const styleSource = readProjectFile('src/style.css');
+  assert(mainSource.includes('function captureBattleImpact') && mainSource.includes('Last Strike') && mainSource.includes('data-action="clear-battle-impact"'), 'Successful attacks should show a dismissible Last Strike combat impact card.');
+  assert(renderSource.includes('function drawBattleImpact') && renderSource.includes('battleImpact') && renderSource.includes('REFORM'), 'Successful attacks should draw a target-tile impact marker.');
+  assert(styleSource.includes('.battle-impact') && styleSource.includes('.battle-impact.good') && styleSource.includes('.battle-impact.bad'), 'Combat impact cards need readable tone styling.');
+
   const state = createGame('quality-combat');
   const legion = state.units.find((u) => u.faction === 'olundar' && u.type === 'legionary');
   const thrall = state.units.find((u) => u.faction === 'dead' && u.type === 'boneThrall');
@@ -1123,6 +1136,8 @@ check('combat can damage enemies and protects portal before boss death', () => {
   const beforeHp = thrall.hp;
   const hit = attackUnit(state, legion.id, thrall.id);
   assert(hit.ok, hit.reason || 'Attack failed.');
+  assert(hit.type === 'unit' && hit.targetName === thrall.name && hit.targetX === thrall.x && hit.targetY === thrall.y, 'Unit attack results should expose the struck target and tile.');
+  assert(hit.targetHpBefore === beforeHp && hit.targetHpAfter < hit.targetHpBefore && hit.damage > 0, 'Unit attack results should expose a readable HP delta.');
   const maybeThrall = state.units.find((u) => u.id === thrall.id);
   assert(!maybeThrall || maybeThrall.hp < beforeHp, 'Attack did not damage target.');
 
@@ -1134,6 +1149,8 @@ check('combat can damage enemies and protects portal before boss death', () => {
   portal.hp = 1;
   const result = attackBuilding(state, onager.id, portal.id);
   assert(result.ok, result.reason || 'Portal attack failed.');
+  assert(result.type === 'building' && result.portalReforms && result.targetX === portal.x && result.targetY === portal.y, 'Building attack results should expose portal reformation impact data.');
+  assert(!result.targetDestroyed && result.targetHpBefore === 1 && result.targetHpAfter === 10, 'Portal reformation should not be reported as a destroyed target.');
   assert(state.status === 'playing' && portal.hp === 10, 'Portal should reform while boss lives.');
 });
 
