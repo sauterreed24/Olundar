@@ -1003,6 +1003,7 @@ function renderActions() {
     if (def.tags.includes('builder') && selectedUnit.faction === 'olundar') {
       const buildSection = actionSection('Construction orders', 'Place roads, economy sites, defenses, and mustering halls from this engineer.', 'build-orders');
       const grid = commandActions('build-actions');
+      const buildDrawer = orderDrawer('Construction catalog', 'Roads, mines, towers', 'build-drawer', !isMobileIntelDrawerMode());
       const buildOrder = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
       for (const type of buildOrder) {
         const bDef = BUILDING_TYPES[type];
@@ -1014,7 +1015,8 @@ function renderActions() {
           render();
         }, { disabled }));
       }
-      buildSection.appendChild(grid);
+      buildDrawer.appendChild(grid);
+      buildSection.appendChild(buildDrawer);
       actionPanel.appendChild(buildSection);
     }
   }
@@ -3110,6 +3112,14 @@ function commandActions(className = '') {
   const actions = document.createElement('div');
   actions.className = `command-actions ${className}`.trim();
   return actions;
+}
+
+function orderDrawer(label, meta, className = '', open = false) {
+  const drawer = document.createElement('details');
+  drawer.className = `order-drawer ${className}`.trim();
+  if (open) drawer.open = true;
+  drawer.innerHTML = `<summary><span>${escapeHtml(label)}</span>${meta ? ` <small>${escapeHtml(meta)}</small>` : ''}</summary>`;
+  return drawer;
 }
 
 function orderButton(label, meta, onClick, options = {}) {
