@@ -141,7 +141,7 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
   renderTopBar();
   renderMapLensBar();
   renderMapHelp();
@@ -843,6 +843,52 @@ function missionSiteFocusOverlay() {
 function battleImpactOverlay() {
   if (!battleImpact || !inMap(battleImpact.x, battleImpact.y)) return null;
   return battleImpact;
+}
+
+function openingOrderOverlay() {
+  const directive = currentOpeningDirective();
+  if (!directive || state.status !== 'playing') return null;
+  const action = openingDirectiveAction(directive.current.id);
+  if (!action) return null;
+
+  const unit = action.unitId ? state.units.find((item) => item.id === action.unitId) : null;
+  const building = action.buildingId ? state.buildings.find((item) => item.id === action.buildingId) : null;
+  const source = unit || building || null;
+  const target = Number.isFinite(action.x) && Number.isFinite(action.y)
+    ? { x: action.x, y: action.y }
+    : source ? { x: source.x, y: source.y } : null;
+  if (!target || !inMap(target.x, target.y)) return null;
+
+  let path = [];
+  let cost = null;
+  if (unit && Number.isFinite(action.x) && Number.isFinite(action.y)) {
+    const move = UNIT_TYPES[unit.type]?.move || 0;
+    const found = action.kind === 'move'
+      ? findPath(state, unit, action.x, action.y, move)
+      : null;
+    if (found?.path?.length) {
+      path = [{ x: unit.x, y: unit.y }, ...found.path.map(pathKeyToTile)];
+      cost = found.cost;
+    } else if (unit.x !== action.x || unit.y !== action.y) {
+      path = [{ x: unit.x, y: unit.y }, target];
+    }
+  }
+
+  return {
+    kind: action.kind,
+    label: action.label,
+    meta: action.meta,
+    canExecute: action.canExecute !== false && !action.disabled,
+    unitId: action.unitId || null,
+    buildingId: action.buildingId || null,
+    target,
+    path,
+    cost
+  };
+}
+
+function pathKeyToTile(key) {
+  return { x: key % MAP_WIDTH, y: Math.floor(key / MAP_WIDTH) };
 }
 
 function focusedArchivedMission() {
@@ -3050,7 +3096,7 @@ canvas.addEventListener('mousemove', (event) => {
   }
   renderTilePanel();
   renderMapIntel();
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;
