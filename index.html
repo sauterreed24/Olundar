@@ -65,18 +65,26 @@
       <aside class="side">
         <section id="selectionPanel" class="panel command-card"></section>
         <section id="actionPanel" class="panel order-card"></section>
-        <section id="councilPanel" class="panel council"></section>
-        <section id="guidePanel" class="panel guide"></section>
-        <section id="operationsPanel" class="panel operations"></section>
-        <section id="crisisPanel" class="panel crisis"></section>
-        <section id="missionPanel" class="panel missions"></section>
-        <section id="tilePanel" class="panel"></section>
-        <section class="panel">
-          <h2>Objectives</h2>
-          <ol id="objectiveList" class="objectives"></ol>
-        </section>
-        <section id="diplomacyPanel" class="panel"></section>
-        <section id="logPanel" class="panel chronicle"></section>
+        <details id="mobileIntelDrawer" class="mobile-intel-drawer" open>
+          <summary class="mobile-intel-summary">
+            <span>Campaign intelligence</span>
+            <small id="mobileIntelDrawerSummary">First orders, objectives, diplomacy</small>
+          </summary>
+          <div class="mobile-intel-stack">
+            <section id="councilPanel" class="panel council"></section>
+            <section id="guidePanel" class="panel guide"></section>
+            <section id="operationsPanel" class="panel operations"></section>
+            <section id="crisisPanel" class="panel crisis"></section>
+            <section id="missionPanel" class="panel missions"></section>
+            <section id="tilePanel" class="panel"></section>
+            <section class="panel">
+              <h2>Objectives</h2>
+              <ol id="objectiveList" class="objectives"></ol>
+            </section>
+            <section id="diplomacyPanel" class="panel"></section>
+            <section id="logPanel" class="panel chronicle"></section>
+          </div>
+        </details>
       </aside>
     </main>
 

@@ -731,6 +731,20 @@ button:disabled {
   scrollbar-color: rgba(255, 207, 106, 0.62) rgba(45, 26, 16, 0.64);
 }
 
+.mobile-intel-drawer {
+  display: contents;
+}
+
+.mobile-intel-summary {
+  display: none;
+}
+
+.mobile-intel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.88rem;
+}
+
 .panel {
   scroll-margin-top: 6.5rem;
   padding: 0.85rem;
@@ -3589,6 +3603,10 @@ button:hover:not(:disabled) {
   #selectionPanel {
     order: 0;
   }
+
+  .mobile-intel-drawer {
+    order: 1;
+  }
 }
 
 @media (max-width: 620px) {
@@ -3897,6 +3915,88 @@ button:hover:not(:disabled) {
   .panel {
     scroll-margin-top: 11rem;
     padding: 0.72rem;
+  }
+
+  .mobile-intel-drawer {
+    display: block;
+  }
+
+  .mobile-intel-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+    min-height: 2.78rem;
+    padding: 0.5rem 0.62rem;
+    border: 1px solid rgba(143, 36, 24, 0.20);
+    border-radius: 8px;
+    background:
+      linear-gradient(180deg, rgba(255, 252, 235, 0.98), rgba(227, 194, 126, 0.82)),
+      radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.76), transparent 8rem);
+    color: #6b3518;
+    cursor: pointer;
+    list-style: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.72),
+      0 8px 16px rgba(92, 58, 24, 0.10);
+  }
+
+  .mobile-intel-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-intel-summary::marker {
+    content: "";
+  }
+
+  .mobile-intel-summary::after {
+    content: "+";
+    display: grid;
+    place-items: center;
+    width: 1.42rem;
+    height: 1.42rem;
+    flex: 0 0 auto;
+    border: 1px solid rgba(143, 36, 24, 0.24);
+    border-radius: 50%;
+    background: rgba(255, 248, 225, 0.82);
+    color: #8f2418;
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .mobile-intel-drawer[open] .mobile-intel-summary::after {
+    content: "-";
+  }
+
+  .mobile-intel-summary span,
+  .mobile-intel-summary small {
+    min-width: 0;
+  }
+
+  .mobile-intel-summary span {
+    color: #8f2418;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.94rem;
+    font-weight: 900;
+    line-height: 1.05;
+  }
+
+  .mobile-intel-summary small {
+    color: #5f4a2e;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: right;
+  }
+
+  .mobile-intel-drawer:not([open]) .mobile-intel-stack {
+    display: none;
+  }
+
+  .mobile-intel-stack {
+    gap: 0.62rem;
+    margin-top: 0.62rem;
   }
 
   button {
