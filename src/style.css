@@ -3085,11 +3085,13 @@ button:hover:not(:disabled) {
   border-top: 1px dashed rgba(129, 80, 33, 0.22);
 }
 
-.campaign-tools-drawer {
+.campaign-tools-drawer,
+.order-drawer {
   margin-top: 0.44rem;
 }
 
-.campaign-tools-drawer summary {
+.campaign-tools-drawer summary,
+.order-drawer summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3108,15 +3110,18 @@ button:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.64), 0 6px 12px rgba(96, 58, 25, 0.08);
 }
 
-.campaign-tools-drawer summary::-webkit-details-marker {
+.campaign-tools-drawer summary::-webkit-details-marker,
+.order-drawer summary::-webkit-details-marker {
   display: none;
 }
 
-.campaign-tools-drawer summary::marker {
+.campaign-tools-drawer summary::marker,
+.order-drawer summary::marker {
   content: "";
 }
 
-.campaign-tools-drawer summary::after {
+.campaign-tools-drawer summary::after,
+.order-drawer summary::after {
   content: "+";
   display: grid;
   place-items: center;
@@ -3131,24 +3136,33 @@ button:hover:not(:disabled) {
   line-height: 1;
 }
 
-.campaign-tools-drawer[open] summary::after {
+.campaign-tools-drawer[open] summary::after,
+.order-drawer[open] summary::after {
   content: "-";
 }
 
 .campaign-tools-drawer summary span,
-.campaign-tools-drawer summary small {
+.campaign-tools-drawer summary small,
+.order-drawer summary span,
+.order-drawer summary small {
   min-width: 0;
 }
 
-.campaign-tools-drawer summary small {
+.campaign-tools-drawer summary small,
+.order-drawer summary small {
   color: #72593a;
   font-size: 0.68rem;
   font-weight: 800;
   text-align: right;
 }
 
-.campaign-tools-drawer[open] .campaign-tools {
+.campaign-tools-drawer[open] .campaign-tools,
+.order-drawer[open] .command-actions {
   margin-top: 0.34rem;
+}
+
+.build-drawer {
+  margin-top: 0.52rem;
 }
 
 .campaign-tools .order-button {
