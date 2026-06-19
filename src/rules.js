@@ -398,6 +398,7 @@ function missionView(state, mission) {
   const routeStep = mission.chainLimit ? `Route ${mission.chainStep || 1}/${mission.chainLimit}` : '';
   return {
     id: mission.id,
+    type: mission.type,
     name: mission.name,
     text: mission.text,
     tone: mission.tone || 'info',

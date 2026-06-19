@@ -48,7 +48,7 @@ export function pointToTile(canvas, clientX, clientY) {
   };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null) {
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -57,6 +57,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawStrategicLens(ctx, state, layout, lensId);
   drawReachable(ctx, state, layout);
   drawMissionRoute(ctx, state, layout, routeOverlay);
+  drawMissionFocus(ctx, state, layout, missionFocusOverlay);
   drawBuildSites(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
@@ -64,6 +65,29 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawFog(ctx, state, layout);
   drawMiniMap(ctx, state, layout, lensId);
   drawStatusRibbon(ctx, state, layout);
+}
+
+function drawMissionFocus(ctx, state, layout, overlay) {
+  if (!overlay || !isRevealed(state, overlay.x, overlay.y)) return;
+  const x = layout.offsetX + overlay.x * layout.tileSize;
+  const y = layout.offsetY + overlay.y * layout.tileSize;
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.strokeStyle = '#baf58c';
+  ctx.lineWidth = Math.max(2, s * 0.09);
+  ctx.globalAlpha = 0.9;
+  ctx.strokeRect(x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84);
+  ctx.globalAlpha = 0.32;
+  ctx.fillStyle = '#baf58c';
+  ctx.fillRect(x + s * 0.14, y + s * 0.14, s * 0.72, s * 0.72);
+  ctx.globalAlpha = 1;
+  drawMissionSiteMarker(ctx, x, y, s, {
+    ...overlay,
+    kind: 'missionComplete',
+    completed: true,
+    visible: true
+  }, '#baf58c');
+  ctx.restore();
 }
 
 function drawBackdrop(ctx, canvas) {

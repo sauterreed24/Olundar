@@ -87,6 +87,7 @@ let activeMapLens = 'normal';
 let focusedMissionId = null;
 let missionResultBanner = null;
 let missionHistoryFilter = 'recent';
+let focusedArchivedMissionId = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -107,7 +108,7 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay());
   renderTopBar();
   renderMapLensBar();
   renderCouncil();
@@ -354,11 +355,14 @@ function missionHistoryMarkup(missions) {
 
 function missionHistoryRecordMarkup(mission) {
   return `
-    <p>
-      <b>T${escapeHtml(mission.completedTurn)} ${escapeHtml(mission.name)}:</b>
-      ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}
-      ${mission.completedBy ? `<small>Completed by ${escapeHtml(mission.completedBy)}.</small>` : ''}
-    </p>
+    <article class="mission-history-record ${mission.id === focusedArchivedMissionId ? 'focused' : ''}">
+      <p>
+        <b>T${escapeHtml(mission.completedTurn)} ${escapeHtml(mission.name)}:</b>
+        ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}
+        ${mission.completedBy ? `<small>Completed by ${escapeHtml(mission.completedBy)}.</small>` : ''}
+      </p>
+      <button type="button" data-action="focus-completed-mission" data-mission-id="${escapeHtml(mission.id)}" title="Show this completed site on the Missions lens">Site</button>
+    </article>
   `;
 }
 
@@ -370,6 +374,7 @@ function focusMissionTarget(missionId) {
   }
   activeMapLens = 'missions';
   focusedMissionId = mission.id;
+  focusedArchivedMissionId = null;
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
   toast(`${mission.name} target ${mission.target}.`, 'info');
@@ -388,6 +393,7 @@ function focusMissionUnit(missionId) {
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
   focusedMissionId = mission.id;
+  focusedArchivedMissionId = null;
   hoverTile = { x: unit.x, y: unit.y };
   lastTile = hoverTile;
   toast(`${unit.name} route to ${mission.name}.`, mission.route.reachableThisTurn ? 'good' : 'info');
@@ -414,6 +420,7 @@ function dispatchMission(missionId) {
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
   focusedMissionId = mission.id;
+  focusedArchivedMissionId = null;
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
   const result = moveUnit(state, unit.id, mission.x, mission.y);
@@ -425,6 +432,26 @@ function dispatchMission(missionId) {
       toast(`${mission.name} completed by ${unit.name}.`, 'good');
     }
   }
+  render();
+  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function focusCompletedMissionSite(missionId) {
+  const missions = getAftermathMissions(state);
+  const mission = [...missions.recent, ...missions.archive].find((item) => item.id === missionId);
+  if (!mission) {
+    toast('That completed mission is no longer in the review archive.', 'bad');
+    return;
+  }
+  activeMapLens = 'missions';
+  focusedMissionId = null;
+  focusedArchivedMissionId = mission.id;
+  state.selectedUnitId = null;
+  state.selectedBuildingId = null;
+  state.mode = { type: 'select' };
+  hoverTile = { x: mission.x, y: mission.y };
+  lastTile = hoverTile;
+  toast(`${mission.name} completed site ${mission.target}.`, 'info');
   render();
   canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
@@ -475,6 +502,22 @@ function focusedMissionRouteOverlay() {
     path: mission.route.path,
     target: { x: mission.x, y: mission.y },
     unitId: mission.route.unitId
+  };
+}
+
+function missionSiteFocusOverlay() {
+  if (!focusedArchivedMissionId) return null;
+  const missions = getAftermathMissions(state);
+  const mission = [...missions.recent, ...missions.archive].find((item) => item.id === focusedArchivedMissionId);
+  if (!mission) return null;
+  return {
+    missionId: mission.id,
+    name: `${mission.name} complete`,
+    x: mission.x,
+    y: mission.y,
+    site: mission.site,
+    type: mission.type,
+    completed: true
   };
 }
 
@@ -946,6 +989,7 @@ function loadSerializedGame(raw, slot = null) {
     focusedMissionId = null;
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
+    focusedArchivedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -980,6 +1024,7 @@ function importSaveFile(raw, fileName = '') {
     focusedMissionId = null;
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
+    focusedArchivedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1269,6 +1314,7 @@ function startConfiguredCampaign(form) {
   focusedMissionId = null;
   missionResultBanner = null;
   missionHistoryFilter = 'recent';
+  focusedArchivedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
@@ -1356,7 +1402,7 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   renderTilePanel();
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;
@@ -1418,6 +1464,7 @@ missionPanel.addEventListener('click', (event) => {
   if (target.dataset.action === 'focus-mission') focusMissionTarget(target.dataset.missionId);
   else if (target.dataset.action === 'focus-mission-unit') focusMissionUnit(target.dataset.missionId);
   else if (target.dataset.action === 'dispatch-mission') dispatchMission(target.dataset.missionId);
+  else if (target.dataset.action === 'focus-completed-mission') focusCompletedMissionSite(target.dataset.missionId);
   else if (target.dataset.action === 'set-mission-history') {
     missionHistoryFilter = target.dataset.filter === 'archive' ? 'archive' : 'recent';
     render();
