@@ -376,7 +376,7 @@ export function getAftermathMissions(state) {
   const recentCompleted = completed.filter((mission) => state.turn - mission.completedTurn <= 4);
   const archivedCompleted = completed.filter((mission) => state.turn - mission.completedTurn > 4);
   const recent = recentCompleted.slice(0, 3).map((mission) => missionView(state, mission));
-  const archive = archivedCompleted.slice(0, 8).map((mission) => missionView(state, mission));
+  const archive = archivedCompleted.map((mission) => missionView(state, mission));
   return {
     title: 'Aftermath Missions',
     summary: aftermathMissionSummary(active, recent, archivedCompleted.length),

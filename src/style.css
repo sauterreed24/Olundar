@@ -1104,6 +1104,32 @@ button:disabled {
   background: rgba(186, 245, 140, 0.12);
 }
 
+.mission-type-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.24rem;
+}
+
+.mission-type-filter button {
+  display: inline-flex;
+  gap: 0.22rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.24rem 0.4rem;
+  font-size: 0.65rem;
+}
+
+.mission-type-filter button[aria-pressed="true"] {
+  border-color: rgba(240, 200, 102, 0.42);
+  color: #f9e6a8;
+  background: rgba(240, 200, 102, 0.12);
+}
+
+.mission-type-filter span {
+  color: var(--good);
+  font-size: 0.62rem;
+}
+
 .mission-history-record,
 .mission-history > .history-empty {
   display: grid;
