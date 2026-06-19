@@ -39,6 +39,7 @@ import {
   unitAt,
   buildingAt,
   isEnemy,
+  isTileSupplied,
   isVisible
 } from './rules.js';
 import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
@@ -230,6 +231,7 @@ function renderMapHelp() {
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective ? [] : [
     '<span>Standards mark key moves</span>',
+    '<span>Laurels mark supplied ground</span>',
     '<span>Hover previews route cost</span>',
     '<span>Red rim marks attack reach</span>',
     '<span>E ends turn | Esc cancels build</span>'
@@ -1350,13 +1352,15 @@ function mapIntelState(tile) {
   const terrainName = terrain?.name || formatTerrainName(mapTile?.terrain || 'unknown');
   const visibleUnit = unitAt(state, tile.x, tile.y);
   const visibleBuilding = buildingAt(state, tile.x, tile.y);
-  const road = state.buildings.some((building) => building.type === 'road' && building.x === tile.x && building.y === tile.y);
+  const road = Boolean(mapTile?.road || state.buildings.some((building) => building.type === 'road' && building.x === tile.x && building.y === tile.y));
+  const supplied = Boolean(mapTile && isTileSupplied(state, tile.x, tile.y));
   const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId);
   const baseStats = [
     { value: terrainName, label: 'terrain' },
     { value: `${tile.x},${tile.y}`, label: 'sector' }
   ];
   if (road) baseStats.push({ value: 'road', label: 'logistics' });
+  else if (supplied) baseStats.push({ value: 'supply', label: 'logistics' });
   if (mapTile?.blight) baseStats.push({ value: `${mapTile.blight}/9`, label: 'blight' });
 
   const openingAction = openingDirectiveForTile(tile);
@@ -1413,12 +1417,15 @@ function mapIntelState(tile) {
     const path = findPath(state, selectedUnit, tile.x, tile.y, def.move);
     if (path) {
       const remaining = Math.max(0, def.move - path.cost);
+      const logistics = road ? 'Road-linked move. Click to reposition along Olundar logistics.'
+        : supplied ? 'Supplied move. This tile remains inside Olundar command reach.'
+          : 'Valid move. Click to spend this unit action here.';
       return {
-        tone: road ? 'road' : 'good',
+        tone: road ? 'road' : supplied ? 'good' : 'neutral',
         kicker: selectedUnit.name,
         title: terrainName,
-        detail: road ? 'Road-linked move. Click to reposition along Olundar logistics.' : 'Valid move. Click to spend this unit action here.',
-        stats: [...baseStats, { value: `${path.cost}/${def.move}`, label: 'move' }, { value: `${remaining}`, label: 'left' }]
+        detail: logistics,
+        stats: [...baseStats, { value: `${path.cost}/${def.move}`, label: 'move' }, { value: `${remaining}`, label: 'left' }, { value: supplied ? 'held' : 'field', label: 'supply' }]
       };
     }
     return {
