@@ -1464,7 +1464,7 @@ function drawMoveReachTile(ctx, bounds, layout, item) {
   const stroke = item.road ? 'rgba(47, 116, 141, 0.46)' : close ? 'rgba(151, 96, 29, 0.42)' : 'rgba(113, 85, 34, 0.26)';
   fillTileDiamond(ctx, bounds, fill, 3);
   strokeTileDiamond(ctx, bounds, stroke, Math.max(1, layout.tileSize * 0.018), 4);
-  drawTacticalMovePip(ctx, bounds, layout, item);
+  drawTacticalMoveMarker(ctx, bounds, layout, item);
 }
 
 function drawAttackReachTile(ctx, bounds, layout, target) {
@@ -1496,23 +1496,85 @@ function drawAttackReachTile(ctx, bounds, layout, target) {
   }
 }
 
-function drawTacticalMovePip(ctx, bounds, layout, item) {
-  const radius = Math.max(2, layout.tileSize * (item.road ? 0.07 : 0.05));
-  const y = bounds.cy + layout.halfTileHeight * 0.44;
+function drawTacticalMoveMarker(ctx, bounds, layout, item) {
+  const close = item.cost <= 1;
+  const prominent = item.road || item.cost <= 2;
+  const markerY = bounds.cy + layout.halfTileHeight * 0.35;
+  const poleHeight = layout.tileSize * (item.road ? 0.30 : 0.24);
+  const poleX = bounds.cx - layout.tileSize * 0.09;
+  const bannerColor = item.road ? '#9be5ff' : close ? '#ffe08a' : '#f4c866';
+  const rimColor = item.road ? 'rgba(27, 93, 122, 0.78)' : 'rgba(117, 77, 25, 0.68)';
   ctx.save();
-  ctx.fillStyle = item.road ? 'rgba(221, 247, 255, 0.88)' : 'rgba(255, 246, 196, 0.82)';
-  ctx.strokeStyle = item.road ? 'rgba(42, 99, 121, 0.68)' : 'rgba(117, 77, 25, 0.48)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
-  ctx.beginPath();
-  ctx.arc(bounds.cx, y, radius, 0, Math.PI * 2);
+  ctx.shadowColor = item.road ? 'rgba(53, 145, 176, 0.28)' : 'rgba(214, 151, 48, 0.22)';
+  ctx.shadowBlur = layout.tileSize * 0.08;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
+  if (prominent) {
+    ctx.strokeStyle = 'rgba(61, 39, 18, 0.62)';
+    ctx.beginPath();
+    ctx.moveTo(poleX, markerY);
+    ctx.lineTo(poleX, markerY - poleHeight);
+    ctx.stroke();
+    ctx.fillStyle = bannerColor;
+    ctx.strokeStyle = rimColor;
+    ctx.beginPath();
+    ctx.moveTo(poleX, markerY - poleHeight);
+    ctx.lineTo(poleX + layout.tileSize * 0.21, markerY - poleHeight * 0.92);
+    ctx.lineTo(poleX + layout.tileSize * 0.15, markerY - poleHeight * 0.66);
+    ctx.lineTo(poleX, markerY - poleHeight * 0.74);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item);
+  if (item.road) drawRoadChevron(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout);
+  else drawFootstepPair(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
+  ctx.restore();
+}
+
+function drawMoveCostCartouche(ctx, x, y, layout, item) {
+  const w = Math.max(16, layout.tileSize * 0.24);
+  const h = Math.max(10, layout.tileSize * 0.16);
+  ctx.save();
+  roundRectPath(ctx, x - w * 0.5, y - h * 0.5, w, h, h * 0.48);
+  ctx.fillStyle = item.road ? 'rgba(230, 250, 255, 0.92)' : 'rgba(255, 247, 211, 0.92)';
+  ctx.strokeStyle = item.road ? 'rgba(47, 116, 141, 0.64)' : 'rgba(151, 96, 29, 0.56)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
   ctx.fill();
   ctx.stroke();
-  if (item.road) {
-    ctx.strokeStyle = 'rgba(42, 99, 121, 0.54)';
+  ctx.fillStyle = item.road ? '#174a60' : '#733f16';
+  ctx.font = `900 ${Math.max(8, layout.tileSize * 0.13)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(Math.round(item.cost)), x, y + h * 0.02);
+  ctx.restore();
+}
+
+function drawRoadChevron(ctx, cx, cy, layout) {
+  const size = layout.tileSize * 0.10;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(28, 98, 126, 0.62)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = -1; i <= 1; i += 1) {
+    const x = cx + i * size * 1.2;
     ctx.beginPath();
-    ctx.moveTo(bounds.cx - radius * 1.8, y);
-    ctx.lineTo(bounds.cx + radius * 1.8, y);
+    ctx.moveTo(x - size * 0.55, cy - size * 0.15);
+    ctx.lineTo(x, cy + size * 0.28);
+    ctx.lineTo(x + size * 0.55, cy - size * 0.15);
     ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFootstepPair(ctx, cx, cy, layout, close) {
+  const size = layout.tileSize * (close ? 0.060 : 0.052);
+  ctx.save();
+  ctx.fillStyle = close ? 'rgba(133, 83, 24, 0.48)' : 'rgba(119, 86, 35, 0.38)';
+  for (const [dx, dy, rotation] of [[-0.06, 0, -0.34], [0.07, -0.05, 0.32]]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + layout.tileSize * dx, cy + layout.tileSize * dy, size * 0.60, size, rotation, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }

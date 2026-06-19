@@ -216,7 +216,7 @@ function renderMapHelp() {
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective ? [] : [
-    '<span>Gold/blue tiles show movement</span>',
+    '<span>Gold/blue standards mark movement</span>',
     '<span>Red rim marks attack reach</span>',
     '<span>E ends turn | Esc cancels build</span>'
   ];
