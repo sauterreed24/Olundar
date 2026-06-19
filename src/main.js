@@ -1632,6 +1632,7 @@ function openingDoctrineCard() {
   const directive = currentOpeningDirective();
   if (!directive || state.status !== 'playing') return null;
   const { guide, current } = directive;
+  const recommendation = openingDirectiveAction(current.id);
   const card = document.createElement('article');
   card.className = 'opening-doctrine';
   card.innerHTML = `
@@ -1642,11 +1643,58 @@ function openingDoctrineCard() {
     <strong>${escapeHtml(current.label)}</strong>
     <p>${escapeHtml(current.detail)}</p>
     <small>${escapeHtml(guide.phase)}</small>
+    ${recommendation ? `
+      <div class="doctrine-recommendation">
+        <span>Recommended Order</span>
+        <strong>${escapeHtml(recommendation.label)}</strong>
+        <small>${escapeHtml(recommendation.meta)}</small>
+      </div>
+    ` : ''}
   `;
   const actions = commandActions('doctrine-actions');
-  actions.appendChild(orderButton('Focus order', focusOpeningDirectiveMeta(current.id), () => focusOpeningDirective(current.id), { tone: 'primary' }));
+  if (recommendation?.canExecute) {
+    actions.appendChild(orderButton(recommendation.executeLabel || 'Do order', recommendation.executeMeta || recommendation.meta, () => executeOpeningDirective(recommendation), {
+      disabled: Boolean(recommendation.disabled),
+      tone: 'primary'
+    }));
+  }
+  actions.appendChild(orderButton(recommendation ? 'Preview' : 'Focus order', recommendation?.previewMeta || focusOpeningDirectiveMeta(current.id), () => focusOpeningDirective(current.id), {
+    tone: recommendation?.canExecute ? 'secondary' : 'primary'
+  }));
   card.appendChild(actions);
   return card;
+}
+
+function openingDirectiveAction(stepId) {
+  if (['scout', 'contact', 'front'].includes(stepId)) {
+    const scout = openingUnitByTag('recon');
+    const destination = scout ? bestScoutAdvance(scout) : null;
+    if (!scout || !destination) return null;
+    return {
+      kind: 'move',
+      unitId: scout.id,
+      x: destination.x,
+      y: destination.y,
+      canExecute: !scout.hasActed,
+      disabled: scout.hasActed,
+      label: `Advance ${scout.name}`,
+      meta: `${destination.revealGain} new map tile${destination.revealGain === 1 ? '' : 's'} | ${destination.cost}/${UNIT_TYPES[scout.type].move} move`,
+      executeLabel: 'Do order',
+      executeMeta: `${destination.x},${destination.y} sector`,
+      previewMeta: `Preview ${destination.x},${destination.y} sector`,
+      previewToast: `${scout.name} can scout ${destination.x},${destination.y} and reveal ${destination.revealGain} new map tile${destination.revealGain === 1 ? '' : 's'}.`
+    };
+  }
+
+  if (stepId === 'training') {
+    return recommendedTrainingOrder();
+  }
+
+  if (['engineer', 'iron'].includes(stepId)) {
+    return recommendedBuildPreview(stepId);
+  }
+
+  return null;
 }
 
 function focusOpeningDirectiveMeta(stepId) {
@@ -1657,10 +1705,12 @@ function focusOpeningDirectiveMeta(stepId) {
 }
 
 function focusOpeningDirective(stepId) {
-  const readyOlundar = state.units.filter((unit) => unit.faction === 'olundar' && !unit.hasActed);
-  const allOlundar = state.units.filter((unit) => unit.faction === 'olundar');
-  const byTag = (tag) => readyOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag))
-    || allOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag));
+  const recommendation = openingDirectiveAction(stepId);
+  if (recommendation) {
+    previewOpeningDirective(recommendation);
+    return;
+  }
+  const byTag = (tag) => openingUnitByTag(tag);
   let targetUnit = null;
   let targetBuilding = null;
 
@@ -1700,6 +1750,168 @@ function focusOpeningDirective(stepId) {
 
   toast('No matching force is ready for that opening order.', 'bad');
   playAudioCue('warning');
+}
+
+function openingUnitByTag(tag) {
+  const readyOlundar = state.units.filter((unit) => unit.faction === 'olundar' && !unit.hasActed);
+  const allOlundar = state.units.filter((unit) => unit.faction === 'olundar');
+  return readyOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag))
+    || allOlundar.find((unit) => UNIT_TYPES[unit.type].tags.includes(tag));
+}
+
+function bestScoutAdvance(unit) {
+  const def = UNIT_TYPES[unit.type];
+  const candidates = [];
+  for (let y = 0; y < MAP_HEIGHT; y += 1) {
+    for (let x = 0; x < MAP_WIDTH; x += 1) {
+      if (x === unit.x && y === unit.y) continue;
+      const path = findPath(state, unit, x, y, def.move);
+      if (!path) continue;
+      const tile = tileAt(state, x, y);
+      const revealGain = forecastRevealGain(unit, x, y);
+      const terrainBonus = tile?.terrain === 'ruins' ? 5 : tile?.terrain === 'hills' ? 3 : tile?.terrain === 'forest' ? 2 : tile?.terrain === 'river' ? -3 : 0;
+      const roadBonus = tile?.road ? 3 : 0;
+      const forwardBonus = (x - unit.x) * 0.9 - Math.abs(y - unit.y) * 0.15;
+      const score = revealGain * 10 + terrainBonus + roadBonus + forwardBonus - path.cost * 0.6;
+      candidates.push({ x, y, cost: path.cost, revealGain, score });
+    }
+  }
+  return candidates.sort((a, b) => b.score - a.score || b.revealGain - a.revealGain || a.cost - b.cost || b.x - a.x)[0] || null;
+}
+
+function forecastRevealGain(unit, x, y) {
+  const def = UNIT_TYPES[unit.type];
+  const tile = tileAt(state, x, y);
+  const radius = Math.max(1, def.sight + Math.max(-1, TERRAIN[tile?.terrain]?.sight || 0));
+  let gain = 0;
+  for (let ty = y - radius; ty <= y + radius; ty += 1) {
+    for (let tx = x - radius; tx <= x + radius; tx += 1) {
+      if (!inMap(tx, ty) || gridDistance(x, y, tx, ty) > radius) continue;
+      if (!state.revealed[ty * MAP_WIDTH + tx]) gain += 1;
+    }
+  }
+  return gain;
+}
+
+function gridDistance(ax, ay, bx, by) {
+  return Math.abs(ax - bx) + Math.abs(ay - by);
+}
+
+function recommendedTrainingOrder() {
+  const buildings = state.buildings.filter((building) => {
+    const def = BUILDING_TYPES[building.type];
+    return building.faction === 'olundar' && building.turnsLeft <= 0 && def?.trains?.length && building.queue.length < trainingQueueLimit(building);
+  });
+  for (const building of buildings) {
+    const def = BUILDING_TYPES[building.type];
+    const unitType = (def.trains.includes('scout') && canAfford(state.factions.olundar.resources, UNIT_TYPES.scout.cost))
+      ? 'scout'
+      : def.trains.find((type) => canAfford(state.factions.olundar.resources, UNIT_TYPES[type].cost));
+    if (!unitType) continue;
+    const unitDef = UNIT_TYPES[unitType];
+    const turns = trainingTurnsFor(building, unitType);
+    return {
+      kind: 'train',
+      buildingId: building.id,
+      unitType,
+      canExecute: true,
+      label: `Queue ${unitDef.name}`,
+      meta: `${formatCost(unitDef.cost)} | ${turns} turn${turns === 1 ? '' : 's'}`,
+      executeLabel: 'Do order',
+      executeMeta: `${BUILDING_TYPES[building.type].name} queue`,
+      previewMeta: `Inspect ${BUILDING_TYPES[building.type].name}`,
+      previewToast: `${BUILDING_TYPES[building.type].name} can queue ${unitDef.name}.`
+    };
+  }
+  return null;
+}
+
+function recommendedBuildPreview(stepId) {
+  const engineer = openingUnitByTag('builder');
+  if (!engineer) return null;
+  const buildOrder = stepId === 'iron' ? ['mine', 'road', 'watchtower'] : ['road', 'farm', 'lumberCamp', 'mine', 'watchtower'];
+  const sites = [{ x: engineer.x, y: engineer.y }, ...neighborsOf(engineer.x, engineer.y)];
+  for (const type of buildOrder) {
+    for (const site of sites) {
+      const result = canBuildOn(state, type, site.x, site.y);
+      if (!result.ok) continue;
+      return {
+        kind: 'build-preview',
+        unitId: engineer.id,
+        buildingType: type,
+        x: site.x,
+        y: site.y,
+        canExecute: false,
+        label: `Survey ${BUILDING_TYPES[type].name}`,
+        meta: `${site.x},${site.y} sector | ${formatCost(BUILDING_TYPES[type].cost)}`,
+        previewMeta: `Preview ${BUILDING_TYPES[type].name} site`,
+        previewToast: `${engineer.name} can start ${BUILDING_TYPES[type].name} at ${site.x},${site.y}.`
+      };
+    }
+  }
+  return {
+    kind: 'focus',
+    unitId: engineer.id,
+    x: engineer.x,
+    y: engineer.y,
+    label: `Focus ${engineer.name}`,
+    meta: 'Choose a valid construction site',
+    previewMeta: 'Select builder',
+    previewToast: `${engineer.name} is ready for construction.`
+  };
+}
+
+function neighborsOf(x, y) {
+  return [
+    { x: x + 1, y },
+    { x: x - 1, y },
+    { x, y: y + 1 },
+    { x, y: y - 1 }
+  ].filter((tile) => inMap(tile.x, tile.y));
+}
+
+function previewOpeningDirective(action) {
+  if (action.buildingId) {
+    const building = state.buildings.find((item) => item.id === action.buildingId);
+    if (building) selectBuilding(building.id);
+  } else if (action.unitId) {
+    const unit = state.units.find((item) => item.id === action.unitId);
+    if (unit) selectUnit(unit.id);
+  }
+  if (action.kind === 'build-preview') {
+    state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
+  }
+  if (Number.isFinite(action.x) && Number.isFinite(action.y)) {
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+  }
+  toast(action.previewToast || `${action.label} previewed.`, 'info');
+  playAudioCue('select');
+  render();
+  if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
+function executeOpeningDirective(action) {
+  if (action.kind === 'move') {
+    selectUnit(action.unitId);
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+    const result = moveUnit(state, action.unitId, action.x, action.y);
+    const ok = handleResult(result, 'move');
+    if (ok) toast(`${action.label} to ${action.x},${action.y}.`, 'good');
+    render();
+    return;
+  }
+  if (action.kind === 'train') {
+    selectBuilding(action.buildingId);
+    const result = startTraining(state, action.buildingId, action.unitType);
+    const ok = handleResult(result, 'train');
+    if (ok) toast(`${UNIT_TYPES[action.unitType].name} queued.`, 'good');
+    render();
+    if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    return;
+  }
+  previewOpeningDirective(action);
 }
 
 function focusTurnReportOnMobile() {

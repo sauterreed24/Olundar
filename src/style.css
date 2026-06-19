@@ -2256,6 +2256,34 @@ button:disabled {
   line-height: 1.32;
 }
 
+.doctrine-recommendation {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.48rem 0.52rem;
+  border: 1px solid rgba(240, 200, 102, 0.20);
+  border-radius: 7px;
+  background: rgba(255,255,255,0.06);
+}
+
+.doctrine-recommendation span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doctrine-recommendation strong {
+  color: #f9e6a8;
+  font-size: 0.82rem;
+}
+
+.doctrine-recommendation small {
+  color: #ddd0ae;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: none;
+}
+
 .doctrine-actions {
   margin-top: 0.18rem;
 }
@@ -3124,6 +3152,23 @@ button:hover:not(:disabled) {
 
 .opening-doctrine p {
   color: #3d2b1b;
+}
+
+.doctrine-recommendation {
+  border-color: rgba(39, 100, 126, 0.18);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.doctrine-recommendation span {
+  color: #66714c;
+}
+
+.doctrine-recommendation strong {
+  color: #184b5c;
+}
+
+.doctrine-recommendation small {
+  color: #4d3a24;
 }
 
 .turn-report {
