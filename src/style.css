@@ -1175,6 +1175,60 @@ button:disabled {
   background: rgba(129, 212, 250, 0.12);
 }
 
+.mission-archive-group-mode {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  gap: 0.22rem;
+  padding: 0.14rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+}
+
+.mission-archive-group-mode button {
+  min-width: 0;
+  padding: 0.24rem 0.42rem;
+  border-color: transparent;
+  font-size: 0.66rem;
+}
+
+.mission-archive-group-mode button[aria-pressed="true"] {
+  border-color: rgba(186, 245, 140, 0.36);
+  color: #f9e6a8;
+  background: rgba(186, 245, 140, 0.11);
+}
+
+.mission-archive-group {
+  display: grid;
+  gap: 0.34rem;
+  padding: 0.4rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.13);
+}
+
+.mission-archive-group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding-bottom: 0.1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.mission-archive-group-head strong {
+  min-width: 0;
+  color: var(--accent);
+  font-size: 0.82rem;
+}
+
+.mission-archive-group-head span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
 .mission-history-record,
 .mission-history > .history-empty {
   display: grid;
