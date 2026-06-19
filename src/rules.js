@@ -18,7 +18,7 @@ import {
   UNIT_TYPES,
   WAR_AIMS
 } from './content.js';
-import { generateWorld, idx, inBounds, manhattan, neighbors4 } from './map.js';
+import { generateWorld, idx, inBounds, manhattan, neighbors4, xy } from './map.js';
 
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
 const DIPLOMACY_MEMORY_MAX = 12;
@@ -440,7 +440,8 @@ function missionRoutePreview(state, mission) {
     unitType: pick.unit.type,
     unitLocation: location,
     reachableThisTurn: pick.reachableThisTurn,
-    cost: Number.isFinite(pick.cost) ? pick.cost : null
+    cost: Number.isFinite(pick.cost) ? pick.cost : null,
+    path: pick.path ? missionVisibleRoutePath(state, pick.unit, pick.path) : []
   };
 
   if (!pick.path) {
@@ -491,6 +492,11 @@ function missionRouteCandidate(state, mission, unit) {
     distance: manhattan(unit.x, unit.y, mission.x, mission.y),
     reachableThisTurn: Boolean(turnPath)
   };
+}
+
+function missionVisibleRoutePath(state, unit, route) {
+  return [{ x: unit.x, y: unit.y }, ...route.path.map((key) => xy(key))]
+    .filter((point) => isRevealed(state, point.x, point.y));
 }
 
 function missionRequirementPhrase(required = 'any') {

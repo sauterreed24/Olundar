@@ -415,13 +415,17 @@ check('crisis aftermath creates delayed follow-up rulings', () => {
 
 check('aftermath missions turn rulings into map objectives', () => {
   const mainSource = readProjectFile('src/main.js');
+  const renderSource = readProjectFile('src/render.js');
   const styleSource = readProjectFile('src/style.css');
   const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
   assert(mainSource.includes('data-action="focus-mission"') && mainSource.includes('function focusMissionTarget'), 'Mission cards should expose a target focus control.');
   assert(mainSource.includes('data-action="focus-mission-unit"') && mainSource.includes('function focusMissionUnit'), 'Mission cards should let players jump to the recommended unit.');
+  assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
+  assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
   assert(styleSource.includes('.mission-actions'), 'Mission focus controls need compact card styling.');
   assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
+  assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 
   const state = createGame('quality-aftermath-missions');
   state.turn = 8;
@@ -450,10 +454,11 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(missions.visible && active, 'Repair aftermath should create an active map mission.');
   assert(active.required === 'Engineer' && active.target.includes(','), 'Repair mission should expose requirement and target.');
   assert(active.route?.unitName && active.route.reachableThisTurn && active.route.text.includes('complete this turn'), 'Repair mission should preview the eligible unit and same-turn route.');
+  const engineer = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'engineer');
+  assert(active.route.path.length >= 2 && active.route.path[0].x === engineer.x && active.route.path.at(-1).x === active.x, 'Repair mission route should expose a revealed path from unit to target.');
   const lens = getStrategicMapLens(state, 'missions');
   assert(lens.markers.some((marker) => marker.kind === 'missionTarget' && marker.x === active.x && marker.y === active.y), 'Missions lens should mark the active target.');
 
-  const engineer = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'engineer');
   engineer.hasActed = false;
   const moved = moveUnit(state, engineer.id, active.x, active.y);
   assert(moved.ok, moved.reason || 'Engineer should be able to move to the repair mission.');
@@ -488,6 +493,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   const firstRoute = routeMissions.active.find((mission) => mission.name === 'Escort Frontier Families');
   assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
   assert(firstRoute.route?.unitName && firstRoute.route.cost !== null, 'Route missions should expose nearest eligible unit and route cost.');
+  assert(firstRoute.route.path.length >= 2, 'Route mission previews should include route overlay path points.');
   const routeLens = getStrategicMapLens(routeState, 'missions');
   assert(routeLens.markers.some((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:')), 'Missions lens should name spawned mission sites.');
   const routeMarker = routeLens.markers.find((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:'));
