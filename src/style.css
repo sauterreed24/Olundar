@@ -3503,6 +3503,14 @@ button:hover:not(:disabled) {
     max-height: none;
     overflow: visible;
   }
+
+  #actionPanel {
+    order: -1;
+  }
+
+  #selectionPanel {
+    order: 0;
+  }
 }
 
 @media (max-width: 620px) {
