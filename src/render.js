@@ -3,36 +3,36 @@ import { idx, manhattan } from './map.js';
 import { buildingAt, canBuildOn, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
-  plains: '#b7c979',
-  forest: '#2f6f3b',
-  hills: '#bc8f4d',
-  mountains: '#858d8a',
-  river: '#2586b6',
-  marsh: '#527e5e',
-  ruins: '#aa9670',
-  blight: '#5d4b66'
+  plains: '#cfe58a',
+  forest: '#338b4c',
+  hills: '#d8b26a',
+  mountains: '#a9b4b1',
+  river: '#2fa6d3',
+  marsh: '#78a86a',
+  ruins: '#c8bea1',
+  blight: '#6a6580'
 };
 
 const TERRAIN_HIGHLIGHTS = {
-  plains: '#f4df9a',
-  forest: '#7fca65',
-  hills: '#f0c57c',
-  mountains: '#f0f1e7',
+  plains: '#fff1ad',
+  forest: '#91d97a',
+  hills: '#ffd996',
+  mountains: '#f4f8f1',
   river: '#cff4ff',
-  marsh: '#a9d89b',
-  ruins: '#eed79a',
+  marsh: '#c3e7a2',
+  ruins: '#f4e5b4',
   blight: '#acf78b'
 };
 
 const TERRAIN_PALETTES = {
-  plains: { shadow: '#5b7f38', base: '#aeca67', light: '#efd886', accent: '#7da64a', crown: '#dccc73' },
-  forest: { shadow: '#173820', base: '#2f6f3b', light: '#79bd5c', accent: '#224f2d', crown: '#124128' },
-  hills: { shadow: '#75512c', base: '#bc8f4d', light: '#efc57d', accent: '#986a36', crown: '#d9a75c' },
-  mountains: { shadow: '#555b5d', base: '#858d8a', light: '#f0f1e7', accent: '#6f7675', crown: '#cfd6d2' },
-  river: { shadow: '#0c557b', base: '#2586b6', light: '#cff4ff', accent: '#6fc7e6', crown: '#e8fdff' },
-  marsh: { shadow: '#2e563c', base: '#527e5e', light: '#a9d89b', accent: '#6b9b67', crown: '#d4e7ae' },
-  ruins: { shadow: '#6e604b', base: '#aa9670', light: '#eed79a', accent: '#81725c', crown: '#d7c99f' },
-  blight: { shadow: '#2b2332', base: '#5d4b66', light: '#acf78b', accent: '#7de774', crown: '#d9ffb6' }
+  plains: { shadow: '#6a9a3e', base: '#c6df78', light: '#fff0a6', accent: '#90bb55', crown: '#e4da7b' },
+  forest: { shadow: '#184a28', base: '#338b4c', light: '#91d97a', accent: '#23653a', crown: '#165231' },
+  hills: { shadow: '#8b6734', base: '#d8b26a', light: '#ffd996', accent: '#b88445', crown: '#efc374' },
+  mountains: { shadow: '#6e7775', base: '#a9b4b1', light: '#f4f8f1', accent: '#838d8a', crown: '#d7dfda' },
+  river: { shadow: '#0d638c', base: '#2fa6d3', light: '#cff4ff', accent: '#83d8f1', crown: '#e8fdff' },
+  marsh: { shadow: '#437245', base: '#78a86a', light: '#c3e7a2', accent: '#90bd73', crown: '#dcecae' },
+  ruins: { shadow: '#80745e', base: '#c8bea1', light: '#f4e5b4', accent: '#9c9177', crown: '#ded2ac' },
+  blight: { shadow: '#302940', base: '#6a6580', light: '#acf78b', accent: '#7de774', crown: '#d9ffb6' }
 };
 
 const UNIT_ACCENTS = {
@@ -163,11 +163,12 @@ function cameraSortedTiles(map, layout, margin = 2) {
 }
 
 function renderBudget(layout) {
-  const compact = layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
+  const compactViewport = typeof window !== 'undefined' && window.innerWidth <= 980;
+  const compact = compactViewport || layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
   return {
     compact,
-    terrainVignettes: !compact,
-    atmosphericGradients: !compact
+    terrainVignettes: !compact && layout.mapWidth > 760,
+    atmosphericGradients: !compact && layout.mapWidth > 820
   };
 }
 
@@ -500,14 +501,14 @@ function drawWorldLight(ctx, state, layout) {
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
   const shadeGradient = ctx.createLinearGradient(layout.frameX, layout.frameY, layout.frameX + layout.mapWidth, layout.frameY + layout.mapHeight);
-  shadeGradient.addColorStop(0, 'rgba(63, 42, 18, 0)');
-  shadeGradient.addColorStop(0.58, 'rgba(63, 42, 18, 0.03)');
-  shadeGradient.addColorStop(1, 'rgba(38, 31, 27, 0.18)');
+  shadeGradient.addColorStop(0, 'rgba(42, 75, 64, 0)');
+  shadeGradient.addColorStop(0.58, 'rgba(42, 75, 64, 0.025)');
+  shadeGradient.addColorStop(1, 'rgba(34, 47, 54, 0.13)');
   ctx.fillStyle = shadeGradient;
   ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
   if (state.turn > 1) {
-    ctx.globalAlpha = Math.min(0.14, state.turn * 0.006);
-    ctx.fillStyle = 'rgba(113, 63, 32, 0.45)';
+    ctx.globalAlpha = Math.min(0.10, state.turn * 0.004);
+    ctx.fillStyle = 'rgba(84, 106, 82, 0.38)';
     ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
   }
   ctx.restore();
@@ -784,13 +785,13 @@ function drawRoadNetwork(ctx, state, layout, sortedTiles) {
       const b = tileCenter(layout, neighbor.x, neighbor.y);
       const visible = isVisible(state, tile.x, tile.y) && isVisible(state, neighbor.x, neighbor.y);
       ctx.globalAlpha = visible ? 0.78 : 0.34;
-      ctx.strokeStyle = 'rgba(72, 48, 26, 0.74)';
+      ctx.strokeStyle = 'rgba(83, 93, 77, 0.66)';
       ctx.lineWidth = Math.max(4, layout.tileSize * 0.14);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(219, 190, 121, 0.92)';
+      ctx.strokeStyle = 'rgba(243, 225, 157, 0.92)';
       ctx.lineWidth = Math.max(2, layout.tileSize * 0.07);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y - layout.halfTileHeight * 0.03);
@@ -2162,7 +2163,41 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
   for (const item of reachable) {
     drawMovementReachWash(ctx, tileBounds(layout, item.x, item.y), layout, item, maxMove, sameTile(item, hoverMove));
   }
+  drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove);
   drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
+  ctx.restore();
+}
+
+function drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove = null) {
+  if (layout.tileSize < 30) return;
+  ctx.save();
+  for (const item of reachable) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    const hovered = sameTile(item, hoverMove);
+    const frontier = item.cost >= maxMove;
+    const rough = item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
+    const radius = Math.max(2.6, layout.tileSize * (hovered ? 0.070 : frontier ? 0.054 : 0.040));
+    ctx.globalAlpha = hovered ? 0.92 : frontier || rough ? 0.74 : 0.56;
+    ctx.fillStyle = item.road
+      ? 'rgba(225, 250, 255, 0.92)'
+      : item.supplied
+        ? 'rgba(239, 255, 196, 0.88)'
+        : rough
+          ? 'rgba(255, 232, 160, 0.88)'
+          : 'rgba(255, 246, 200, 0.82)';
+    ctx.strokeStyle = item.road
+      ? 'rgba(24, 104, 140, 0.62)'
+      : item.supplied
+        ? 'rgba(59, 128, 62, 0.56)'
+        : rough
+          ? 'rgba(157, 91, 31, 0.54)'
+          : 'rgba(126, 93, 38, 0.42)';
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+    ctx.beginPath();
+    ctx.arc(bounds.cx, bounds.cy + layout.halfTileHeight * 0.18, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2491,14 +2526,14 @@ function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
   const commandGold = item.cost >= maxMove
     ? 'rgba(255, 225, 128, 0.98)'
     : 'rgba(255, 241, 174, 0.92)';
-  ctx.strokeStyle = 'rgba(55, 31, 13, 0.74)';
-  ctx.lineWidth = Math.max(4, layout.tileSize * 0.092);
+  ctx.strokeStyle = 'rgba(24, 64, 76, 0.62)';
+  ctx.lineWidth = Math.max(4, layout.tileSize * 0.105);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
   ctx.strokeStyle = commandGold;
-  ctx.lineWidth = Math.max(2, layout.tileSize * 0.052);
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.060);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.006);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.006);
