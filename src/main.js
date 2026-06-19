@@ -89,7 +89,8 @@ const MISSION_ARCHIVE_SORT_ORDERS = [
 ];
 const MISSION_ARCHIVE_GROUP_MODES = [
   { id: 'flat', label: 'Flat' },
-  { id: 'routes', label: 'Routes' }
+  { id: 'routes', label: 'Routes' },
+  { id: 'rulings', label: 'Rulings' }
 ];
 
 let state = createGame({ scenarioId: 'founding' });
@@ -362,7 +363,7 @@ function missionHistoryMarkup(missions) {
   const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search || sortOrder !== 'newest' || groupMode !== 'flat')
     ? `<small class="mission-history-note">${escapeHtml(missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode))} (${archive.length}/${missions.archiveCount}).</small>`
     : '';
-  const historyMarkup = filter === 'archive' && groupMode === 'routes'
+  const historyMarkup = filter === 'archive' && groupMode !== 'flat'
     ? missionArchiveGroupedRecordsMarkup(history)
     : history.map((mission) => missionHistoryRecordMarkup(mission)).join('');
 
@@ -446,14 +447,25 @@ function missionArchiveGroups(missions) {
     const turns = group.records.map((mission) => mission.completedTurn || 0).filter(Boolean);
     const low = Math.min(...turns);
     const high = Math.max(...turns);
+    const range = `${group.records.length} task${group.records.length === 1 ? '' : 's'}${turns.length ? ` / T${low}${low === high ? '' : `-T${high}`}` : ''}`;
     return {
       ...group,
-      summary: `${group.records.length} task${group.records.length === 1 ? '' : 's'}${turns.length ? ` / T${low}${low === high ? '' : `-T${high}`}` : ''}`
+      summary: group.detail ? `${group.detail} / ${range}` : range
     };
   });
 }
 
 function missionArchiveGroupKey(mission) {
+  if (selectedMissionArchiveGroupMode() === 'rulings') {
+    if (mission.originLabel) {
+      return {
+        id: `ruling:${mission.originEventId || ''}:${mission.originChoiceId || mission.originLabel}`,
+        title: mission.originLabel,
+        detail: mission.originSourceLabel || ''
+      };
+    }
+    return { id: `ruling:legacy:${mission.type || 'field'}`, title: 'Unlabeled Field Rulings', detail: 'Legacy archive' };
+  }
   if (mission.routeName || mission.chainTag) {
     const title = mission.routeName || mission.chainTag.replace(/([a-z])([A-Z])/g, '$1 $2');
     return { id: `route:${mission.chainTag || title}`, title };
@@ -500,7 +512,9 @@ function missionArchiveSortLabel(sortOrder = 'newest') {
 }
 
 function missionArchiveGroupLabel(groupMode = 'flat') {
-  return groupMode === 'routes' ? 'route groups' : 'flat list';
+  if (groupMode === 'routes') return 'route groups';
+  if (groupMode === 'rulings') return 'ruling groups';
+  return 'flat list';
 }
 
 function missionArchiveTitle(typeFilter, visibleCount, archiveCount) {
@@ -522,6 +536,8 @@ function missionArchiveSearchText(mission) {
     mission.terrain,
     mission.routeName,
     mission.chainTag,
+    mission.originLabel,
+    mission.originSourceLabel,
     mission.type,
     `t${mission.completedTurn}`
   ].filter(Boolean).join(' ').toLowerCase();
@@ -552,6 +568,7 @@ function missionHistoryRecordMarkup(mission) {
       <p>
         <b>T${escapeHtml(mission.completedTurn)} ${escapeHtml(mission.name)}:</b>
         ${mission.context ? `${escapeHtml(mission.context)}. ` : ''}${escapeHtml(mission.reward)}
+        ${mission.originLabel ? `<small>Ruling: ${escapeHtml(mission.originLabel)}${mission.originSourceLabel ? ` / ${escapeHtml(mission.originSourceLabel)}` : ''}.</small>` : ''}
         ${mission.completedBy ? `<small>Completed by ${escapeHtml(mission.completedBy)}.</small>` : ''}
       </p>
       <button type="button" data-action="focus-completed-mission" data-mission-id="${escapeHtml(mission.id)}" title="Show this completed site on the Missions lens">Site</button>

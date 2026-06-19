@@ -413,6 +413,10 @@ function missionView(state, mission) {
     chainTag: mission.chainTag || '',
     chainStep: mission.chainStep || 0,
     chainLimit: mission.chainLimit || 0,
+    originEventId: mission.originEventId || '',
+    originChoiceId: mission.originChoiceId || '',
+    originLabel: mission.originLabel || '',
+    originSourceLabel: mission.originSourceLabel || '',
     route: missionRoutePreview(state, mission),
     completed: Boolean(mission.completedTurn),
     completedTurn: mission.completedTurn || null,
@@ -1298,6 +1302,7 @@ function applyCrisisOutcome(state, crisisId, choiceId) {
 }
 
 function applyCrisisAftermathOutcome(state, item, choiceId) {
+  const origin = missionOriginFromRuling(item, choiceId);
   if (item.eventId === 'refugeeAftermath' && choiceId === 'settleOaths') {
     adjustOlundarPopulation(state, 3);
     adjustOlundarMorale(state, 1);
@@ -1309,6 +1314,7 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     const contacts = adjustKnownLivingRelations(state, 3);
     recordKnownFactionMemory(state, 'promise', 'Frontier Families Sponsored', 'Olundar sponsored displaced families as guides instead of abandoning them.', 1);
     addAftermathMission(state, {
+      ...origin,
       type: 'escort',
       name: 'Escort Frontier Families',
       text: 'Move a scout or cavalry unit to the marked road camp so the sponsored families can travel safely.',
@@ -1347,6 +1353,7 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     const fortified = reinforceOlundarHoldings(state, 8, 3);
     adjustOlundarMorale(state, 1);
     addAftermathMission(state, {
+      ...origin,
       type: 'repair',
       name: 'Repair the Raid Roads',
       text: 'Move an engineer to the marked street scar to finish repairs before raiders exploit it again.',
@@ -1361,6 +1368,7 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     const unit = spawnOlundarUnitAtCapital(state, 'cavalry', 'Road Vengeance Patrol');
     gainResources(state.factions.olundar.resources, { influence: 1 });
     addAftermathMission(state, {
+      ...origin,
       type: 'raid',
       name: 'Break the Raider Trail',
       text: 'Move a combat unit to the marked trailhead to scatter raiders before they return.',
@@ -1386,6 +1394,7 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     recordKnownFactionMemory(state, 'promise', 'Emergency Accords Published', 'Olundar publicly honored emergency-council commitments to the living front.', 2);
     adjustOlundarMorale(state, 1);
     addAftermathMission(state, {
+      ...origin,
       type: 'accord',
       name: 'Carry the Accord Tablets',
       text: 'Move a scout or cavalry unit to the marked envoy road to prove the accords are more than speeches.',
@@ -1411,6 +1420,19 @@ function applyCrisisAftermathOutcome(state, item, choiceId) {
     return { tone: 'danger', text: contacts ? 'Delayed commitments preserve options but sour known factions.' : 'Delayed commitments preserve options, but the council records the hesitation.' };
   }
   return { tone: 'info', text: 'The aftermath ruling is recorded.' };
+}
+
+function missionOriginFromRuling(item, choiceId) {
+  const event = CRISIS_AFTERMATH_EVENTS[item.eventId];
+  const choice = event?.choices.find((entry) => entry.id === choiceId);
+  const source = CRISIS_EVENTS[item.crisisId];
+  const sourceChoice = source?.choices.find((entry) => entry.id === item.choiceId);
+  return {
+    originEventId: item.eventId || '',
+    originChoiceId: choiceId || '',
+    originLabel: choice?.name || event?.name || 'Aftermath Ruling',
+    originSourceLabel: sourceChoice ? `After ${sourceChoice.name}` : ''
+  };
 }
 
 function recordKnownFactionMemory(state, type, label, detail, amount = 1) {
@@ -1449,6 +1471,10 @@ function appendAftermathMission(state, config, target) {
     chainStep: config.chainStep || (config.chainTag ? 1 : 0),
     chainLimit: config.chainLimit || 0,
     routeName: config.routeName || '',
+    originEventId: config.originEventId || null,
+    originChoiceId: config.originChoiceId || null,
+    originLabel: config.originLabel || '',
+    originSourceLabel: config.originSourceLabel || '',
     createdTurn: state.turn,
     completedTurn: null,
     rewardText: config.rewardText || ''
@@ -1553,7 +1579,11 @@ function missionFollowUpConfig(mission, nextStep) {
     chainTag: mission.chainTag,
     chainStep: nextStep,
     chainLimit: mission.chainLimit,
-    routeName: mission.routeName
+    routeName: mission.routeName,
+    originEventId: mission.originEventId,
+    originChoiceId: mission.originChoiceId,
+    originLabel: mission.originLabel,
+    originSourceLabel: mission.originSourceLabel
   };
   if (mission.type === 'raid') {
     return {
