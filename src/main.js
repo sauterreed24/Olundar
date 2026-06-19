@@ -227,6 +227,17 @@ function currentOpeningDirective() {
 
 function renderMapHelp() {
   if (!mapHelp) return;
+  if (state.mode.type === 'build') {
+    const def = BUILDING_TYPES[state.mode.buildingType];
+    mapHelp.innerHTML = [
+      `<span class="next-directive"><b>Build</b> ${escapeHtml(def.name)}</span>`,
+      '<span>Green sites are valid</span>',
+      '<span>Red sites are blocked</span>',
+      '<span>Use placement survey or click map</span>',
+      '<span>Esc cancels build</span>'
+    ].join('');
+    return;
+  }
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective ? [] : [
@@ -975,7 +986,9 @@ function renderActions() {
   actionPanel.appendChild(orderHeader());
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
   if (turnReport) actionPanel.appendChild(turnReportCard());
-  const doctrineCard = openingDoctrineCard();
+  const placementCard = buildPlacementCard();
+  if (placementCard) actionPanel.appendChild(placementCard);
+  const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
   if (doctrineCard) actionPanel.appendChild(doctrineCard);
   const envoyCard = diplomacyOpportunityCard();
   if (envoyCard) actionPanel.appendChild(envoyCard);
@@ -1034,7 +1047,7 @@ function renderActions() {
   if (selectedBuilding) {
     const def = BUILDING_TYPES[selectedBuilding.type];
     const buildingStatus = selectedBuilding.turnsLeft > 0
-      ? `Under construction, ${selectedBuilding.turnsLeft} turns left.`
+      ? `Under construction, ${turnCountLabel(selectedBuilding.turnsLeft)} left.`
       : `Tier ${(selectedBuilding.upgraded || 0) + 1}, operational.`;
     actionPanel.appendChild(actionSection(def.name, `${buildingStatus} HP ${selectedBuilding.hp}/${selectedBuilding.maxHp}.`, 'structure-orders'));
 
@@ -1108,6 +1121,82 @@ function buildDoctrineCard(builder) {
   return card;
 }
 
+function buildPlacementCard() {
+  if (state.mode.type !== 'build') return null;
+  const builder = state.units.find((unit) => unit.id === state.mode.builderId);
+  const def = BUILDING_TYPES[state.mode.buildingType];
+  if (!builder || !def) return null;
+  const candidates = buildPlacementCandidates(builder, state.mode.buildingType);
+  const validCount = candidates.filter((candidate) => candidate.ok).length;
+  const card = document.createElement('article');
+  card.className = 'build-placement-card';
+  card.innerHTML = `
+    <div class="build-placement-head">
+      <span>Placement survey</span>
+      <b>${validCount}/${candidates.length} valid</b>
+    </div>
+    <strong>${escapeHtml(def.name)}</strong>
+    <p>${escapeHtml(def.text)} Cost: ${escapeHtml(formatCost(def.cost))}.</p>
+  `;
+  const actions = commandActions('build-placement-actions');
+  for (const candidate of candidates) {
+    const terrain = formatTerrainName(tileAt(state, candidate.x, candidate.y)?.terrain || 'unknown');
+    const meta = candidate.ok
+      ? `${terrain} ${candidate.x},${candidate.y}`
+      : candidate.reason;
+    actions.appendChild(orderButton(candidate.label, meta, () => commitBuildPlacement(candidate), {
+      disabled: !candidate.ok,
+      tone: candidate.ok ? 'primary' : 'secondary',
+      title: candidate.ok ? `Build ${def.name} at ${candidate.x},${candidate.y}` : candidate.reason
+    }));
+  }
+  card.appendChild(actions);
+  const footer = commandActions('build-placement-footer');
+  footer.appendChild(orderButton('Cancel placement', 'Return to unit orders', () => {
+    state.mode = { type: 'select' };
+    toast(`${def.name} placement cancelled.`, 'info');
+    render();
+  }, { tone: 'secondary' }));
+  card.appendChild(footer);
+  return card;
+}
+
+function buildPlacementCandidates(builder, buildingType) {
+  const offsets = [
+    { dx: 0, dy: 0, label: 'Builder tile' },
+    { dx: 1, dy: 0, label: 'East site' },
+    { dx: -1, dy: 0, label: 'West site' },
+    { dx: 0, dy: 1, label: 'South site' },
+    { dx: 0, dy: -1, label: 'North site' }
+  ];
+  return offsets
+    .map(({ dx, dy, label }) => ({ x: builder.x + dx, y: builder.y + dy, label }))
+    .filter((candidate) => inMap(candidate.x, candidate.y))
+    .map((candidate) => {
+      const result = canBuildOn(state, buildingType, candidate.x, candidate.y);
+      return {
+        ...candidate,
+        ok: result.ok,
+        reason: result.ok ? 'Valid site.' : result.reason
+      };
+    })
+    .sort((a, b) => Number(b.ok) - Number(a.ok));
+}
+
+function commitBuildPlacement(candidate) {
+  if (state.mode.type !== 'build' || !candidate.ok) return;
+  const buildingType = state.mode.buildingType;
+  const result = startConstruction(state, state.mode.builderId, buildingType, candidate.x, candidate.y);
+  if (result.ok) {
+    state.mode = { type: 'select' };
+    if (result.building?.id) selectBuilding(result.building.id);
+    lastTile = { x: candidate.x, y: candidate.y };
+    hoverTile = lastTile;
+  }
+  handleResult(result, 'build');
+  render();
+}
+
 function buildDoctrineRecommendations(builder) {
   const has = (type) => state.buildings.some((building) => building.faction === 'olundar' && building.type === type);
   const candidates = [
@@ -1118,20 +1207,31 @@ function buildDoctrineRecommendations(builder) {
     !has('outpost') && mappedPercent() >= 12 ? { type: 'outpost', label: 'Plant frontier outpost', meta: 'Forward sight and muster' } : null,
     !has('wall') ? { type: 'wall', label: 'Close a kill gate', meta: 'Chokepoint defense' } : null
   ].filter(Boolean);
-  const affordable = candidates.filter((item) => canAfford(state.factions.olundar.resources, BUILDING_TYPES[item.type]?.cost || {}));
+  const actionable = candidates.filter((item) => {
+    const bDef = BUILDING_TYPES[item.type];
+    return bDef
+      && canAfford(state.factions.olundar.resources, bDef.cost)
+      && buildPlacementCandidates(builder, item.type).some((candidate) => candidate.ok);
+  });
   const fallback = candidates.length ? candidates : BUILD_ORDER.map((type) => ({
     type,
     label: BUILDING_TYPES[type].name,
     meta: `${formatCost(BUILDING_TYPES[type].cost)} | ${turnCountLabel(BUILDING_TYPES[type].buildTurns)}`
   }));
-  return (affordable.length ? affordable : fallback).filter((item) => BUILDING_TYPES[item.type] && !builder.hasActed);
+  return (actionable.length ? actionable : fallback).filter((item) => BUILDING_TYPES[item.type] && !builder.hasActed);
 }
 
 function buildOrderButton(builder, type, tone = 'secondary', labelOverride = null, metaOverride = null) {
   const bDef = BUILDING_TYPES[type];
-  const disabled = !bDef || builder.hasActed || !canAfford(state.factions.olundar.resources, bDef.cost);
+  const affordable = Boolean(bDef && canAfford(state.factions.olundar.resources, bDef.cost));
+  const placeable = Boolean(bDef && buildPlacementCandidates(builder, type).some((candidate) => candidate.ok));
+  const disabled = !bDef || builder.hasActed || !affordable || !placeable;
   const label = labelOverride || bDef.name;
-  const meta = metaOverride || `${formatCost(bDef.cost)} | ${turnCountLabel(bDef.buildTurns)}`;
+  const meta = !affordable
+    ? `${formatCost(bDef.cost)} required`
+    : !placeable
+      ? 'No adjacent valid site'
+      : metaOverride || `${formatCost(bDef.cost)} | ${turnCountLabel(bDef.buildTurns)}`;
   return orderButton(label, meta, () => enterBuildMode(builder.id, type), { disabled, tone });
 }
 
@@ -1144,7 +1244,7 @@ function enterBuildMode(builderId, buildingType) {
   if (!bDef) return;
   state.mode = { type: 'build', buildingType, builderId };
   playAudioCue('ui');
-  toast(`Build mode: click ${bDef.name} on this tile or an adjacent tile.`);
+  toast(`Build mode: place ${bDef.name} from the survey or highlighted map sites.`);
   render();
 }
 
@@ -1542,7 +1642,7 @@ function formatBattleForecast(forecast) {
 function renderMode() {
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
-    modeBanner.textContent = `Build mode: ${def.name}. Click the engineer's tile or an adjacent valid tile. Esc cancels.`;
+    modeBanner.textContent = `Build mode: ${def.name}. Click a highlighted valid site or use the placement survey in Orders. Esc cancels.`;
     modeBanner.hidden = false;
   } else {
     modeBanner.hidden = true;
@@ -1602,17 +1702,17 @@ function canvasClicked(event) {
 
   if (state.status !== 'playing') return;
 
-  const openingAction = openingDirectiveForTile(tile);
-  if (openingAction) {
-    executeOpeningDirective(openingAction);
-    return;
-  }
-
   if (state.mode.type === 'build') {
     const result = startConstruction(state, state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
     state.mode = { type: 'select' };
     handleResult(result, 'build');
     render();
+    return;
+  }
+
+  const openingAction = openingDirectiveForTile(tile);
+  if (openingAction) {
+    executeOpeningDirective(openingAction);
     return;
   }
 
