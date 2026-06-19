@@ -58,6 +58,7 @@ const LENS_COLORS = {
   alliance: '#88d8ff'
 };
 const ISO_TILE_Y_RATIO = 0.66;
+const SORTED_TILE_CACHE = new WeakMap();
 
 export function getLayout(canvas) {
   const camera = canvas.__olundarState ? getCameraBounds(canvas.__olundarState) : {
@@ -132,6 +133,41 @@ function getCameraBounds(state) {
     y: clamp(Math.round(centerY - height / 2), 0, Math.max(0, MAP_HEIGHT - height)),
     width,
     height
+  };
+}
+
+function sortedTilesForMap(map) {
+  const cached = SORTED_TILE_CACHE.get(map);
+  if (cached?.source === map.tiles && cached.sorted.length === map.tiles.length) return cached.sorted;
+  const sorted = map.tiles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  SORTED_TILE_CACHE.set(map, { source: map.tiles, sorted });
+  return sorted;
+}
+
+function cameraTileWindow(layout, margin = 2) {
+  return {
+    minX: Math.max(0, layout.camera.x - margin),
+    maxX: Math.min(MAP_WIDTH - 1, layout.camera.x + layout.camera.width + margin - 1),
+    minY: Math.max(0, layout.camera.y - margin),
+    maxY: Math.min(MAP_HEIGHT - 1, layout.camera.y + layout.camera.height + margin - 1)
+  };
+}
+
+function isInTileWindow(tile, window) {
+  return tile.x >= window.minX && tile.x <= window.maxX && tile.y >= window.minY && tile.y <= window.maxY;
+}
+
+function cameraSortedTiles(map, layout, margin = 2) {
+  const window = cameraTileWindow(layout, margin);
+  return sortedTilesForMap(map).filter((tile) => isInTileWindow(tile, window));
+}
+
+function renderBudget(layout) {
+  const compact = layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
+  return {
+    compact,
+    terrainVignettes: !compact,
+    atmosphericGradients: !compact
   };
 }
 
@@ -246,15 +282,15 @@ function drawMissionFocus(ctx, state, layout, overlay) {
 
 function drawBackdrop(ctx, canvas) {
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, '#fff4cf');
-  gradient.addColorStop(0.48, '#e9d4a6');
-  gradient.addColorStop(1, '#c8d8c9');
+  gradient.addColorStop(0, '#fffdf0');
+  gradient.addColorStop(0.48, '#f4edcf');
+  gradient.addColorStop(1, '#dff0ea');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  ctx.globalAlpha = 0.22;
-  ctx.strokeStyle = '#b77d32';
+  ctx.globalAlpha = 0.14;
+  ctx.strokeStyle = '#5f8d9a';
   ctx.lineWidth = 1;
   const gap = Math.max(32, Math.floor(canvas.width / 34));
   for (let x = -gap; x < canvas.width + gap; x += gap) {
@@ -267,10 +303,11 @@ function drawBackdrop(ctx, canvas) {
 }
 
 function drawTiles(ctx, state, layout) {
-  const sortedTiles = state.map.tiles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  const sortedTiles = cameraSortedTiles(state.map, layout, 3);
+  const budget = renderBudget(layout);
   drawContinentUnderpaint(ctx, state, layout, sortedTiles);
   drawBiomeWash(ctx, state, layout, sortedTiles);
-  drawRegionalAtmosphere(ctx, state, layout, sortedTiles);
+  if (budget.atmosphericGradients) drawRegionalAtmosphere(ctx, state, layout, sortedTiles);
   drawElevationCastShadows(ctx, state, layout, sortedTiles);
   for (const tile of sortedTiles) {
     const bounds = tileBounds(layout, tile.x, tile.y);
@@ -304,10 +341,10 @@ function drawTiles(ctx, state, layout) {
   drawRiverNetwork(ctx, state, layout, sortedTiles);
   drawRoadNetwork(ctx, state, layout, sortedTiles);
   drawImperialTerritoryVeneer(ctx, state, layout, sortedTiles);
-  drawGeographyOverlays(ctx, state, layout);
+  drawGeographyOverlays(ctx, state, layout, sortedTiles);
   drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles);
-  drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
-  drawRevealedFrontierRim(ctx, state, layout);
+  if (budget.terrainVignettes) drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
+  drawRevealedFrontierRim(ctx, state, layout, sortedTiles);
 }
 
 function drawContinentUnderpaint(ctx, state, layout, sortedTiles) {
@@ -1013,9 +1050,8 @@ function drawTerrainGrain(ctx, tile, x, y, s, visible, palette) {
   }
 }
 
-function drawGeographyOverlays(ctx, state, layout) {
+function drawGeographyOverlays(ctx, state, layout, sortedTiles) {
   ctx.save();
-  const sortedTiles = state.map.tiles.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
   for (const tile of sortedTiles) {
     if (!isVisible(state, tile.x, tile.y)) continue;
     const { x, y, s } = tileBounds(layout, tile.x, tile.y);
@@ -1305,11 +1341,11 @@ function drawRoadMilestone(ctx, tile, x, y, s) {
   ctx.restore();
 }
 
-function drawRevealedFrontierRim(ctx, state, layout) {
+function drawRevealedFrontierRim(ctx, state, layout, sortedTiles) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  for (const tile of state.map.tiles) {
+  for (const tile of sortedTiles) {
     if (!isRevealed(state, tile.x, tile.y)) continue;
     const bounds = tileBounds(layout, tile.x, tile.y);
     const visible = isVisible(state, tile.x, tile.y);
@@ -1698,8 +1734,10 @@ function drawBlightVeins(ctx, x, y, s, blight, visible) {
 function drawStrategicLens(ctx, state, layout, lensId) {
   const lens = getStrategicMapLens(state, lensId);
   if (lens.id === 'normal') return;
+  const window = cameraTileWindow(layout, 3);
   ctx.save();
   for (const tile of lens.tiles) {
+    if (!isInTileWindow(tile, window)) continue;
     const bounds = tileBounds(layout, tile.x, tile.y);
     const { x, y, s } = bounds;
     const color = lensColor(tile.tone);
@@ -1721,6 +1759,7 @@ function drawStrategicLens(ctx, state, layout, lensId) {
   }
   ctx.globalAlpha = 1;
   for (const marker of lens.markers) {
+    if (!isInTileWindow(marker, window)) continue;
     const bounds = tileBounds(layout, marker.x, marker.y);
     const { x, y, s } = bounds;
     const color = lensColor(marker.tone);
@@ -2078,9 +2117,13 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
 
 function collectReachableTiles(state, unit, move) {
   const tiles = [];
-  for (let y = 0; y < MAP_HEIGHT; y += 1) {
-    for (let x = 0; x < MAP_WIDTH; x += 1) {
-      if (x === unit.x && y === unit.y) continue;
+  const minX = Math.max(0, unit.x - move);
+  const maxX = Math.min(MAP_WIDTH - 1, unit.x + move);
+  const minY = Math.max(0, unit.y - move);
+  const maxY = Math.min(MAP_HEIGHT - 1, unit.y + move);
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if ((x === unit.x && y === unit.y) || manhattan(unit.x, unit.y, x, y) > move) continue;
       const path = findPath(state, unit, x, y, move);
       if (!path) continue;
       const tile = tileAt(state, x, y);
@@ -4137,8 +4180,9 @@ function drawUndead(ctx, unit, x, y, s) {
 }
 
 function drawFog(ctx, state, layout) {
-  for (let y = 0; y < MAP_HEIGHT; y += 1) {
-    for (let x = 0; x < MAP_WIDTH; x += 1) {
+  const window = cameraTileWindow(layout, 3);
+  for (let y = window.minY; y <= window.maxY; y += 1) {
+    for (let x = window.minX; x <= window.maxX; x += 1) {
       const bounds = tileBounds(layout, x, y);
       const { s } = bounds;
       if (!isRevealed(state, x, y)) {
@@ -4168,7 +4212,7 @@ function drawFog(ctx, state, layout) {
 
 function drawFogAtmosphere(ctx, state, layout) {
   ctx.save();
-  for (const tile of state.map.tiles) {
+  for (const tile of cameraSortedTiles(state.map, layout, 4)) {
     if (isRevealed(state, tile.x, tile.y)) continue;
     const frontier = hasAdjacentRevealedTile(state, tile.x, tile.y);
     const seed = (tile.x * 37 + tile.y * 19) % 13;
@@ -4211,16 +4255,16 @@ function drawImperialMapFrame(ctx, layout) {
   const h = layout.mapHeight;
   const s = layout.tileSize;
   ctx.save();
-  ctx.strokeStyle = 'rgba(147, 86, 28, 0.86)';
-  ctx.lineWidth = Math.max(2, s * 0.09);
-  ctx.strokeRect(x - s * 0.08, y - s * 0.08, w + s * 0.16, h + s * 0.16);
-  ctx.strokeStyle = 'rgba(255, 247, 220, 0.82)';
-  ctx.lineWidth = Math.max(2, s * 0.04);
-  ctx.strokeRect(x + s * 0.05, y + s * 0.05, w - s * 0.10, h - s * 0.10);
-  ctx.fillStyle = 'rgba(143, 36, 24, 0.68)';
+  ctx.strokeStyle = 'rgba(103, 127, 106, 0.42)';
+  ctx.lineWidth = Math.max(1.5, s * 0.035);
+  ctx.strokeRect(x - s * 0.05, y - s * 0.05, w + s * 0.10, h + s * 0.10);
+  ctx.strokeStyle = 'rgba(255, 253, 240, 0.78)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.strokeRect(x + s * 0.04, y + s * 0.04, w - s * 0.08, h - s * 0.08);
+  ctx.fillStyle = 'rgba(143, 36, 24, 0.32)';
   for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
     ctx.beginPath();
-    ctx.arc(px, py, Math.max(2, s * 0.12), 0, Math.PI * 2);
+    ctx.arc(px, py, Math.max(1.8, s * 0.065), 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -4270,18 +4314,18 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const panelW = w + 16;
   const panelH = h + 16;
   ctx.save();
-  ctx.shadowColor = 'rgba(70, 42, 18, 0.24)';
-  ctx.shadowBlur = layout.tileSize * 0.14;
-  ctx.shadowOffsetY = layout.tileSize * 0.04;
+  ctx.shadowColor = 'rgba(49, 84, 72, 0.16)';
+  ctx.shadowBlur = layout.tileSize * 0.08;
+  ctx.shadowOffsetY = layout.tileSize * 0.025;
   roundRectPath(ctx, panelX, panelY, panelW, panelH, Math.max(5, scale * 1.2));
   const frame = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY + panelH);
-  frame.addColorStop(0, 'rgba(255, 252, 229, 0.94)');
-  frame.addColorStop(0.55, 'rgba(225, 196, 130, 0.90)');
-  frame.addColorStop(1, 'rgba(139, 82, 35, 0.62)');
+  frame.addColorStop(0, 'rgba(255, 255, 245, 0.94)');
+  frame.addColorStop(0.58, 'rgba(224, 240, 216, 0.90)');
+  frame.addColorStop(1, 'rgba(151, 197, 193, 0.58)');
   ctx.fillStyle = frame;
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(143, 36, 24, 0.70)';
+  ctx.strokeStyle = 'rgba(35, 106, 131, 0.38)';
   ctx.lineWidth = Math.max(1, scale * 0.35);
   ctx.stroke();
 

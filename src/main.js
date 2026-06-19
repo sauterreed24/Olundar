@@ -140,7 +140,7 @@ registerPwa();
 focusFirstReadyUnit();
 
 function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
@@ -727,7 +727,7 @@ function focusMissionTarget(missionId) {
   lastTile = hoverTile;
   toast(`${mission.name} target ${mission.target}.`, 'info');
   render();
-  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  scrollBattlefieldIntoView();
 }
 
 function focusMissionUnit(missionId) {
@@ -746,7 +746,7 @@ function focusMissionUnit(missionId) {
   lastTile = hoverTile;
   toast(`${unit.name} route to ${mission.name}.`, mission.route.reachableThisTurn ? 'good' : 'info');
   render();
-  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  scrollBattlefieldIntoView();
 }
 
 function dispatchMission(missionId) {
@@ -781,7 +781,7 @@ function dispatchMission(missionId) {
     }
   }
   render();
-  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  scrollBattlefieldIntoView();
 }
 
 function focusCompletedMissionSite(missionId) {
@@ -801,7 +801,7 @@ function focusCompletedMissionSite(missionId) {
   lastTile = hoverTile;
   toast(`${mission.name} completed site ${mission.target}.`, 'info');
   render();
-  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  scrollBattlefieldIntoView();
 }
 
 function captureMissionResult(missionId) {
@@ -2291,7 +2291,7 @@ function focusOpeningDirective(stepId) {
     toast(`${targetUnit.name} focused for the next opening order.`, 'info');
     playAudioCue('select');
     render();
-    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    if (window.innerWidth <= 980) scrollBattlefieldIntoView();
     return;
   }
 
@@ -2309,9 +2309,13 @@ function openingUnitByTag(tag) {
 function bestScoutAdvance(unit) {
   const def = UNIT_TYPES[unit.type];
   const candidates = [];
-  for (let y = 0; y < MAP_HEIGHT; y += 1) {
-    for (let x = 0; x < MAP_WIDTH; x += 1) {
-      if (x === unit.x && y === unit.y) continue;
+  const minX = Math.max(0, unit.x - def.move);
+  const maxX = Math.min(MAP_WIDTH - 1, unit.x + def.move);
+  const minY = Math.max(0, unit.y - def.move);
+  const maxY = Math.min(MAP_HEIGHT - 1, unit.y + def.move);
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if ((x === unit.x && y === unit.y) || gridDistance(unit.x, unit.y, x, y) > def.move) continue;
       const path = findPath(state, unit, x, y, def.move);
       if (!path) continue;
       const tile = tileAt(state, x, y);
@@ -2615,7 +2619,7 @@ function previewOpeningDirective(action) {
   toast(action.previewToast || `${action.label} previewed.`, 'info');
   playAudioCue('select');
   render();
-  if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+  if (window.innerWidth <= 980) scrollBattlefieldIntoView();
 }
 
 function focusOpeningFollowThrough(previousStepId) {
@@ -2650,7 +2654,32 @@ function focusOpeningFollowThrough(previousStepId) {
 
 function scrollOpeningFollowThroughRail(previousStepId) {
   if (!['scout', 'contact', 'front'].includes(previousStepId)) return;
-  actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+  if (window.innerWidth > 980) {
+    resetCommandRailScroll();
+    return;
+  }
+  scrollBattlefieldIntoView();
+}
+
+function resetCommandRailScroll() {
+  const rail = document.querySelector('.side');
+  if (!rail) return;
+  rail.scrollTo({
+    top: 0,
+    behavior: 'auto'
+  });
+}
+
+function scrollBattlefieldIntoView() {
+  const battlefield = canvas.parentElement;
+  if (!battlefield) return;
+  const topbar = document.querySelector('.topbar');
+  const offset = Math.ceil(topbar?.getBoundingClientRect().height || 0) + 24;
+  const top = Math.max(0, window.scrollY + battlefield.getBoundingClientRect().top - offset);
+  window.scrollTo({
+    top,
+    behavior: 'auto'
+  });
 }
 
 function executeOpeningDirective(action) {
@@ -2697,7 +2726,7 @@ function executeOpeningDirective(action) {
       state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
     }
     render();
-    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    if (window.innerWidth <= 980) scrollBattlefieldIntoView();
     return;
   }
   if (action.kind === 'fortify') {
@@ -2714,7 +2743,7 @@ function executeOpeningDirective(action) {
       focusOpeningFollowThrough(previousStepId);
     }
     render();
-    if (window.innerWidth <= 980) canvas.parentElement?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+    if (window.innerWidth <= 980) scrollBattlefieldIntoView();
     return;
   }
   if (action.kind === 'end-turn') {
