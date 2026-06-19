@@ -84,6 +84,7 @@ let toastTimer = null;
 let playerSettings = readSettings();
 let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
+let focusedMissionId = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -104,7 +105,7 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens);
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay());
   renderTopBar();
   renderMapLensBar();
   renderCouncil();
@@ -302,7 +303,7 @@ function renderAftermathMissions() {
     ${missions.active.length ? `
       <div class="mission-list">
         ${missions.active.map((mission) => `
-          <article class="mission ${escapeHtml(mission.tone)}">
+          <article class="mission ${escapeHtml(mission.tone)} ${mission.id === focusedMissionId ? 'focused' : ''}">
             <span>${escapeHtml(mission.required)}</span>
             <strong>${escapeHtml(mission.name)}</strong>
             <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}${mission.context ? ` / ${escapeHtml(mission.context)}` : ''}. ${escapeHtml(mission.reward)}</small>
@@ -334,6 +335,7 @@ function focusMissionTarget(missionId) {
     return;
   }
   activeMapLens = 'missions';
+  focusedMissionId = mission.id;
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
   toast(`${mission.name} target ${mission.target}.`, 'info');
@@ -351,11 +353,27 @@ function focusMissionUnit(missionId) {
   state.selectedUnitId = unit.id;
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
+  focusedMissionId = mission.id;
   hoverTile = { x: unit.x, y: unit.y };
   lastTile = hoverTile;
   toast(`${unit.name} route to ${mission.name}.`, mission.route.reachableThisTurn ? 'good' : 'info');
   render();
   canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function focusedMissionRouteOverlay() {
+  if (!focusedMissionId) return null;
+  const mission = getAftermathMissions(state).active.find((item) => item.id === focusedMissionId);
+  if (!mission?.route?.path?.length) return null;
+  return {
+    missionId: mission.id,
+    missionName: mission.name,
+    tone: mission.route.tone,
+    reachableThisTurn: mission.route.reachableThisTurn,
+    path: mission.route.path,
+    target: { x: mission.x, y: mission.y },
+    unitId: mission.route.unitId
+  };
 }
 
 function renderObjectives() {
@@ -823,6 +841,7 @@ function loadSerializedGame(raw, slot = null) {
   try {
     state = deserializeState(raw);
     activeSaveSlotId = slot?.id || null;
+    focusedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -854,6 +873,7 @@ function importSaveFile(raw, fileName = '') {
     const imported = importSaveSnapshot(raw, { fileName });
     state = imported.state;
     activeSaveSlotId = imported.slot.id;
+    focusedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1140,6 +1160,7 @@ function startConfiguredCampaign(form) {
   hoverTile = null;
   lastTile = { x: 7, y: 16 };
   lastAutoRecapKey = null;
+  focusedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
@@ -1227,7 +1248,7 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   renderTilePanel();
-  drawGame(canvas, state, hoverTile, activeMapLens);
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;

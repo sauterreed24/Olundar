@@ -48,7 +48,7 @@ export function pointToTile(canvas, clientX, clientY) {
   };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal') {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null) {
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -56,6 +56,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal') {
   drawTiles(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawReachable(ctx, state, layout);
+  drawMissionRoute(ctx, state, layout, routeOverlay);
   drawBuildSites(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
@@ -361,6 +362,76 @@ function drawMissionCheck(ctx, x, y, s) {
   ctx.lineTo(x + s * 0.42, y + s * 0.42);
   ctx.lineTo(x + s * 0.72, y + s * 0.22);
   ctx.stroke();
+}
+
+function drawMissionRoute(ctx, state, layout, routeOverlay) {
+  const points = Array.isArray(routeOverlay?.path)
+    ? routeOverlay.path.filter((point) => point && isRevealed(state, point.x, point.y))
+    : [];
+  if (points.length < 2) return;
+  const color = routeOverlay.reachableThisTurn ? '#baf58c' : '#f0c866';
+  const center = (point) => ({
+    x: layout.offsetX + point.x * layout.tileSize + layout.tileSize * 0.5,
+    y: layout.offsetY + point.y * layout.tileSize + layout.tileSize * 0.5
+  });
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.setLineDash([Math.max(5, layout.tileSize * 0.36), Math.max(3, layout.tileSize * 0.18)]);
+  ctx.lineWidth = Math.max(5, layout.tileSize * 0.22);
+  ctx.strokeStyle = 'rgba(5, 7, 10, 0.84)';
+  drawRouteStroke(ctx, points, center);
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.095);
+  ctx.strokeStyle = color;
+  drawRouteStroke(ctx, points, center);
+  ctx.setLineDash([]);
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const p = center(points[i]);
+    ctx.fillStyle = 'rgba(5, 7, 10, 0.82)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(3, layout.tileSize * 0.14), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(2, layout.tileSize * 0.075), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  drawRouteEndpoint(ctx, center(points[0]), layout.tileSize, color, false);
+  drawRouteEndpoint(ctx, center(points[points.length - 1]), layout.tileSize, color, true);
+  ctx.restore();
+}
+
+function drawRouteStroke(ctx, points, center) {
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i += 1) {
+    const p = center(points[i]);
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+}
+
+function drawRouteEndpoint(ctx, p, tileSize, color, target) {
+  ctx.fillStyle = 'rgba(5, 7, 10, 0.86)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, tileSize * 0.08);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, Math.max(5, tileSize * (target ? 0.22 : 0.17)), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (target) {
+    ctx.beginPath();
+    ctx.moveTo(p.x - tileSize * 0.14, p.y);
+    ctx.lineTo(p.x + tileSize * 0.14, p.y);
+    ctx.moveTo(p.x, p.y - tileSize * 0.14);
+    ctx.lineTo(p.x, p.y + tileSize * 0.14);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(2, tileSize * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawReachable(ctx, state, layout) {
