@@ -369,17 +369,25 @@ export function getAftermathMissions(state) {
   const active = state.crises.missions
     .filter((mission) => !mission.completedTurn)
     .map((mission) => missionView(state, mission));
-  const recent = state.crises.missions
-    .filter((mission) => mission.completedTurn && state.turn - mission.completedTurn <= 4)
-    .slice(-3)
-    .reverse()
-    .map((mission) => missionView(state, mission));
+  const completed = state.crises.missions
+    .filter((mission) => mission.completedTurn)
+    .slice()
+    .sort((a, b) => b.completedTurn - a.completedTurn || String(b.id).localeCompare(String(a.id)));
+  const recentCompleted = completed.filter((mission) => state.turn - mission.completedTurn <= 4);
+  const archivedCompleted = completed.filter((mission) => state.turn - mission.completedTurn > 4);
+  const recent = recentCompleted.slice(0, 3).map((mission) => missionView(state, mission));
+  const archive = archivedCompleted.slice(0, 8).map((mission) => missionView(state, mission));
   return {
     title: 'Aftermath Missions',
-    summary: aftermathMissionSummary(active, recent),
-    visible: state.status === 'playing' && (active.length > 0 || recent.length > 0),
+    summary: aftermathMissionSummary(active, recent, archivedCompleted.length),
+    visible: state.status === 'playing' && (active.length > 0 || recent.length > 0 || archivedCompleted.length > 0),
     active,
-    recent
+    recent,
+    archive,
+    recentCount: recentCompleted.length,
+    archiveCount: archivedCompleted.length,
+    archiveOverflow: Math.max(0, archivedCompleted.length - archive.length),
+    completedCount: completed.length
   };
 }
 
@@ -520,10 +528,11 @@ function missionRequirementText(required = 'any') {
   return 'Any Olundaran unit';
 }
 
-function aftermathMissionSummary(active, recent) {
+function aftermathMissionSummary(active, recent, archiveCount = 0) {
   if (active.length > 1) return `${active.length} aftermath field tasks are shaping the map. Use the Missions lens to find their targets.`;
   if (active.length === 1) return `${active[0].name} is marked on the map. Send the right unit to finish the consequence.`;
   if (recent.length) return 'Recent aftermath missions are complete; their rewards are now part of the campaign.';
+  if (archiveCount) return `${archiveCount} older mission outcome${archiveCount === 1 ? '' : 's'} remain in the archive.`;
   return 'No aftermath missions are active.';
 }
 

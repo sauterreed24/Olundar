@@ -424,12 +424,14 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('mission.route.reachableThisTurn') && mainSource.includes('moveUnit(state, unit.id, mission.x, mission.y)'), 'Mission dispatch should only use reachable route previews and normal movement rules.');
   assert(mainSource.includes('missionResultBannerMarkup') && mainSource.includes('captureMissionResult'), 'Mission dispatch should show a compact post-completion result banner.');
   assert(mainSource.includes('data-action="close-mission-result"') && mainSource.includes('missionFollowUpText'), 'Mission result banners should be dismissible and summarize follow-up markers.');
+  assert(mainSource.includes('missionHistoryFilter') && mainSource.includes('data-action="set-mission-history"'), 'Completed mission outcomes should have a recent/archive filter.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
   assert(styleSource.includes('.mission-actions'), 'Mission focus controls need compact card styling.');
   assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
   assert(styleSource.includes('.mission-result'), 'Mission completion result banners need compact styling.');
+  assert(styleSource.includes('.mission-history-tools'), 'Mission outcome archive filters need compact styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 
   const state = createGame('quality-aftermath-missions');
@@ -470,10 +472,16 @@ check('aftermath missions turn rulings into map objectives', () => {
   missions = getAftermathMissions(state);
   assert(!missions.active.some((mission) => mission.id === active.id), 'Completed aftermath missions should leave the active list.');
   assert(missions.recent.some((mission) => mission.id === active.id && mission.completed), 'Completed aftermath missions should appear in recent history.');
-  assert(missions.recent.some((mission) => mission.id === active.id && mission.completedBy === engineer.name), 'Completed aftermath missions should expose the completing unit for result banners.');
+  const completedRepair = missions.recent.find((mission) => mission.id === active.id);
+  assert(completedRepair?.completedBy === engineer.name, 'Completed aftermath missions should expose the completing unit for result banners.');
   assert(state.factions.olundar.resources.morale > beforeMorale, 'Completing a repair mission should improve morale beyond the aftermath ruling.');
   const completedLens = getStrategicMapLens(state, 'missions');
   assert(completedLens.markers.some((marker) => marker.kind === 'missionComplete' && marker.x === active.x && marker.y === active.y), 'Missions lens should retain recent completion markers.');
+  state.turn = completedRepair.completedTurn + 5;
+  missions = getAftermathMissions(state);
+  assert(!missions.recent.some((mission) => mission.id === active.id), 'Completed aftermath missions should age out of the short recent window.');
+  assert(missions.archive.some((mission) => mission.id === active.id && mission.completedBy === engineer.name), 'Archived mission outcomes should stay reviewable after the recent window.');
+  assert(missions.visible && missions.archiveCount >= 1 && missions.completedCount >= missions.archiveCount, 'Mission panel should remain available when only archived outcomes exist.');
 
   const routeState = createGame('quality-route-chain-missions');
   routeState.turn = 8;
