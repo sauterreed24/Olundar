@@ -2370,6 +2370,21 @@ button:disabled {
   line-height: 1.33;
 }
 
+.turn-report-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.36rem;
+}
+
+.turn-report-actions button {
+  min-height: 2.42rem;
+  border-color: rgba(33, 112, 138, 0.38);
+  background:
+    linear-gradient(180deg, rgba(235, 249, 251, 0.96), rgba(126, 183, 194, 0.72)),
+    linear-gradient(90deg, rgba(255,255,255,0.32), rgba(31, 86, 101, 0.05));
+  color: #14394a;
+}
+
 .turn-report-glance {
   display: none;
 }

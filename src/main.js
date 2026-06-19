@@ -1938,6 +1938,9 @@ function turnReportCard() {
       <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
     </div>
     <p>${escapeHtml(turnReport.summary)}</p>
+    <div class="turn-report-actions">
+      <button type="button" data-action="continue-turn-orders">Continue orders</button>
+    </div>
     <div class="turn-report-glance">${glance}</div>
     <details class="turn-report-detail-drawer"${detailsOpen}>
       <summary><span>Report details</span><small>Metrics, stores, notes</small></summary>
@@ -2643,6 +2646,7 @@ function focusTurnReportOnMobile() {
 }
 
 function requestEndTurn(force = false) {
+  const previousStepId = currentOpeningDirective()?.current?.id || null;
   if (!force && state.pendingEndTurn === state.turn) force = true;
   const warnings = getEndTurnWarnings(state);
   if (!force && warnings.length) {
@@ -2659,10 +2663,20 @@ function requestEndTurn(force = false) {
   battleImpact = null;
   endTurn(state);
   turnReport = buildTurnReport(before, previousTurn);
+  focusOpeningFollowThrough(previousStepId);
   toast(turnReport.toast, turnReport.tone === 'bad' ? 'bad' : 'info');
   playAudioCue('turn');
   render();
   focusTurnReportOnMobile();
+}
+
+function continueTurnReportOrders() {
+  turnReport = null;
+  focusOpeningFollowThrough('turn-report');
+  render();
+  if (window.innerWidth <= 980) {
+    actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+  }
 }
 
 function selectNextReadyUnit() {
@@ -3529,6 +3543,8 @@ actionPanel.addEventListener('click', (event) => {
   } else if (target.dataset.action === 'clear-turn-report') {
     turnReport = null;
     render();
+  } else if (target.dataset.action === 'continue-turn-orders') {
+    continueTurnReportOrders();
   }
 });
 
