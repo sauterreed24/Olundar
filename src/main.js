@@ -827,27 +827,47 @@ function renderObjectives() {
 function renderSelection() {
   const selection = describeSelection(state);
   if (!selection) {
-    selectionPanel.innerHTML = '<h2>Command Seat</h2><p>Select a unit, city, or building. Scouts reveal the map; engineers build the economy; legions hold the line.</p>';
+    const readyUnits = getReadyOlundarUnits(state).length;
+    selectionPanel.innerHTML = `
+      <div class="command-kicker">Imperial command</div>
+      <h2>Command Seat</h2>
+      <p>Select a unit, city, or building. Scouts reveal the map; engineers build the economy; legions hold the line.</p>
+      <div class="command-stats">
+        <span class="stat-chip"><b>${readyUnits}</b><small>Ready units</small></span>
+        <span class="stat-chip"><b>${state.turn}</b><small>Turn</small></span>
+        <span class="stat-chip"><b>${Math.round((state.explored.size / (MAP_WIDTH * MAP_HEIGHT)) * 100)}%</b><small>Mapped</small></span>
+      </div>
+    `;
     return;
   }
+  const kind = selection.unit ? 'Unit' : 'Structure';
   selectionPanel.innerHTML = `
-    <h2>${escapeHtml(selection.title)}</h2>
-    <p class="muted">${escapeHtml(selection.subtitle)}</p>
+    <div class="selection-command">
+      <div class="selection-crest ${selection.unit ? 'unit-crest' : 'building-crest'}" aria-hidden="true">${escapeHtml(kind.slice(0, 1))}</div>
+      <div>
+        <div class="command-kicker">${escapeHtml(kind)} selected</div>
+        <h2>${escapeHtml(selection.title)}</h2>
+        <p class="muted">${escapeHtml(selection.subtitle)}</p>
+      </div>
+    </div>
+    ${selectionStatMarkup(selection)}
     <p>${escapeHtml(selection.body)}</p>
   `;
 }
 
 function renderActions() {
   actionPanel.innerHTML = '';
-  const heading = document.createElement('h2');
-  heading.textContent = 'Orders';
-  actionPanel.appendChild(heading);
+  actionPanel.appendChild(orderHeader());
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
 
   if (state.status !== 'playing') {
-    actionPanel.appendChild(button('Review campaign recap', () => openCampaignRecap('current')));
-    actionPanel.appendChild(button('Save final campaign', () => openSaveManager('save')));
-    actionPanel.appendChild(button('New campaign', () => newCampaign()));
+    const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
+    const actions = commandActions('campaign-tools');
+    actions.appendChild(orderButton('Campaign recap', 'Review final milestones', () => openCampaignRecap('current'), { tone: 'primary' }));
+    actions.appendChild(orderButton('Save campaign', 'Store the finished state', () => openSaveManager('save')));
+    actions.appendChild(orderButton('New campaign', 'Start a fresh table', () => newCampaign()));
+    section.appendChild(actions);
+    actionPanel.appendChild(section);
     return;
   }
 
@@ -855,64 +875,92 @@ function renderActions() {
   const selectedBuilding = state.buildings.find((b) => b.id === state.selectedBuildingId);
 
   if (!selectedUnit && !selectedBuilding) {
-    actionPanel.appendChild(paragraph('Select an Olundaran unit or structure to issue orders.'));
+    actionPanel.appendChild(orderNote('Select an Olundaran unit or structure to issue field orders. The campaign tools remain available below.'));
   }
 
   if (selectedUnit) {
     const def = UNIT_TYPES[selectedUnit.type];
-    actionPanel.appendChild(paragraph(`${def.name}: ${selectedUnit.hasActed ? 'acted this turn' : 'ready'}.`));
-    actionPanel.appendChild(button('Fortify / Hold position', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), selectedUnit.hasActed || selectedUnit.faction !== 'olundar'));
+    const status = selectedUnit.faction === 'olundar'
+      ? (selectedUnit.hasActed ? 'Orders spent for this turn.' : 'Ready for direct orders.')
+      : 'Foreign or hostile contact under observation.';
+    const unitSection = actionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
+    const unitActions = commandActions('primary-orders');
+    unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), {
+      disabled: selectedUnit.hasActed || selectedUnit.faction !== 'olundar',
+      tone: 'primary'
+    }));
+    unitSection.appendChild(unitActions);
+    actionPanel.appendChild(unitSection);
+
     if (def.tags.includes('builder') && selectedUnit.faction === 'olundar') {
-      const grid = document.createElement('div');
-      grid.className = 'button-grid';
+      const buildSection = actionSection('Construction orders', 'Place roads, economy sites, defenses, and mustering halls from this engineer.', 'build-orders');
+      const grid = commandActions('build-actions');
       const buildOrder = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
       for (const type of buildOrder) {
         const bDef = BUILDING_TYPES[type];
-        const label = `${bDef.name} · ${formatCost(bDef.cost)} · ${bDef.buildTurns}t`;
         const disabled = selectedUnit.hasActed || !canAfford(state.factions.olundar.resources, bDef.cost);
-        grid.appendChild(button(label, () => {
+        grid.appendChild(orderButton(bDef.name, `${formatCost(bDef.cost)} | ${bDef.buildTurns} turns`, () => {
           state.mode = { type: 'build', buildingType: type, builderId: selectedUnit.id };
           playAudioCue('ui');
           toast(`Build mode: click ${bDef.name} on this tile or an adjacent tile.`);
           render();
-        }, disabled));
+        }, { disabled }));
       }
-      actionPanel.appendChild(subheading('Build'));
-      actionPanel.appendChild(grid);
+      buildSection.appendChild(grid);
+      actionPanel.appendChild(buildSection);
     }
   }
 
   if (selectedBuilding) {
     const def = BUILDING_TYPES[selectedBuilding.type];
-    actionPanel.appendChild(paragraph(`${def.name}: ${selectedBuilding.turnsLeft > 0 ? `under construction, ${selectedBuilding.turnsLeft} turns left` : `tier ${(selectedBuilding.upgraded || 0) + 1}, operational`}.`));
+    const buildingStatus = selectedBuilding.turnsLeft > 0
+      ? `Under construction, ${selectedBuilding.turnsLeft} turns left.`
+      : `Tier ${(selectedBuilding.upgraded || 0) + 1}, operational.`;
+    actionPanel.appendChild(actionSection(def.name, `${buildingStatus} HP ${selectedBuilding.hp}/${selectedBuilding.maxHp}.`, 'structure-orders'));
+
     if (selectedBuilding.faction === 'olundar' && selectedBuilding.turnsLeft <= 0 && def.trains.length) {
-      const grid = document.createElement('div');
-      grid.className = 'button-grid';
+      const trainSection = actionSection('Muster troops', `Queue ${selectedBuilding.queue.length}/${trainingQueueLimit(selectedBuilding)}. Upgrades increase capacity and speed elite musters.`, 'train-orders');
+      const grid = commandActions('train-actions');
       for (const unitType of def.trains) {
         const uDef = UNIT_TYPES[unitType];
         const turns = trainingTurnsFor(selectedBuilding, unitType);
         const disabled = selectedBuilding.queue.length >= trainingQueueLimit(selectedBuilding) || !canAfford(state.factions.olundar.resources, uDef.cost);
-        grid.appendChild(button(`${uDef.name} · ${formatCost(uDef.cost)} · ${turns}t`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType), 'train'), disabled));
+        grid.appendChild(orderButton(uDef.name, `${formatCost(uDef.cost)} | ${turns} turns`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType), 'train'), { disabled, tone: 'primary' }));
       }
-      actionPanel.appendChild(subheading('Train'));
-      actionPanel.appendChild(paragraph(`Queue ${selectedBuilding.queue.length}/${trainingQueueLimit(selectedBuilding)}. Upgrades increase capacity and speed elite musters.`));
-      actionPanel.appendChild(grid);
+      trainSection.appendChild(grid);
+      actionPanel.appendChild(trainSection);
     }
     if (selectedBuilding.faction === 'olundar' && selectedBuilding.turnsLeft <= 0 && (selectedBuilding.upgraded || 0) < 2) {
       const cost = upgradeCostFor(selectedBuilding);
-      actionPanel.appendChild(subheading('Upgrade'));
-      actionPanel.appendChild(button(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2} · ${formatCost(cost)}`, () => runAction(() => upgradeBuilding(state, selectedBuilding.id), 'build'), !canAfford(state.factions.olundar.resources, cost)));
+      const upgradeSection = actionSection('Upgrade works', 'Invest in durability, vision, and stronger strategic output.', 'upgrade-orders');
+      const upgradeActions = commandActions('primary-orders');
+      upgradeActions.appendChild(orderButton(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2}`, formatCost(cost), () => runAction(() => upgradeBuilding(state, selectedBuilding.id), 'build'), {
+        disabled: !canAfford(state.factions.olundar.resources, cost),
+        tone: 'primary'
+      }));
+      upgradeSection.appendChild(upgradeActions);
+      actionPanel.appendChild(upgradeSection);
     }
   }
 
-  actionPanel.appendChild(subheading('Campaign'));
-  actionPanel.appendChild(button('Next ready unit', () => selectNextReadyUnit(), !getReadyOlundarUnits(state).length));
-  actionPanel.appendChild(button('End turn', () => requestEndTurn()));
-  actionPanel.appendChild(button('Save / slots', () => openSaveManager('save')));
-  actionPanel.appendChild(button('Load campaign', () => openSaveManager('load')));
-  actionPanel.appendChild(button('New campaign', () => newCampaign()));
-  actionPanel.appendChild(button('Export save file', () => exportSave()));
-  actionPanel.appendChild(button('Import save file', () => openImportSaveFile()));
+  const readyUnits = getReadyOlundarUnits(state).length;
+  const campaignSection = actionSection('Campaign tempo', `${readyUnits} ready unit${readyUnits === 1 ? '' : 's'} before the council should end the turn.`, 'campaign-orders');
+  const primaryCampaign = commandActions('campaign-primary');
+  primaryCampaign.appendChild(orderButton('Next ready unit', 'Jump to an unused Olundaran force', () => selectNextReadyUnit(), {
+    disabled: !readyUnits,
+    tone: 'primary'
+  }));
+  primaryCampaign.appendChild(orderButton('End turn', 'Resolve enemies, training, blight, and diplomacy', () => requestEndTurn(), { tone: 'danger' }));
+  campaignSection.appendChild(primaryCampaign);
+
+  const tools = commandActions('campaign-tools');
+  tools.appendChild(orderButton('Save slots', 'Store this campaign', () => openSaveManager('save')));
+  tools.appendChild(orderButton('Load', 'Open a saved campaign', () => openSaveManager('load')));
+  tools.appendChild(orderButton('New', 'Restart from setup', () => newCampaign()));
+  tools.appendChild(orderButton('Export', 'Download save file', () => exportSave()));
+  tools.appendChild(orderButton('Import', 'Load save file', () => openImportSaveFile()));
+  campaignSection.appendChild(tools);
+  actionPanel.appendChild(campaignSection);
 }
 
 function renderDiplomacy() {
@@ -1302,7 +1350,11 @@ function requestEndTurn(force = false) {
 }
 
 function selectNextReadyUnit() {
-  const [unit] = getReadyOlundarUnits(state);
+  const readyUnits = getReadyOlundarUnits(state);
+  const currentIndex = readyUnits.findIndex((unit) => unit.id === state.selectedUnitId);
+  const unit = currentIndex >= 0 && readyUnits.length > 1
+    ? readyUnits[(currentIndex + 1) % readyUnits.length]
+    : readyUnits[0];
   if (!unit) {
     toast('No ready Olundaran units remain.');
     playAudioCue('warning');
@@ -1729,6 +1781,68 @@ function focusCampaign() {
 
 function hasBuilding(type) {
   return state.buildings.some((b) => b.faction === 'olundar' && b.type === type && b.turnsLeft <= 0);
+}
+
+function selectionStatMarkup(selection) {
+  const stats = [];
+  if (selection.unit) {
+    const unit = selection.unit;
+    const def = UNIT_TYPES[unit.type];
+    stats.push(['HP', `${unit.hp}/${unit.maxHp}`]);
+    stats.push(['Move', def.move]);
+    stats.push(['Attack', def.range > 1 ? `${def.attack} R${def.range}` : def.attack]);
+    stats.push(['Sight', def.sight]);
+    stats.push(['Status', unit.hasActed ? 'Acted' : 'Ready']);
+  } else if (selection.building) {
+    const building = selection.building;
+    stats.push(['HP', `${building.hp}/${building.maxHp}`]);
+    stats.push(['Tier', (building.upgraded || 0) + 1]);
+    stats.push(['Queue', `${building.queue?.length || 0}/${trainingQueueLimit(building)}`]);
+    stats.push(['Build', building.turnsLeft > 0 ? `${building.turnsLeft}t` : 'Ready']);
+  }
+  return `<div class="command-stats">${stats.map(([label, value]) => `<span class="stat-chip"><b>${escapeHtml(value)}</b><small>${escapeHtml(label)}</small></span>`).join('')}</div>`;
+}
+
+function orderHeader() {
+  const header = document.createElement('div');
+  header.className = 'order-head';
+  header.innerHTML = '<span>War council</span><h2>Orders</h2>';
+  return header;
+}
+
+function actionSection(title, detail = '', className = '') {
+  const section = document.createElement('section');
+  section.className = `order-section ${className}`.trim();
+  section.innerHTML = `
+    <div class="order-section-head">
+      <h3>${escapeHtml(title)}</h3>
+      ${detail ? `<p>${escapeHtml(detail)}</p>` : ''}
+    </div>
+  `;
+  return section;
+}
+
+function commandActions(className = '') {
+  const actions = document.createElement('div');
+  actions.className = `command-actions ${className}`.trim();
+  return actions;
+}
+
+function orderButton(label, meta, onClick, options = {}) {
+  const { disabled = false, title = '', tone = 'secondary' } = options;
+  const el = button(label, onClick, disabled, title);
+  el.className = `order-button ${tone}`.trim();
+  el.innerHTML = `
+    <span class="order-button-label">${escapeHtml(label)}</span>
+    ${meta ? `<span class="order-button-meta">${escapeHtml(meta)}</span>` : ''}
+  `;
+  return el;
+}
+
+function orderNote(text) {
+  const p = paragraph(text);
+  p.className = 'order-note';
+  return p;
 }
 
 function button(label, onClick, disabled = false, title = '') {
