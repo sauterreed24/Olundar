@@ -2062,7 +2062,9 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   ctx.save();
   drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove);
   drawCommandRangeFrontier(ctx, layout, reachable, def.move);
+  drawMovementBlockedApproaches(ctx, state, layout, reachable);
   drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
+  drawCommandSurveyVectors(ctx, state, layout, unit, reachable, def.move, hoverMove);
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
     drawMoveReachTile(ctx, bounds, layout, item, def.move, hoverMove);
@@ -2097,6 +2099,7 @@ function collectReachableTiles(state, unit, move) {
         relief,
         elevation,
         terrainPressure: road ? 0 : terrainCost + relief * 0.45 + Math.max(0, elevation - 0.45) * 1.6 + (terrain === 'blight' ? 1.1 : 0),
+        route: path.path,
         road,
         supplied: isTileSupplied(state, x, y),
         frontier: path.cost >= move
@@ -2112,10 +2115,31 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove);
   for (const item of reachable) {
     drawMovementReachWash(ctx, tileBounds(layout, item.x, item.y), layout, item, maxMove, sameTile(item, hoverMove));
   }
   drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
+  ctx.restore();
+}
+
+function drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove = null) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (const item of reachable) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    const hovered = sameTile(item, hoverMove);
+    const frontier = item.cost >= maxMove;
+    const accent = movementTerrainAccent(item);
+    const radius = layout.tileSize * (hovered ? 0.92 : frontier ? 0.70 : 0.58);
+    const alpha = hovered ? 0.42 : frontier ? 0.27 : 0.18;
+    const glow = ctx.createRadialGradient(bounds.cx, bounds.cy, layout.tileSize * 0.08, bounds.cx, bounds.cy, radius);
+    glow.addColorStop(0, accent.canopyCore.replace('ALPHA', String(alpha)));
+    glow.addColorStop(0.52, accent.canopyMid.replace('ALPHA', String(alpha * 0.48)));
+    glow.addColorStop(1, accent.canopyMid.replace('ALPHA', '0'));
+    ctx.fillStyle = glow;
+    ctx.fillRect(bounds.cx - radius, bounds.cy - radius, radius * 2, radius * 2);
+  }
   ctx.restore();
 }
 
@@ -2130,9 +2154,10 @@ function drawMovementReachWash(ctx, bounds, layout, item, maxMove, hovered = fal
 
   ctx.save();
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = layout.tileSize * (hovered ? 0.18 : 0.08);
-  fillTileDiamond(ctx, bounds, gradient, hovered ? 0.5 : 2.5);
-  strokeTileDiamond(ctx, bounds, palette.innerStroke, Math.max(1, layout.tileSize * (hovered ? 0.026 : 0.012)), hovered ? 1 : 4);
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.22 : 0.12);
+  fillTileDiamond(ctx, bounds, gradient, hovered ? 0.5 : 2.0);
+  strokeTileDiamond(ctx, bounds, palette.outerStroke || 'rgba(71, 42, 16, 0.30)', Math.max(1, layout.tileSize * (hovered ? 0.050 : 0.026)), hovered ? 0.5 : 2.2);
+  strokeTileDiamond(ctx, bounds, palette.innerStroke, Math.max(1, layout.tileSize * (hovered ? 0.030 : 0.016)), hovered ? 3 : 5);
   drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressure, hovered);
   ctx.restore();
 }
@@ -2143,6 +2168,7 @@ function movementRadiusPalette(item, progress, pressure, hovered) {
       light: hovered ? 'rgba(216, 249, 255, 0.50)' : 'rgba(202, 245, 255, 0.30)',
       fill: hovered ? 'rgba(88, 190, 225, 0.44)' : 'rgba(88, 174, 205, 0.24)',
       shadow: 'rgba(24, 103, 133, 0.18)',
+      outerStroke: 'rgba(24, 103, 133, 0.40)',
       innerStroke: 'rgba(128, 226, 255, 0.42)',
       glow: 'rgba(104, 214, 255, 0.30)'
     };
@@ -2152,8 +2178,21 @@ function movementRadiusPalette(item, progress, pressure, hovered) {
       light: hovered ? 'rgba(241, 255, 203, 0.44)' : 'rgba(232, 255, 190, 0.27)',
       fill: hovered ? 'rgba(166, 220, 105, 0.40)' : 'rgba(154, 204, 92, 0.22)',
       shadow: 'rgba(64, 120, 45, 0.16)',
+      outerStroke: 'rgba(64, 120, 45, 0.34)',
       innerStroke: 'rgba(205, 244, 137, 0.36)',
       glow: 'rgba(185, 245, 140, 0.24)'
+    };
+  }
+  const accent = movementTerrainAccent(item);
+  if (item.terrain !== 'plains' && (item.terrainCost > 1 || item.terrain === 'blight')) {
+    const heavyAlpha = hovered ? 0.44 : pressure > 0.62 || item.frontier ? 0.30 : 0.22;
+    return {
+      light: accent.light.replace('ALPHA', String(heavyAlpha + 0.06)),
+      fill: accent.fill.replace('ALPHA', String(heavyAlpha)),
+      shadow: accent.shadow.replace('ALPHA', String(Math.max(0.13, heavyAlpha - 0.08))),
+      outerStroke: accent.outerStroke,
+      innerStroke: accent.stroke,
+      glow: accent.glow
     };
   }
   const heavy = pressure > 0.62 || item.frontier;
@@ -2162,13 +2201,100 @@ function movementRadiusPalette(item, progress, pressure, hovered) {
     light: `rgba(255, 239, 168, ${alpha + 0.06})`,
     fill: heavy ? `rgba(222, 151, 58, ${alpha})` : `rgba(241, 198, 86, ${alpha})`,
     shadow: heavy ? `rgba(125, 70, 24, ${Math.max(0.15, alpha - 0.08)})` : `rgba(134, 92, 28, ${Math.max(0.11, alpha - 0.09)})`,
+    outerStroke: heavy ? 'rgba(94, 54, 19, 0.38)' : 'rgba(128, 83, 24, 0.30)',
     innerStroke: heavy ? 'rgba(255, 211, 110, 0.38)' : 'rgba(255, 232, 154, 0.30)',
     glow: heavy ? 'rgba(255, 184, 83, 0.24)' : 'rgba(255, 220, 124, 0.20)'
   };
 }
 
+function movementTerrainAccent(item) {
+  const palettes = {
+    forest: {
+      light: 'rgba(225, 255, 178, ALPHA)',
+      fill: 'rgba(122, 173, 75, ALPHA)',
+      shadow: 'rgba(41, 88, 38, ALPHA)',
+      stroke: 'rgba(223, 249, 150, 0.44)',
+      outerStroke: 'rgba(43, 91, 40, 0.38)',
+      glow: 'rgba(162, 220, 95, 0.22)',
+      canopyCore: 'rgba(210, 255, 150, ALPHA)',
+      canopyMid: 'rgba(89, 155, 71, ALPHA)'
+    },
+    hills: {
+      light: 'rgba(255, 226, 150, ALPHA)',
+      fill: 'rgba(216, 143, 58, ALPHA)',
+      shadow: 'rgba(112, 72, 31, ALPHA)',
+      stroke: 'rgba(255, 218, 132, 0.48)',
+      outerStroke: 'rgba(120, 74, 25, 0.42)',
+      glow: 'rgba(255, 190, 84, 0.25)',
+      canopyCore: 'rgba(255, 226, 152, ALPHA)',
+      canopyMid: 'rgba(201, 118, 51, ALPHA)'
+    },
+    mountains: {
+      light: 'rgba(255, 249, 218, ALPHA)',
+      fill: 'rgba(178, 172, 149, ALPHA)',
+      shadow: 'rgba(89, 86, 78, ALPHA)',
+      stroke: 'rgba(255, 246, 208, 0.48)',
+      outerStroke: 'rgba(80, 78, 70, 0.42)',
+      glow: 'rgba(255, 238, 190, 0.24)',
+      canopyCore: 'rgba(255, 248, 218, ALPHA)',
+      canopyMid: 'rgba(140, 136, 125, ALPHA)'
+    },
+    river: {
+      light: 'rgba(219, 252, 255, ALPHA)',
+      fill: 'rgba(77, 174, 210, ALPHA)',
+      shadow: 'rgba(28, 97, 133, ALPHA)',
+      stroke: 'rgba(167, 235, 255, 0.52)',
+      outerStroke: 'rgba(28, 97, 133, 0.44)',
+      glow: 'rgba(95, 210, 255, 0.28)',
+      canopyCore: 'rgba(218, 252, 255, ALPHA)',
+      canopyMid: 'rgba(76, 177, 216, ALPHA)'
+    },
+    marsh: {
+      light: 'rgba(226, 255, 190, ALPHA)',
+      fill: 'rgba(116, 158, 94, ALPHA)',
+      shadow: 'rgba(45, 91, 56, ALPHA)',
+      stroke: 'rgba(212, 246, 158, 0.42)',
+      outerStroke: 'rgba(45, 91, 56, 0.40)',
+      glow: 'rgba(158, 214, 118, 0.22)',
+      canopyCore: 'rgba(224, 255, 184, ALPHA)',
+      canopyMid: 'rgba(95, 154, 93, ALPHA)'
+    },
+    ruins: {
+      light: 'rgba(255, 235, 170, ALPHA)',
+      fill: 'rgba(182, 147, 85, ALPHA)',
+      shadow: 'rgba(96, 75, 45, ALPHA)',
+      stroke: 'rgba(255, 226, 148, 0.44)',
+      outerStroke: 'rgba(92, 70, 39, 0.40)',
+      glow: 'rgba(235, 178, 94, 0.23)',
+      canopyCore: 'rgba(255, 235, 170, ALPHA)',
+      canopyMid: 'rgba(166, 125, 72, ALPHA)'
+    },
+    blight: {
+      light: 'rgba(201, 255, 167, ALPHA)',
+      fill: 'rgba(110, 104, 91, ALPHA)',
+      shadow: 'rgba(45, 38, 46, ALPHA)',
+      stroke: 'rgba(176, 250, 128, 0.48)',
+      outerStroke: 'rgba(49, 44, 48, 0.48)',
+      glow: 'rgba(137, 244, 119, 0.24)',
+      canopyCore: 'rgba(187, 255, 146, ALPHA)',
+      canopyMid: 'rgba(96, 168, 82, ALPHA)'
+    },
+    plains: {
+      light: 'rgba(255, 239, 168, ALPHA)',
+      fill: 'rgba(241, 198, 86, ALPHA)',
+      shadow: 'rgba(134, 92, 28, ALPHA)',
+      stroke: 'rgba(255, 232, 154, 0.30)',
+      outerStroke: 'rgba(128, 83, 24, 0.30)',
+      glow: 'rgba(255, 220, 124, 0.20)',
+      canopyCore: 'rgba(255, 239, 168, ALPHA)',
+      canopyMid: 'rgba(226, 177, 75, ALPHA)'
+    }
+  };
+  return palettes[item.terrain] || palettes.plains;
+}
+
 function drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressure, hovered = false) {
-  const shouldDraw = hovered || item.frontier || item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
+  const shouldDraw = hovered || item.frontier || item.road || item.supplied || item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
   if (!shouldDraw) return;
   const cueCount = Math.min(4, Math.max(1, Math.ceil(item.terrainPressure - 1)));
   const terrainColor = item.road
@@ -2207,6 +2333,90 @@ function drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressur
     ctx.moveTo(bounds.cx - bounds.halfW * 0.34, bounds.cy + bounds.halfH * 0.18);
     ctx.lineTo(bounds.cx, bounds.cy + bounds.halfH * 0.36);
     ctx.lineTo(bounds.cx + bounds.halfW * 0.34, bounds.cy + bounds.halfH * 0.18);
+    ctx.stroke();
+  }
+  drawMovementTerrainInsignia(ctx, bounds, layout, item, hovered);
+  ctx.restore();
+}
+
+function drawMovementTerrainInsignia(ctx, bounds, layout, item, hovered = false) {
+  const s = layout.tileSize;
+  const cx = bounds.cx + bounds.halfW * 0.21;
+  const cy = bounds.cy - bounds.halfH * 0.26;
+  const r = Math.max(3.5, s * (hovered ? 0.095 : 0.074));
+  ctx.save();
+  ctx.globalAlpha = hovered ? 0.92 : 0.68;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = item.road ? 'rgba(231, 251, 255, 0.86)' : item.supplied ? 'rgba(244, 255, 222, 0.82)' : 'rgba(255, 247, 214, 0.76)';
+  ctx.strokeStyle = item.road ? 'rgba(45, 118, 145, 0.56)' : item.supplied ? 'rgba(73, 120, 47, 0.52)' : 'rgba(122, 78, 27, 0.48)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = item.road ? 'rgba(30, 112, 143, 0.82)' : item.terrain === 'blight' ? 'rgba(66, 99, 50, 0.82)' : 'rgba(108, 71, 29, 0.74)';
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  if (item.road) {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.62, cy + r * 0.12);
+    ctx.lineTo(cx - r * 0.10, cy - r * 0.28);
+    ctx.lineTo(cx + r * 0.58, cy + r * 0.16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.34, cy + r * 0.34);
+    ctx.lineTo(cx + r * 0.12, cy - r * 0.06);
+    ctx.stroke();
+  } else if (item.terrain === 'river') {
+    for (let i = -1; i <= 1; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.62, cy + i * r * 0.22);
+      ctx.bezierCurveTo(cx - r * 0.26, cy - r * 0.30 + i * r * 0.18, cx + r * 0.25, cy + r * 0.34 + i * r * 0.10, cx + r * 0.62, cy + i * r * 0.18);
+      ctx.stroke();
+    }
+  } else if (item.terrain === 'forest') {
+    for (const [dx, scale] of [[-0.32, 0.70], [0.05, 0.92], [0.38, 0.62]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + r * dx, cy - r * scale * 0.62);
+      ctx.lineTo(cx + r * (dx + scale * 0.34), cy + r * scale * 0.18);
+      ctx.lineTo(cx + r * (dx - scale * 0.34), cy + r * scale * 0.18);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (item.terrain === 'hills' || item.terrain === 'mountains') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.72, cy + r * 0.42);
+    ctx.lineTo(cx - r * 0.18, cy - r * 0.40);
+    ctx.lineTo(cx + r * 0.24, cy + r * 0.28);
+    ctx.lineTo(cx + r * 0.52, cy - r * 0.16);
+    ctx.lineTo(cx + r * 0.78, cy + r * 0.42);
+    ctx.stroke();
+  } else if (item.terrain === 'marsh') {
+    for (let i = -1; i <= 1; i += 1) {
+      const x = cx + i * r * 0.32;
+      ctx.beginPath();
+      ctx.moveTo(x, cy + r * 0.48);
+      ctx.quadraticCurveTo(x + r * 0.10, cy - r * 0.22, x + r * 0.34, cy + r * 0.14);
+      ctx.stroke();
+    }
+  } else if (item.terrain === 'ruins') {
+    ctx.strokeRect(cx - r * 0.40, cy - r * 0.20, r * 0.34, r * 0.58);
+    ctx.strokeRect(cx + r * 0.08, cy - r * 0.44, r * 0.34, r * 0.82);
+  } else if (item.terrain === 'blight') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.52, cy - r * 0.22);
+    ctx.lineTo(cx - r * 0.06, cy + r * 0.08);
+    ctx.lineTo(cx - r * 0.24, cy + r * 0.52);
+    ctx.moveTo(cx + r * 0.08, cy - r * 0.44);
+    ctx.lineTo(cx + r * 0.38, cy - r * 0.02);
+    ctx.lineTo(cx + r * 0.18, cy + r * 0.46);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.56, cy + r * 0.26);
+    ctx.quadraticCurveTo(cx, cy - r * 0.32, cx + r * 0.56, cy + r * 0.26);
     ctx.stroke();
   }
   ctx.restore();
@@ -2258,6 +2468,76 @@ function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
   ctx.stroke();
 }
 
+function drawMovementBlockedApproaches(ctx, state, layout, reachable) {
+  if (!reachable.length) return;
+  const reachableSet = new Set(reachable.map((item) => tileKey(item.x, item.y)));
+  const drawn = new Set();
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const item of reachable) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = item.x + dx;
+      const ny = item.y + dy;
+      const key = `${item.x},${item.y}:${dx},${dy}`;
+      if (drawn.has(key) || reachableSet.has(tileKey(nx, ny)) || !inMap(nx, ny) || !isRevealed(state, nx, ny)) continue;
+      const tile = tileAt(state, nx, ny);
+      const terrain = TERRAIN[tile?.terrain || 'plains'];
+      const hardBlocked = !terrain?.passable;
+      const roughBlocked = (terrain?.move || 1) > Math.max(1, item.remaining + 0.5) || tile?.terrain === 'blight';
+      if (!hardBlocked && !roughBlocked) continue;
+      drawn.add(key);
+      drawMovementBlockedHatch(ctx, tileBounds(layout, item.x, item.y), layout, dx, dy, tile?.terrain || 'plains', hardBlocked);
+    }
+  }
+  ctx.restore();
+}
+
+function drawMovementBlockedHatch(ctx, bounds, layout, dx, dy, terrain, hardBlocked) {
+  const [start, end] = frontierEdgePoints(bounds, dx, dy);
+  const adjacent = {
+    x: bounds.cx + (dx - dy) * layout.halfTileWidth,
+    y: bounds.cy + (dx + dy) * layout.halfTileHeight
+  };
+  const mid = { x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5 };
+  const vx = adjacent.x - mid.x;
+  const vy = adjacent.y - mid.y;
+  const len = Math.max(0.001, Math.hypot(vx, vy));
+  const nx = vx / len;
+  const ny = vy / len;
+  const terrainColor = terrain === 'river'
+    ? 'rgba(65, 138, 171, 0.68)'
+    : terrain === 'forest' || terrain === 'marsh'
+      ? 'rgba(76, 117, 58, 0.62)'
+      : terrain === 'blight'
+        ? 'rgba(78, 128, 58, 0.70)'
+        : hardBlocked
+          ? 'rgba(76, 69, 58, 0.74)'
+          : 'rgba(126, 78, 32, 0.66)';
+  ctx.save();
+  ctx.shadowColor = terrain === 'blight' ? 'rgba(130, 238, 104, 0.20)' : 'rgba(255, 218, 126, 0.14)';
+  ctx.shadowBlur = layout.tileSize * 0.04;
+  ctx.strokeStyle = 'rgba(56, 34, 16, 0.58)';
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.040);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.strokeStyle = terrainColor;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  for (let i = 1; i <= 3; i += 1) {
+    const t = i / 4;
+    const px = start.x + (end.x - start.x) * t;
+    const py = start.y + (end.y - start.y) * t;
+    const length = layout.tileSize * (hardBlocked ? 0.18 : 0.13);
+    ctx.beginPath();
+    ctx.moveTo(px - nx * length * 0.12, py - ny * length * 0.12);
+    ctx.lineTo(px + nx * length, py + ny * length);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function collectAttackTiles(state, unit, range) {
   if (range <= 0) return [];
   const tiles = [];
@@ -2293,12 +2573,49 @@ function drawMoveReachTile(ctx, bounds, layout, item, maxMove, hoverMove = null)
       ? 'rgba(151, 96, 29, 0.34)'
       : 'rgba(113, 85, 34, 0.16)';
   fillTileDiamond(ctx, bounds, fill, hovered ? 1.5 : 4);
+  drawMovementTileCommandRim(ctx, bounds, layout, item, { hovered, maxMove });
   if (shouldAnnotateMove(item, maxMove, hoverMove, compact)) {
     strokeTileDiamond(ctx, bounds, hovered ? 'rgba(255, 238, 170, 0.92)' : stroke, Math.max(1, layout.tileSize * (hovered ? 0.038 : 0.016)), hovered ? 2 : 5);
     drawTacticalMoveMarker(ctx, bounds, layout, item, { hovered, maxMove });
   } else {
     drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove);
   }
+}
+
+function drawMovementTileCommandRim(ctx, bounds, layout, item, options = {}) {
+  const hovered = Boolean(options.hovered);
+  const frontier = item.cost >= options.maxMove;
+  const rim = item.road
+    ? 'rgba(176, 238, 255, 0.74)'
+    : item.supplied
+      ? 'rgba(224, 250, 155, 0.70)'
+      : frontier || item.terrainCost > 1
+        ? 'rgba(255, 211, 116, 0.78)'
+        : 'rgba(255, 236, 165, 0.58)';
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = item.road ? 'rgba(72, 177, 218, 0.20)' : 'rgba(255, 204, 104, 0.18)';
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.12 : 0.055);
+  strokeTileDiamond(ctx, bounds, 'rgba(59, 36, 17, 0.38)', Math.max(1, layout.tileSize * (hovered ? 0.046 : 0.026)), hovered ? 1.2 : 3.4);
+  strokeTileDiamond(ctx, bounds, rim, Math.max(1, layout.tileSize * (hovered ? 0.026 : 0.014)), hovered ? 3.7 : 5.8);
+  if (frontier || hovered) {
+    const r = Math.max(2.5, layout.tileSize * 0.050);
+    for (const [px, py] of [
+      [bounds.cx, bounds.cy - bounds.halfH + layout.tileSize * 0.09],
+      [bounds.cx + bounds.halfW - layout.tileSize * 0.08, bounds.cy],
+      [bounds.cx, bounds.cy + bounds.halfH - layout.tileSize * 0.09],
+      [bounds.cx - bounds.halfW + layout.tileSize * 0.08, bounds.cy]
+    ]) {
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(75, 46, 19, 0.42)';
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.010);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawCommandRangeFrontier(ctx, layout, reachable, maxMove) {
@@ -2348,6 +2665,57 @@ function drawCommandSupplyMesh(ctx, layout, reachable, hoverMove = null) {
   ctx.restore();
 }
 
+function drawCommandSurveyVectors(ctx, state, layout, unit, reachable, maxMove, hoverMove) {
+  if (hoverMove || !reachable.length || layout.tileSize < 26) return;
+  const targets = chooseCommandSurveyTargets(reachable, maxMove);
+  if (!targets.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = targets.length - 1; i >= 0; i -= 1) {
+    const target = targets[i];
+    const path = target.route?.length ? target.route : findPath(state, unit, target.x, target.y, maxMove)?.path;
+    if (!path?.length) continue;
+    const points = [{ x: unit.x, y: unit.y }, ...path.map((key) => tileFromKey(key))];
+    const roadBias = target.road || target.supplied;
+    const alpha = i === 0 ? 0.78 : 0.46;
+    const color = roadBias ? 'rgba(157, 231, 255, 0.76)' : target.terrain === 'blight' ? 'rgba(176, 250, 128, 0.68)' : 'rgba(255, 221, 128, 0.72)';
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = roadBias ? 'rgba(75, 180, 220, 0.24)' : 'rgba(255, 191, 90, 0.22)';
+    ctx.shadowBlur = layout.tileSize * 0.07;
+    ctx.strokeStyle = 'rgba(57, 34, 15, 0.50)';
+    ctx.lineWidth = Math.max(2, layout.tileSize * 0.045);
+    drawRouteStroke(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.020);
+    drawRouteStroke(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y));
+    drawRouteArrowheads(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y), layout.tileSize, color, alpha);
+  }
+  ctx.restore();
+}
+
+function chooseCommandSurveyTargets(reachable, maxMove) {
+  const scored = reachable
+    .filter((item) => item.cost > 0 && (item.frontier || item.road || item.supplied || item.terrainCost > 1))
+    .map((item) => ({
+      ...item,
+      surveyScore: item.cost * 2.0
+        + (item.frontier ? 4.0 : 0)
+        + (item.road ? 2.4 : 0)
+        + (item.supplied ? 1.4 : 0)
+        + Math.min(3.0, item.terrainPressure)
+        + (item.cost >= maxMove ? 1.8 : 0)
+    }))
+    .sort((a, b) => b.surveyScore - a.surveyScore || b.cost - a.cost || a.y - b.y || a.x - b.x);
+  const picked = [];
+  for (const item of scored) {
+    if (picked.some((target) => manhattan(target.x, target.y, item.x, item.y) <= 1)) continue;
+    picked.push(item);
+    if (picked.length >= 3) break;
+  }
+  return picked;
+}
+
 function drawCommandPathPreview(ctx, state, layout, unit, maxMove, hoverMove) {
   if (!hoverMove || sameTile(unit, hoverMove)) return;
   const path = findPath(state, unit, hoverMove.x, hoverMove.y, maxMove);
@@ -2364,6 +2732,7 @@ function drawCommandPathPreview(ctx, state, layout, unit, maxMove, hoverMove) {
   ctx.strokeStyle = hoverMove.road ? 'rgba(155, 229, 255, 0.90)' : 'rgba(255, 218, 126, 0.92)';
   ctx.lineWidth = Math.max(2, layout.tileSize * 0.044);
   drawRouteStroke(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y));
+  drawRouteArrowheads(ctx, points, (tile) => tileCenter(layout, tile.x, tile.y), layout.tileSize, hoverMove.road ? 'rgba(218, 249, 255, 0.92)' : 'rgba(255, 232, 158, 0.92)', 1);
   for (let i = 1; i < points.length - 1; i += 1) {
     const p = tileCenter(layout, points[i].x, points[i].y);
     ctx.fillStyle = 'rgba(70, 38, 13, 0.82)';
@@ -2376,6 +2745,40 @@ function drawCommandPathPreview(ctx, state, layout, unit, maxMove, hoverMove) {
     ctx.fill();
   }
   drawRouteEndpoint(ctx, tileCenter(layout, hoverMove.x, hoverMove.y), layout.tileSize, hoverMove.road ? '#9be5ff' : '#ffe08a', true);
+  ctx.restore();
+}
+
+function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
+  if (points.length < 2) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.18, Math.min(1, alpha));
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(62, 36, 16, 0.46)';
+  ctx.lineWidth = Math.max(1, tileSize * 0.010);
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = center(points[i]);
+    const b = center(points[i + 1]);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 2) continue;
+    const angle = Math.atan2(dy, dx);
+    const size = Math.max(4, tileSize * (i === points.length - 2 ? 0.105 : 0.075));
+    const px = a.x + dx * 0.62;
+    const py = a.y + dy * 0.62;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(size * 0.72, 0);
+    ctx.lineTo(-size * 0.36, -size * 0.38);
+    ctx.lineTo(-size * 0.18, 0);
+    ctx.lineTo(-size * 0.36, size * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
