@@ -3769,6 +3769,69 @@ button:hover:not(:disabled) {
     display: none;
   }
 
+  .opening-doctrine {
+    gap: 0.24rem;
+    margin-bottom: 0.48rem;
+    padding: 0.5rem 0.56rem;
+  }
+
+  .opening-doctrine-head {
+    align-items: center;
+  }
+
+  .opening-doctrine-head span,
+  .opening-doctrine small {
+    font-size: 0.56rem;
+  }
+
+  .opening-doctrine > strong {
+    font-size: 0.84rem;
+    line-height: 1.12;
+  }
+
+  .opening-doctrine p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.68rem;
+    line-height: 1.22;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .opening-doctrine > small {
+    display: none;
+  }
+
+  .doctrine-recommendation {
+    gap: 0.04rem;
+    padding: 0.38rem 0.44rem;
+  }
+
+  .doctrine-recommendation span {
+    display: none;
+  }
+
+  .doctrine-recommendation strong {
+    font-size: 0.76rem;
+    line-height: 1.08;
+  }
+
+  .doctrine-recommendation small {
+    font-size: 0.62rem;
+    line-height: 1.08;
+  }
+
+  .doctrine-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.28rem;
+    margin-top: 0.22rem;
+  }
+
+  .doctrine-actions .order-button {
+    min-height: 2.22rem;
+    padding: 0.34rem 0.42rem;
+  }
+
   .council-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
