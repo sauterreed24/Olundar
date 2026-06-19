@@ -400,10 +400,102 @@ function missionView(state, mission) {
     site,
     terrain: terrain?.name || 'Unknown terrain',
     context: [site, terrain?.name, routeStep].filter(Boolean).join(' / '),
+    route: missionRoutePreview(state, mission),
     completed: Boolean(mission.completedTurn),
     completedTurn: mission.completedTurn || null,
     reward: mission.completedTurn && mission.resultText ? mission.resultText : mission.rewardText || 'A small campaign reward follows completion.'
   };
+}
+
+function missionRoutePreview(state, mission) {
+  const candidates = state.units
+    .filter((unit) => unit.faction === 'olundar' && unitCanCompleteMission(unit, mission))
+    .map((unit) => missionRouteCandidate(state, mission, unit));
+  const routed = candidates
+    .filter((candidate) => candidate.path)
+    .sort((a, b) => a.cost - b.cost || a.distance - b.distance || a.unit.y - b.unit.y || a.unit.x - b.unit.x);
+  const ready = routed
+    .filter((candidate) => candidate.reachableThisTurn)
+    .sort((a, b) => a.cost - b.cost || a.distance - b.distance || a.unit.y - b.unit.y || a.unit.x - b.unit.x)[0];
+  const pick = ready || routed[0] || candidates[0];
+
+  if (!pick) {
+    const required = missionRequirementPhrase(mission.required);
+    return {
+      tone: 'danger',
+      label: 'No eligible unit',
+      text: `Train or keep ${required} available for this field task.`,
+      unitId: null,
+      unitName: '',
+      reachableThisTurn: false,
+      cost: null
+    };
+  }
+
+  const location = `${pick.unit.x},${pick.unit.y}`;
+  const costText = Number.isFinite(pick.cost) ? `${pick.cost} move${pick.cost === 1 ? '' : 's'}` : 'unknown route';
+  const base = {
+    unitId: pick.unit.id,
+    unitName: pick.unit.name,
+    unitType: pick.unit.type,
+    unitLocation: location,
+    reachableThisTurn: pick.reachableThisTurn,
+    cost: Number.isFinite(pick.cost) ? pick.cost : null
+  };
+
+  if (!pick.path) {
+    return {
+      ...base,
+      tone: 'danger',
+      label: 'No open route',
+      text: `${pick.unit.name} is eligible at ${location}, but no passable route to ${mission.x},${mission.y} is open.`
+    };
+  }
+
+  if (pick.reachableThisTurn) {
+    return {
+      ...base,
+      tone: 'good',
+      label: 'Reachable now',
+      text: `${pick.unit.name} can complete this turn from ${location} (${costText}).`
+    };
+  }
+
+  if (pick.unit.hasActed) {
+    return {
+      ...base,
+      tone: 'info',
+      label: 'Already acted',
+      text: `${pick.unit.name} is closest at ${location}; the route costs ${costText}, but the unit has acted.`
+    };
+  }
+
+  const turns = Math.max(2, Math.ceil(pick.cost / Math.max(1, pick.move)));
+  return {
+    ...base,
+    tone: 'info',
+    label: 'Stage route',
+    text: `${pick.unit.name} is closest at ${location}; ${costText} means about ${turns} turns of movement.`
+  };
+}
+
+function missionRouteCandidate(state, mission, unit) {
+  const def = getUnitDef(unit);
+  const path = findPath(state, unit, mission.x, mission.y, Infinity);
+  const turnPath = !unit.hasActed ? findPath(state, unit, mission.x, mission.y, def.move) : null;
+  return {
+    unit,
+    move: def.move,
+    path,
+    cost: path?.cost ?? Infinity,
+    distance: manhattan(unit.x, unit.y, mission.x, mission.y),
+    reachableThisTurn: Boolean(turnPath)
+  };
+}
+
+function missionRequirementPhrase(required = 'any') {
+  const text = missionRequirementText(required).toLowerCase();
+  return text.startsWith('any') ? text : `a ${text}`;
 }
 
 function missionSiteName(type = '') {
