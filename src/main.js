@@ -306,7 +306,12 @@ function renderAftermathMissions() {
             <span>${escapeHtml(mission.required)}</span>
             <strong>${escapeHtml(mission.name)}</strong>
             <small>${escapeHtml(mission.text)} Target ${escapeHtml(mission.target)}${mission.context ? ` / ${escapeHtml(mission.context)}` : ''}. ${escapeHtml(mission.reward)}</small>
+            <div class="mission-route ${escapeHtml(mission.route?.tone || 'info')}">
+              <b>${escapeHtml(mission.route?.label || 'Route')}</b>
+              <span>${escapeHtml(mission.route?.text || 'Select the mission target to inspect the route.')}</span>
+            </div>
             <div class="mission-actions">
+              <button type="button" data-action="focus-mission-unit" data-mission-id="${escapeHtml(mission.id)}" ${mission.route?.unitId ? '' : 'disabled'}>Unit</button>
               <button type="button" data-action="focus-mission" data-mission-id="${escapeHtml(mission.id)}">Focus</button>
             </div>
           </article>
@@ -332,6 +337,23 @@ function focusMissionTarget(missionId) {
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
   toast(`${mission.name} target ${mission.target}.`, 'info');
+  render();
+  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function focusMissionUnit(missionId) {
+  const mission = getAftermathMissions(state).active.find((item) => item.id === missionId);
+  const unit = mission?.route?.unitId ? state.units.find((item) => item.id === mission.route.unitId) : null;
+  if (!mission || !unit) {
+    toast('No eligible mission unit is available.', 'bad');
+    return;
+  }
+  state.selectedUnitId = unit.id;
+  state.selectedBuildingId = null;
+  state.mode = { type: 'select' };
+  hoverTile = { x: unit.x, y: unit.y };
+  lastTile = hoverTile;
+  toast(`${unit.name} route to ${mission.name}.`, mission.route.reachableThisTurn ? 'good' : 'info');
   render();
   canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
@@ -1262,9 +1284,10 @@ document.querySelector('#loadTop').addEventListener('click', () => openSaveManag
 document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
 
 missionPanel.addEventListener('click', (event) => {
-  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action="focus-mission"]') : null;
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;
   if (!(target instanceof HTMLElement)) return;
-  focusMissionTarget(target.dataset.missionId);
+  if (target.dataset.action === 'focus-mission') focusMissionTarget(target.dataset.missionId);
+  else if (target.dataset.action === 'focus-mission-unit') focusMissionUnit(target.dataset.missionId);
 });
 
 setupOverlay.addEventListener('click', (event) => {

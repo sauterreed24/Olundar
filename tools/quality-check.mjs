@@ -418,8 +418,10 @@ check('aftermath missions turn rulings into map objectives', () => {
   const styleSource = readProjectFile('src/style.css');
   const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
   assert(mainSource.includes('data-action="focus-mission"') && mainSource.includes('function focusMissionTarget'), 'Mission cards should expose a target focus control.');
+  assert(mainSource.includes('data-action="focus-mission-unit"') && mainSource.includes('function focusMissionUnit'), 'Mission cards should let players jump to the recommended unit.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');
   assert(styleSource.includes('.mission-actions'), 'Mission focus controls need compact card styling.');
+  assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
 
   const state = createGame('quality-aftermath-missions');
   state.turn = 8;
@@ -447,6 +449,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   const active = missions.active.find((mission) => mission.name === 'Repair the Raid Roads');
   assert(missions.visible && active, 'Repair aftermath should create an active map mission.');
   assert(active.required === 'Engineer' && active.target.includes(','), 'Repair mission should expose requirement and target.');
+  assert(active.route?.unitName && active.route.reachableThisTurn && active.route.text.includes('complete this turn'), 'Repair mission should preview the eligible unit and same-turn route.');
   const lens = getStrategicMapLens(state, 'missions');
   assert(lens.markers.some((marker) => marker.kind === 'missionTarget' && marker.x === active.x && marker.y === active.y), 'Missions lens should mark the active target.');
 
@@ -484,6 +487,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   let routeMissions = getAftermathMissions(routeState);
   const firstRoute = routeMissions.active.find((mission) => mission.name === 'Escort Frontier Families');
   assert(firstRoute && firstRoute.context.includes('Road camp') && firstRoute.context.includes('Route 1/2'), 'Route missions should expose camp site, terrain, and chain step.');
+  assert(firstRoute.route?.unitName && firstRoute.route.cost !== null, 'Route missions should expose nearest eligible unit and route cost.');
   const routeLens = getStrategicMapLens(routeState, 'missions');
   assert(routeLens.markers.some((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:')), 'Missions lens should name spawned mission sites.');
   const routeMarker = routeLens.markers.find((marker) => marker.kind === 'missionTarget' && marker.name.includes('Road camp:'));
