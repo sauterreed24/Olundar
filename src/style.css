@@ -2363,6 +2363,23 @@ button:disabled {
   line-height: 1.33;
 }
 
+.turn-report-glance {
+  display: none;
+}
+
+.turn-report-detail-drawer {
+  margin: 0;
+}
+
+.turn-report-detail-drawer[open] {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.turn-report-detail-drawer summary {
+  display: none;
+}
+
 .turn-report-metrics,
 .turn-report-deltas {
   display: grid;
@@ -3605,6 +3622,90 @@ button:hover:not(:disabled) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .turn-report-glance {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.36rem;
+  }
+
+  .turn-report-glance span {
+    min-width: 0;
+    padding: 0.42rem;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.46);
+    color: #5f472d;
+    font-size: 0.66rem;
+    font-weight: 900;
+    line-height: 1.08;
+    text-transform: uppercase;
+  }
+
+  .turn-report-glance b {
+    display: block;
+    margin-bottom: 0.12rem;
+    color: #23170f;
+    font-size: 0.92rem;
+    line-height: 1;
+    text-transform: none;
+  }
+
+  .turn-report-detail-drawer summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 2rem;
+    padding: 0.36rem 0.48rem;
+    border: 1px solid rgba(143, 36, 24, 0.18);
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, rgba(255, 252, 236, 0.94), rgba(222, 184, 111, 0.54)),
+      radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.68), transparent 7rem);
+    color: #6b3518;
+    cursor: pointer;
+    font-weight: 900;
+    list-style: none;
+  }
+
+  .turn-report-detail-drawer summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .turn-report-detail-drawer summary::marker {
+    content: "";
+  }
+
+  .turn-report-detail-drawer summary::after {
+    content: "+";
+    display: grid;
+    place-items: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    flex: 0 0 auto;
+    border: 1px solid rgba(143, 36, 24, 0.22);
+    border-radius: 50%;
+    background: rgba(255, 248, 225, 0.78);
+    color: #8f2418;
+    font-size: 0.88rem;
+    line-height: 1;
+  }
+
+  .turn-report-detail-drawer[open] summary::after {
+    content: "-";
+  }
+
+  .turn-report-detail-drawer summary span,
+  .turn-report-detail-drawer summary small {
+    min-width: 0;
+  }
+
+  .turn-report-detail-drawer summary small {
+    color: #72593a;
+    font-size: 0.64rem;
+    font-weight: 800;
+    text-align: right;
+  }
+
   .side {
     max-height: none;
     overflow: visible;
@@ -3874,6 +3975,46 @@ button:hover:not(:disabled) {
   .doctrine-actions .order-button {
     min-height: 2.22rem;
     padding: 0.34rem 0.42rem;
+  }
+
+  .turn-report {
+    gap: 0.38rem;
+    margin-bottom: 0.5rem;
+    padding: 0.56rem;
+  }
+
+  .turn-report-head strong {
+    font-size: 0.84rem;
+  }
+
+  .turn-report p {
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .turn-report-glance {
+    display: flex;
+    gap: 0.28rem;
+  }
+
+  .turn-report-glance span {
+    flex: 1 1 0;
+    padding: 0.28rem 0.36rem;
+    font-size: 0.58rem;
+  }
+
+  .turn-report-glance b {
+    margin-bottom: 0.08rem;
+    font-size: 0.84rem;
+  }
+
+  .turn-report-detail-drawer summary {
+    min-height: 1.78rem;
+    padding: 0.28rem 0.42rem;
+  }
+
+  .turn-report-detail-drawer summary small {
+    font-size: 0.58rem;
   }
 
   .council-stats {
