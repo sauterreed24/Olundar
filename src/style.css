@@ -4249,11 +4249,11 @@ button:hover:not(:disabled) {
   .map-help {
     left: 0.5rem;
     right: 0.5rem;
-    bottom: 0.5rem;
+    bottom: 0.38rem;
     border-radius: 8px;
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding: 0.26rem;
+    padding: 0.20rem 0.24rem;
   }
 
   .map-help span {
@@ -4270,14 +4270,17 @@ button:hover:not(:disabled) {
   .map-intel {
     left: 0.5rem;
     right: 0.5rem;
-    bottom: 3.35rem;
+    bottom: 2.66rem;
     width: auto;
-    max-height: 5.4rem;
-    padding: 0.46rem 0.52rem;
+    max-height: 3.2rem;
+    padding: 0.28rem 0.40rem;
+    border-left-width: 3px;
     overflow: hidden;
   }
 
   .map-intel-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 0.45rem;
   }
 
@@ -4286,20 +4289,22 @@ button:hover:not(:disabled) {
   }
 
   .map-intel-head strong {
+    align-self: center;
     font-size: 0.82rem;
   }
 
   .map-intel p {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 0.68rem;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: none;
   }
 
   .map-intel-stats {
     gap: 0.18rem;
-    margin-top: 0.3rem;
+    margin-top: 0.18rem;
+  }
+
+  .map-intel-stats span {
+    padding: 0.14rem 0.28rem;
+    font-size: 0.58rem;
   }
 
   .map-intel-stats span:nth-child(n + 4) {
