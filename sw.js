@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v44';
+const CACHE_NAME = 'olundar-pwa-v45';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
