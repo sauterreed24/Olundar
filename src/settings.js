@@ -31,18 +31,18 @@ export const MAP_SCALE_PRESETS = Object.freeze({
   standard: {
     id: 'standard',
     label: 'Standard',
-    text: 'Balanced map height for regular laptop and tablet play.',
-    minHeight: 360,
-    maxHeightFloor: 420,
-    maxHeightOffset: 146
+    text: 'Map-forward height for regular laptop and tablet play.',
+    minHeight: 380,
+    maxHeightFloor: 470,
+    maxHeightOffset: 128
   },
   expanded: {
     id: 'expanded',
     label: 'Expanded',
     text: 'Taller battlefield for scouting and siege planning.',
-    minHeight: 420,
-    maxHeightFloor: 520,
-    maxHeightOffset: 88
+    minHeight: 440,
+    maxHeightFloor: 580,
+    maxHeightOffset: 78
   }
 });
 
