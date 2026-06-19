@@ -302,6 +302,7 @@ function drawTiles(ctx, state, layout) {
   drawRiverbankHighlights(ctx, state, layout, sortedTiles);
   drawRiverNetwork(ctx, state, layout, sortedTiles);
   drawRoadNetwork(ctx, state, layout, sortedTiles);
+  drawImperialTerritoryVeneer(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout);
   drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles);
   drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
@@ -758,6 +759,174 @@ function drawRoadNetwork(ctx, state, layout, sortedTiles) {
       ctx.lineTo(b.x, b.y - layout.halfTileHeight * 0.03);
       ctx.stroke();
     }
+  }
+  ctx.restore();
+}
+
+function drawImperialTerritoryVeneer(ctx, state, layout, sortedTiles) {
+  const imperialHoldings = state.buildings.filter((building) => building.faction === 'olundar' && building.type !== 'road');
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y)) continue;
+    const visible = isVisible(state, tile.x, tile.y);
+    const holding = buildingAt(state, tile.x, tile.y);
+    const road = Boolean(tile.road || state.buildings.some((building) => building.type === 'road' && building.x === tile.x && building.y === tile.y));
+    const supplied = isTileSupplied(state, tile.x, tile.y);
+    const holdingDistance = nearestHoldingDistance(imperialHoldings, tile.x, tile.y);
+    const imperialGround = supplied || holding?.faction === 'olundar' || (road && holdingDistance <= 6) || holdingDistance <= 2;
+    const deadPressure = tile.blight > 0 || holding?.faction === 'dead';
+
+    if (!imperialGround && !deadPressure) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const { x, y, s } = bounds;
+    ctx.save();
+    tileDiamondPath(ctx, bounds, s * 0.035);
+    ctx.clip();
+    if (imperialGround) {
+      drawImperialInfluenceTile(ctx, tile, bounds, visible, supplied, road, holding?.faction === 'olundar', holdingDistance);
+    }
+    if (deadPressure) {
+      drawDeadwalkerPressureTile(ctx, tile, bounds, visible, holding?.faction === 'dead');
+    }
+    if (imperialGround && visible && !unitAt(state, tile.x, tile.y) && tileNoise(tile, 1005) > 0.78) {
+      drawSupplyPennant(ctx, x, y, s, road || holding?.faction === 'olundar');
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function nearestHoldingDistance(holdings, x, y) {
+  let best = Infinity;
+  for (const holding of holdings) {
+    best = Math.min(best, manhattan(holding.x, holding.y, x, y));
+  }
+  return best;
+}
+
+function drawImperialInfluenceTile(ctx, tile, bounds, visible, supplied, road, holding, holdingDistance) {
+  const { x, y, s } = bounds;
+  const distanceFade = Number.isFinite(holdingDistance) ? Math.max(0, 1 - holdingDistance / 5) : 0;
+  const strength = Math.max(holding ? 0.82 : 0, road ? 0.58 : 0, supplied ? 0.42 : 0, distanceFade * 0.46);
+  if (strength <= 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = (visible ? 0.36 : 0.16) * strength;
+  const glow = ctx.createRadialGradient(bounds.cx, bounds.cy, s * 0.10, bounds.cx, bounds.cy, s * 0.74);
+  glow.addColorStop(0, 'rgba(255, 238, 162, 0.74)');
+  glow.addColorStop(0.48, 'rgba(108, 190, 212, 0.18)');
+  glow.addColorStop(1, 'rgba(108, 190, 212, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x, y, s, s);
+  ctx.restore();
+
+  if (holding || road || (supplied && tileNoise(tile, 994) > 0.46)) {
+    drawImperialCobbles(ctx, tile, bounds, visible, Math.max(strength, supplied ? 0.38 : 0));
+  }
+
+  if (supplied && tileNoise(tile, 1017) > 0.52) {
+    drawSupplyLaurelMosaic(ctx, tile, bounds, visible, road);
+  }
+}
+
+function drawImperialCobbles(ctx, tile, bounds, visible, strength) {
+  const { x, y, s } = bounds;
+  ctx.save();
+  ctx.globalAlpha = (visible ? 0.34 : 0.13) * strength;
+  ctx.strokeStyle = 'rgba(95, 61, 29, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  for (let i = 0; i < 4; i += 1) {
+    const offset = 0.22 + i * 0.13 + tileNoise(tile, 1025 + i) * 0.025;
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.18, y + s * offset);
+    ctx.lineTo(x + s * 0.48, y + s * (offset - 0.14));
+    ctx.lineTo(x + s * 0.82, y + s * (offset + 0.03));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = (visible ? 0.24 : 0.10) * strength;
+  ctx.strokeStyle = 'rgba(255, 246, 197, 0.74)';
+  for (let i = 0; i < 3; i += 1) {
+    const offset = 0.34 + i * 0.14 + tileNoise(tile, 1045 + i) * 0.02;
+    ctx.beginPath();
+    ctx.moveTo(x + s * offset, y + s * 0.27);
+    ctx.lineTo(x + s * (offset - 0.18), y + s * 0.52);
+    ctx.lineTo(x + s * (offset + 0.05), y + s * 0.78);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSupplyLaurelMosaic(ctx, tile, bounds, visible, road) {
+  const { x, y, s } = bounds;
+  ctx.save();
+  ctx.globalAlpha = visible ? 0.52 : 0.22;
+  ctx.strokeStyle = road ? 'rgba(198, 235, 247, 0.78)' : 'rgba(236, 220, 128, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  const cx = x + s * (0.35 + tileNoise(tile, 1061) * 0.28);
+  const cy = y + s * (0.55 + tileNoise(tile, 1062) * 0.18);
+  ctx.beginPath();
+  ctx.arc(cx - s * 0.06, cy, s * 0.13, Math.PI * 0.78, Math.PI * 1.55);
+  ctx.arc(cx + s * 0.08, cy, s * 0.13, Math.PI * 1.42, Math.PI * 0.22, true);
+  ctx.stroke();
+  ctx.fillStyle = road ? 'rgba(198, 235, 247, 0.82)' : 'rgba(236, 220, 128, 0.76)';
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.ellipse(cx + s * (-0.12 + i * 0.10), cy + s * (0.02 - i * 0.02), s * 0.026, s * 0.011, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSupplyPennant(ctx, x, y, s, imperialAnchor) {
+  ctx.save();
+  const px = x + s * 0.68;
+  const py = y + s * 0.50;
+  ctx.globalAlpha = imperialAnchor ? 0.82 : 0.62;
+  ctx.strokeStyle = 'rgba(68, 45, 25, 0.66)';
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  ctx.beginPath();
+  ctx.moveTo(px, py + s * 0.12);
+  ctx.lineTo(px, py - s * 0.14);
+  ctx.stroke();
+  ctx.fillStyle = imperialAnchor ? 'rgba(143, 36, 24, 0.88)' : 'rgba(61, 126, 145, 0.78)';
+  ctx.beginPath();
+  ctx.moveTo(px, py - s * 0.13);
+  ctx.lineTo(px + s * 0.13, py - s * 0.08);
+  ctx.lineTo(px, py - s * 0.03);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDeadwalkerPressureTile(ctx, tile, bounds, visible, holding) {
+  const { x, y, s } = bounds;
+  const pressure = Math.max(holding ? 0.78 : 0, Math.min(1, tile.blight || 0));
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = (visible ? 0.24 : 0.11) * Math.max(0.35, pressure);
+  const rot = ctx.createLinearGradient(x + s * 0.08, y + s * 0.16, x + s * 0.92, y + s * 0.84);
+  rot.addColorStop(0, 'rgba(42, 28, 47, 0.10)');
+  rot.addColorStop(0.52, 'rgba(47, 76, 45, 0.28)');
+  rot.addColorStop(1, 'rgba(13, 20, 16, 0.36)');
+  ctx.fillStyle = rot;
+  ctx.fillRect(x, y, s, s);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = visible ? 0.22 : 0.09;
+  ctx.strokeStyle = 'rgba(156, 243, 138, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.016);
+  for (let i = 0; i < 2; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (0.22 + tileNoise(tile, 1085 + i) * 0.12), y + s * (0.30 + i * 0.18));
+    ctx.quadraticCurveTo(
+      x + s * (0.48 + tileNoise(tile, 1095 + i) * 0.10),
+      y + s * (0.54 - i * 0.04),
+      x + s * (0.76 - tileNoise(tile, 1105 + i) * 0.12),
+      y + s * (0.66 + i * 0.06)
+    );
+    ctx.stroke();
   }
   ctx.restore();
 }
