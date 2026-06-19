@@ -241,6 +241,7 @@ function renderMapHelp() {
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective ? [] : [
+    '<span>Gold field marks movement radius</span>',
     '<span>Standards mark key moves</span>',
     '<span>Laurels mark supplied ground</span>',
     '<span>Hover previews route cost</span>',

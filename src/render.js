@@ -2059,6 +2059,7 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const attackTiles = collectAttackTiles(state, unit, def.range);
   const hoverMove = reachable.find((item) => sameTile(item, hoverTile)) || null;
   ctx.save();
+  drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove);
   drawCommandRangeFrontier(ctx, layout, reachable, def.move);
   drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
   for (const item of reachable) {
@@ -2081,11 +2082,20 @@ function collectReachableTiles(state, unit, move) {
       if (!path) continue;
       const tile = tileAt(state, x, y);
       const road = Boolean(tile?.road || state.buildings.find((building) => building.type === 'road' && building.x === x && building.y === y));
+      const terrain = tile?.terrain || 'plains';
+      const terrainCost = TERRAIN[terrain]?.move || 1;
+      const relief = terrainReliefRank(terrain);
+      const elevation = tile?.elevation || 0;
       tiles.push({
         x,
         y,
         cost: path.cost,
-        terrain: tile?.terrain || 'plains',
+        remaining: Math.max(0, move - path.cost),
+        terrain,
+        terrainCost,
+        relief,
+        elevation,
+        terrainPressure: road ? 0 : terrainCost + relief * 0.45 + Math.max(0, elevation - 0.45) * 1.6 + (terrain === 'blight' ? 1.1 : 0),
         road,
         supplied: isTileSupplied(state, x, y),
         frontier: path.cost >= move
@@ -2094,6 +2104,157 @@ function collectReachableTiles(state, unit, move) {
   }
   tiles.sort((a, b) => a.cost - b.cost);
   return tiles;
+}
+
+function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = null) {
+  if (!reachable.length) return;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const item of reachable) {
+    drawMovementReachWash(ctx, tileBounds(layout, item.x, item.y), layout, item, maxMove, sameTile(item, hoverMove));
+  }
+  drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
+  ctx.restore();
+}
+
+function drawMovementReachWash(ctx, bounds, layout, item, maxMove, hovered = false) {
+  const progress = Math.max(0, Math.min(1, item.cost / Math.max(1, maxMove)));
+  const pressure = Math.max(0, Math.min(1, item.terrainPressure / 4.2));
+  const palette = movementRadiusPalette(item, progress, pressure, hovered);
+  const gradient = ctx.createLinearGradient(bounds.cx, bounds.cy - bounds.halfH, bounds.cx, bounds.cy + bounds.halfH);
+  gradient.addColorStop(0, palette.light);
+  gradient.addColorStop(0.56, palette.fill);
+  gradient.addColorStop(1, palette.shadow);
+
+  ctx.save();
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.18 : 0.08);
+  fillTileDiamond(ctx, bounds, gradient, hovered ? 0.5 : 2.5);
+  strokeTileDiamond(ctx, bounds, palette.innerStroke, Math.max(1, layout.tileSize * (hovered ? 0.026 : 0.012)), hovered ? 1 : 4);
+  drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressure, hovered);
+  ctx.restore();
+}
+
+function movementRadiusPalette(item, progress, pressure, hovered) {
+  if (item.road) {
+    return {
+      light: hovered ? 'rgba(216, 249, 255, 0.50)' : 'rgba(202, 245, 255, 0.30)',
+      fill: hovered ? 'rgba(88, 190, 225, 0.44)' : 'rgba(88, 174, 205, 0.24)',
+      shadow: 'rgba(24, 103, 133, 0.18)',
+      innerStroke: 'rgba(128, 226, 255, 0.42)',
+      glow: 'rgba(104, 214, 255, 0.30)'
+    };
+  }
+  if (item.supplied) {
+    return {
+      light: hovered ? 'rgba(241, 255, 203, 0.44)' : 'rgba(232, 255, 190, 0.27)',
+      fill: hovered ? 'rgba(166, 220, 105, 0.40)' : 'rgba(154, 204, 92, 0.22)',
+      shadow: 'rgba(64, 120, 45, 0.16)',
+      innerStroke: 'rgba(205, 244, 137, 0.36)',
+      glow: 'rgba(185, 245, 140, 0.24)'
+    };
+  }
+  const heavy = pressure > 0.62 || item.frontier;
+  const alpha = hovered ? 0.46 : heavy ? 0.28 : 0.22 - progress * 0.035;
+  return {
+    light: `rgba(255, 239, 168, ${alpha + 0.06})`,
+    fill: heavy ? `rgba(222, 151, 58, ${alpha})` : `rgba(241, 198, 86, ${alpha})`,
+    shadow: heavy ? `rgba(125, 70, 24, ${Math.max(0.15, alpha - 0.08)})` : `rgba(134, 92, 28, ${Math.max(0.11, alpha - 0.09)})`,
+    innerStroke: heavy ? 'rgba(255, 211, 110, 0.38)' : 'rgba(255, 232, 154, 0.30)',
+    glow: heavy ? 'rgba(255, 184, 83, 0.24)' : 'rgba(255, 220, 124, 0.20)'
+  };
+}
+
+function drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressure, hovered = false) {
+  const shouldDraw = hovered || item.frontier || item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
+  if (!shouldDraw) return;
+  const cueCount = Math.min(4, Math.max(1, Math.ceil(item.terrainPressure - 1)));
+  const terrainColor = item.road
+    ? 'rgba(226, 250, 255, 0.70)'
+    : item.supplied
+      ? 'rgba(238, 255, 188, 0.62)'
+      : pressure > 0.62
+        ? 'rgba(92, 49, 20, 0.42)'
+        : 'rgba(126, 81, 28, 0.30)';
+  ctx.save();
+  tileDiamondPath(ctx, bounds, layout.tileSize * 0.09);
+  ctx.clip();
+  ctx.globalAlpha = hovered ? 0.95 : 0.68;
+  ctx.strokeStyle = terrainColor;
+  ctx.lineWidth = Math.max(1, layout.tileSize * (pressure > 0.62 ? 0.022 : 0.016));
+  for (let i = 0; i < cueCount; i += 1) {
+    const y = bounds.cy - bounds.halfH * 0.35 + bounds.halfH * (0.28 + i * 0.26);
+    const sway = tileNoise(item, 1220 + i) * layout.tileSize * 0.11;
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx - bounds.halfW * (0.50 - i * 0.035), y + sway * 0.10);
+    ctx.bezierCurveTo(
+      bounds.cx - bounds.halfW * 0.18,
+      y - layout.tileSize * (0.05 + pressure * 0.035),
+      bounds.cx + bounds.halfW * 0.18,
+      y + layout.tileSize * (0.05 + progress * 0.025),
+      bounds.cx + bounds.halfW * (0.50 - i * 0.035),
+      y - sway * 0.08
+    );
+    ctx.stroke();
+  }
+  if (item.frontier) {
+    ctx.globalAlpha = hovered ? 0.88 : 0.58;
+    ctx.strokeStyle = 'rgba(255, 249, 212, 0.62)';
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx - bounds.halfW * 0.34, bounds.cy + bounds.halfH * 0.18);
+    ctx.lineTo(bounds.cx, bounds.cy + bounds.halfH * 0.36);
+    ctx.lineTo(bounds.cx + bounds.halfW * 0.34, bounds.cy + bounds.halfH * 0.18);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
+  const reachableSet = new Set(reachable.map((item) => tileKey(item.x, item.y)));
+  ctx.save();
+  ctx.shadowColor = 'rgba(255, 218, 126, 0.28)';
+  ctx.shadowBlur = layout.tileSize * 0.12;
+  for (const item of reachable) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (reachableSet.has(tileKey(item.x + dx, item.y + dy))) continue;
+      drawMovementBoundaryEdge(ctx, tileBounds(layout, item.x, item.y), layout, item, dx, dy, maxMove);
+    }
+  }
+  ctx.restore();
+}
+
+function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
+  const [start, end] = frontierEdgePoints(bounds, dx, dy);
+  const typeColor = item.road
+    ? 'rgba(160, 236, 255, 0.92)'
+    : item.supplied
+      ? 'rgba(215, 250, 142, 0.90)'
+      : item.cost >= maxMove || item.terrainPressure > 2.7
+        ? 'rgba(255, 196, 91, 0.94)'
+        : 'rgba(255, 226, 137, 0.86)';
+  const commandGold = item.cost >= maxMove
+    ? 'rgba(255, 225, 128, 0.98)'
+    : 'rgba(255, 241, 174, 0.92)';
+  ctx.strokeStyle = 'rgba(55, 31, 13, 0.74)';
+  ctx.lineWidth = Math.max(4, layout.tileSize * 0.092);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.strokeStyle = commandGold;
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.052);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y - layout.tileSize * 0.006);
+  ctx.lineTo(end.x, end.y - layout.tileSize * 0.006);
+  ctx.stroke();
+  ctx.strokeStyle = typeColor;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y - layout.tileSize * 0.020);
+  ctx.lineTo(end.x, end.y - layout.tileSize * 0.020);
+  ctx.stroke();
 }
 
 function collectAttackTiles(state, unit, range) {
