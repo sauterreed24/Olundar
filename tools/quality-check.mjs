@@ -420,6 +420,8 @@ check('aftermath missions turn rulings into map objectives', () => {
   const resourceTotal = (state) => ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'].reduce((sum, key) => sum + (state.factions.olundar.resources[key] || 0), 0);
   assert(mainSource.includes('data-action="focus-mission"') && mainSource.includes('function focusMissionTarget'), 'Mission cards should expose a target focus control.');
   assert(mainSource.includes('data-action="focus-mission-unit"') && mainSource.includes('function focusMissionUnit'), 'Mission cards should let players jump to the recommended unit.');
+  assert(mainSource.includes('data-action="dispatch-mission"') && mainSource.includes('function dispatchMission'), 'Reachable mission routes should expose a direct dispatch action.');
+  assert(mainSource.includes('mission.route.reachableThisTurn') && mainSource.includes('moveUnit(state, unit.id, mission.x, mission.y)'), 'Mission dispatch should only use reachable route previews and normal movement rules.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(mainSource.includes("activeMapLens = 'missions'") && mainSource.includes('scrollIntoView'), 'Mission focus should switch to the Missions lens and bring the map into view.');

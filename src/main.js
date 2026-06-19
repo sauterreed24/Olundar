@@ -312,6 +312,7 @@ function renderAftermathMissions() {
               <span>${escapeHtml(mission.route?.text || 'Select the mission target to inspect the route.')}</span>
             </div>
             <div class="mission-actions">
+              <button type="button" data-action="dispatch-mission" data-mission-id="${escapeHtml(mission.id)}" ${mission.route?.unitId && mission.route?.reachableThisTurn ? '' : 'disabled'} title="${mission.route?.reachableThisTurn ? 'Move the recommended unit to complete this mission now' : 'The recommended route is not ready this turn'}">Dispatch</button>
               <button type="button" data-action="focus-mission-unit" data-mission-id="${escapeHtml(mission.id)}" ${mission.route?.unitId ? '' : 'disabled'}>Unit</button>
               <button type="button" data-action="focus-mission" data-mission-id="${escapeHtml(mission.id)}">Focus</button>
             </div>
@@ -357,6 +358,39 @@ function focusMissionUnit(missionId) {
   hoverTile = { x: unit.x, y: unit.y };
   lastTile = hoverTile;
   toast(`${unit.name} route to ${mission.name}.`, mission.route.reachableThisTurn ? 'good' : 'info');
+  render();
+  canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function dispatchMission(missionId) {
+  const mission = getAftermathMissions(state).active.find((item) => item.id === missionId);
+  const unit = mission?.route?.unitId ? state.units.find((item) => item.id === mission.route.unitId) : null;
+  if (!mission || !unit) {
+    toast('No eligible mission unit is available.', 'bad');
+    playAudioCue('error');
+    return;
+  }
+  if (!mission.route.reachableThisTurn) {
+    focusedMissionId = mission.id;
+    toast('This mission route needs staging before dispatch.', 'bad');
+    playAudioCue('warning');
+    render();
+    return;
+  }
+  state.selectedUnitId = unit.id;
+  state.selectedBuildingId = null;
+  state.mode = { type: 'select' };
+  focusedMissionId = mission.id;
+  hoverTile = { x: mission.x, y: mission.y };
+  lastTile = hoverTile;
+  const result = moveUnit(state, unit.id, mission.x, mission.y);
+  if (handleResult(result, 'move')) {
+    const completed = !getAftermathMissions(state).active.some((item) => item.id === mission.id);
+    if (completed) {
+      focusedMissionId = null;
+      toast(`${mission.name} completed by ${unit.name}.`, 'good');
+    }
+  }
   render();
   canvas.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
@@ -1309,6 +1343,7 @@ missionPanel.addEventListener('click', (event) => {
   if (!(target instanceof HTMLElement)) return;
   if (target.dataset.action === 'focus-mission') focusMissionTarget(target.dataset.missionId);
   else if (target.dataset.action === 'focus-mission-unit') focusMissionUnit(target.dataset.missionId);
+  else if (target.dataset.action === 'dispatch-mission') dispatchMission(target.dataset.missionId);
 });
 
 setupOverlay.addEventListener('click', (event) => {
