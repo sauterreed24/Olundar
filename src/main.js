@@ -2134,7 +2134,7 @@ function previewOpeningDirective(action) {
 
 function focusOpeningFollowThrough(previousStepId) {
   const directive = currentOpeningDirective();
-  if (!directive || directive.current.id === previousStepId) return false;
+  if (!directive) return false;
   const recommendation = openingDirectiveAction(directive.current.id);
   if (!recommendation) return false;
 
@@ -2228,6 +2228,8 @@ function executeOpeningDirective(action) {
   if (action.kind === 'end-turn') {
     state.mode = { type: 'select' };
     requestEndTurn(true);
+    focusOpeningFollowThrough(previousStepId);
+    render();
     return;
   }
   previewOpeningDirective(action);
