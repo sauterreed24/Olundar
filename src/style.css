@@ -1130,6 +1130,27 @@ button:disabled {
   font-size: 0.62rem;
 }
 
+.mission-archive-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.28rem;
+}
+
+.mission-archive-search input {
+  min-width: 0;
+  padding: 0.34rem 0.45rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  color: #f7edd0;
+  background: rgba(0,0,0,0.24);
+}
+
+.mission-archive-search button {
+  min-width: 0;
+  padding: 0.32rem 0.46rem;
+  font-size: 0.66rem;
+}
+
 .mission-history-record,
 .mission-history > .history-empty {
   display: grid;
