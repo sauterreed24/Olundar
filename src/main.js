@@ -1751,6 +1751,10 @@ function turnReportCard() {
       ${turnReport.messages.map((message) => `<p class="${escapeHtml(message.tone || 'info')}">${escapeHtml(message.text)}</p>`).join('')}
     </div>
   ` : '';
+  const glance = turnReport.metrics.slice(0, 2).map((item) => `
+    <span><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>
+  `).join('');
+  const detailsOpen = isMobileIntelDrawerMode() ? '' : ' open';
   card.innerHTML = `
     <div class="turn-report-head">
       <span>Campaign Report</span>
@@ -1758,9 +1762,13 @@ function turnReportCard() {
       <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
     </div>
     <p>${escapeHtml(turnReport.summary)}</p>
-    <div class="turn-report-metrics">${metrics}</div>
-    ${deltas}
-    ${messages}
+    <div class="turn-report-glance">${glance}</div>
+    <details class="turn-report-detail-drawer"${detailsOpen}>
+      <summary><span>Report details</span><small>Metrics, stores, notes</small></summary>
+      <div class="turn-report-metrics">${metrics}</div>
+      ${deltas}
+      ${messages}
+    </details>
   `;
   return card;
 }
