@@ -164,7 +164,7 @@ export function pointToTile(canvas, clientX, clientY) {
   return candidates[0] ? { x: candidates[0].x, y: candidates[0].y } : { x: -1, y: -1 };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null) {
   canvas.__olundarState = state;
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
@@ -178,6 +178,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
+  drawOpeningOrderRoute(ctx, state, layout, openingOrderOverlay);
   drawMissionRoute(ctx, state, layout, routeOverlay);
   drawMissionFocus(ctx, state, layout, missionFocusOverlay);
   drawBuildSites(ctx, state, layout);
@@ -1372,6 +1373,122 @@ function drawMissionRoute(ctx, state, layout, routeOverlay) {
   drawRouteEndpoint(ctx, center(points[0]), layout.tileSize, color, false);
   drawRouteEndpoint(ctx, center(points[points.length - 1]), layout.tileSize, color, true);
   ctx.restore();
+}
+
+function drawOpeningOrderRoute(ctx, state, layout, overlay) {
+  if (!overlay || state.status !== 'playing') return;
+  const target = overlay.target && isRevealed(state, overlay.target.x, overlay.target.y)
+    ? overlay.target
+    : null;
+  const points = Array.isArray(overlay.path)
+    ? overlay.path.filter((point) => point && isRevealed(state, point.x, point.y))
+    : [];
+  if (!target && points.length < 2) return;
+
+  const color = openingOrderColor(overlay.kind, overlay.canExecute);
+  const center = (point) => tileCenter(layout, point.x, point.y);
+  ctx.save();
+  if (points.length >= 2) {
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(240, 200, 102, 0.26)';
+    ctx.shadowBlur = layout.tileSize * 0.18;
+    ctx.setLineDash([Math.max(7, layout.tileSize * 0.28), Math.max(4, layout.tileSize * 0.14)]);
+    ctx.lineWidth = Math.max(5, layout.tileSize * 0.20);
+    ctx.strokeStyle = 'rgba(55, 31, 15, 0.78)';
+    drawRouteStroke(ctx, points, center);
+    ctx.lineWidth = Math.max(2, layout.tileSize * 0.075);
+    ctx.strokeStyle = color;
+    drawRouteStroke(ctx, points, center);
+    ctx.setLineDash([]);
+    drawOpeningRouteSparks(ctx, points, center, layout, color);
+  }
+  if (target) drawOpeningTargetStandard(ctx, tileBounds(layout, target.x, target.y), layout, overlay, color);
+  ctx.restore();
+}
+
+function drawOpeningRouteSparks(ctx, points, center, layout, color) {
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = layout.tileSize * 0.14;
+  for (let i = 1; i < points.length; i += 1) {
+    const p = center(points[i]);
+    ctx.fillStyle = 'rgba(52, 30, 13, 0.72)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(3, layout.tileSize * 0.085), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(2, layout.tileSize * 0.045), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawOpeningTargetStandard(ctx, bounds, layout, overlay, color) {
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = s * 0.20;
+  fillTileDiamond(ctx, bounds, overlay.canExecute ? 'rgba(255, 215, 107, 0.20)' : 'rgba(157, 126, 73, 0.16)', 2);
+  strokeTileDiamond(ctx, bounds, 'rgba(58, 32, 14, 0.72)', Math.max(2, s * 0.065), 2);
+  strokeTileDiamond(ctx, bounds, color, Math.max(2, s * 0.034), 6);
+  ctx.shadowBlur = 0;
+
+  const poleX = bounds.cx - s * 0.12;
+  const poleBaseY = bounds.cy + layout.halfTileHeight * 0.38;
+  const poleTopY = bounds.cy - layout.halfTileHeight * 1.08;
+  ctx.strokeStyle = 'rgba(49, 29, 13, 0.86)';
+  ctx.lineWidth = Math.max(1.4, s * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(poleX, poleTopY);
+  ctx.lineTo(poleX, poleBaseY);
+  ctx.stroke();
+
+  ctx.fillStyle = overlay.canExecute ? '#8f2418' : '#8f6b3e';
+  ctx.strokeStyle = '#3b1f10';
+  ctx.lineWidth = Math.max(1, s * 0.017);
+  ctx.beginPath();
+  ctx.moveTo(poleX, poleTopY + s * 0.03);
+  ctx.lineTo(poleX + s * 0.38, poleTopY + s * 0.09);
+  ctx.lineTo(poleX + s * 0.25, poleTopY + s * 0.23);
+  ctx.lineTo(poleX, poleTopY + s * 0.18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(poleX + s * 0.08, poleTopY + s * 0.11, Math.max(2, s * 0.035), 0, Math.PI * 2);
+  ctx.fill();
+
+  const compact = layout.tileSize < 40 || layout.mapWidth < 560;
+  if (!compact) {
+    const label = overlay.kind === 'build' || overlay.kind === 'build-preview' ? 'BUILD' : 'NEXT';
+    const labelW = Math.max(s * 0.62, 42);
+    const labelH = Math.max(s * 0.20, 15);
+    const labelX = bounds.cx - labelW * 0.5;
+    const labelY = bounds.cy - layout.halfTileHeight * 1.44;
+    roundRectPath(ctx, labelX, labelY, labelW, labelH, labelH * 0.45);
+    ctx.fillStyle = 'rgba(255, 250, 226, 0.94)';
+    ctx.strokeStyle = 'rgba(143, 36, 24, 0.58)';
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#8f2418';
+    ctx.font = `900 ${Math.max(8, s * 0.105)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bounds.cx, labelY + labelH * 0.54);
+  }
+  ctx.restore();
+}
+
+function openingOrderColor(kind, canExecute = true) {
+  if (!canExecute) return 'rgba(158, 125, 78, 0.78)';
+  if (kind === 'build' || kind === 'build-preview') return '#88d8ff';
+  if (kind === 'train') return '#baf58c';
+  if (kind === 'fortify') return '#ffe08a';
+  return '#f0c866';
 }
 
 function drawRouteStroke(ctx, points, center) {
