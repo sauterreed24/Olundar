@@ -185,6 +185,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
+  drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
   drawFogAtmosphere(ctx, state, layout);
@@ -2644,6 +2645,117 @@ function drawUnits(ctx, state, layout) {
     const { x, y, s } = tileBounds(layout, unit.x, unit.y);
     drawUnitSprite(ctx, unit, x, y, s, state);
   }
+}
+
+function drawSelectedUnitCommandPresence(ctx, state, layout) {
+  const unit = state.units.find((candidate) => candidate.id === state.selectedUnitId && isVisible(state, candidate.x, candidate.y));
+  if (!unit || state.mode.type !== 'select') return;
+  const bounds = tileBounds(layout, unit.x, unit.y);
+  const color = FACTION_COLORS[unit.faction] || '#f0c866';
+  const active = unit.faction === 'olundar' && !unit.hasActed;
+  ctx.save();
+  drawSelectedCommandSpotlight(ctx, bounds, layout, color, active);
+  drawSelectedCommandAquila(ctx, bounds, layout, color, active);
+  drawSelectedCommandPlaque(ctx, bounds, layout, unit, color, active);
+  ctx.restore();
+}
+
+function drawSelectedCommandSpotlight(ctx, bounds, layout, color, active) {
+  const glow = ctx.createRadialGradient(
+    bounds.cx,
+    bounds.cy - layout.halfTileHeight * 0.18,
+    layout.tileSize * 0.04,
+    bounds.cx,
+    bounds.cy - layout.halfTileHeight * 0.10,
+    layout.tileSize * 0.84
+  );
+  glow.addColorStop(0, active ? 'rgba(255, 246, 190, 0.34)' : 'rgba(224, 202, 160, 0.20)');
+  glow.addColorStop(0.46, colorMix(color, active ? '#fff0a8' : '#d0b982', active ? 0.62 : 0.36).replace('rgb', 'rgba').replace(')', active ? ', 0.20)' : ', 0.12)'));
+  glow.addColorStop(1, 'rgba(255, 230, 142, 0)');
+  ctx.save();
+  ctx.fillStyle = glow;
+  ctx.fillRect(bounds.cx - layout.tileSize * 0.90, bounds.cy - layout.tileSize * 1.02, layout.tileSize * 1.80, layout.tileSize * 1.48);
+  ctx.strokeStyle = active ? 'rgba(255, 242, 176, 0.58)' : 'rgba(178, 146, 98, 0.34)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.setLineDash([layout.tileSize * 0.10, layout.tileSize * 0.07]);
+  ctx.beginPath();
+  ctx.ellipse(bounds.cx, bounds.cy + layout.halfTileHeight * 0.20, layout.tileSize * 0.45, layout.tileSize * 0.15, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawSelectedCommandAquila(ctx, bounds, layout, color, active) {
+  const compact = layout.tileSize < 42 || layout.mapWidth < 560;
+  const poleX = bounds.cx + layout.tileSize * (compact ? 0.34 : 0.42);
+  const baseY = bounds.cy + layout.halfTileHeight * 0.42;
+  const topY = bounds.cy - layout.tileSize * (compact ? 0.72 : 0.96);
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.shadowColor = active ? 'rgba(255, 216, 104, 0.40)' : 'rgba(70, 43, 20, 0.24)';
+  ctx.shadowBlur = s * (active ? 0.10 : 0.06);
+  ctx.strokeStyle = 'rgba(49, 29, 13, 0.82)';
+  ctx.lineWidth = Math.max(1.2, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(poleX, baseY);
+  ctx.lineTo(poleX, topY);
+  ctx.stroke();
+
+  const bannerW = s * (compact ? 0.34 : 0.42);
+  const bannerH = s * (compact ? 0.18 : 0.22);
+  ctx.fillStyle = active ? colorMix(color, '#f0c866', 0.38) : colorMix(color, '#84633b', 0.25);
+  ctx.strokeStyle = 'rgba(58, 33, 15, 0.82)';
+  ctx.lineWidth = Math.max(1, s * 0.016);
+  ctx.beginPath();
+  ctx.moveTo(poleX, topY + s * 0.18);
+  ctx.lineTo(poleX + bannerW, topY + s * 0.23);
+  ctx.lineTo(poleX + bannerW * 0.74, topY + s * 0.23 + bannerH * 0.46);
+  ctx.lineTo(poleX + bannerW, topY + s * 0.23 + bannerH);
+  ctx.lineTo(poleX, topY + s * 0.19 + bannerH * 0.78);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  const eagleY = topY + s * 0.075;
+  ctx.fillStyle = active ? '#ffe8a2' : '#d8bd7a';
+  ctx.strokeStyle = 'rgba(54, 32, 16, 0.78)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.beginPath();
+  ctx.arc(poleX, eagleY, Math.max(2.5, s * 0.045), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(poleX - s * 0.15, eagleY + s * 0.02);
+  ctx.quadraticCurveTo(poleX - s * 0.04, eagleY - s * 0.08, poleX, eagleY);
+  ctx.quadraticCurveTo(poleX + s * 0.04, eagleY - s * 0.08, poleX + s * 0.15, eagleY + s * 0.02);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSelectedCommandPlaque(ctx, bounds, layout, unit, color, active) {
+  const compact = layout.tileSize < 46 || layout.mapWidth < 560;
+  if (compact) return;
+  const def = UNIT_TYPES[unit.type];
+  const label = active ? 'READY' : unit.hasActed ? 'SPENT' : def.role.toUpperCase();
+  const w = Math.max(48, layout.tileSize * 0.82);
+  const h = Math.max(17, layout.tileSize * 0.22);
+  const x = bounds.cx - w * 0.50;
+  const y = bounds.cy - layout.tileSize * 1.03;
+  ctx.save();
+  ctx.shadowColor = 'rgba(67, 40, 18, 0.24)';
+  ctx.shadowBlur = layout.tileSize * 0.08;
+  roundRectPath(ctx, x, y, w, h, h * 0.44);
+  ctx.fillStyle = active ? 'rgba(255, 248, 216, 0.94)' : 'rgba(239, 225, 190, 0.86)';
+  ctx.strokeStyle = active ? colorMix(color, '#ffd86b', 0.48) : 'rgba(128, 94, 52, 0.52)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = active ? '#8f2418' : '#6d5740';
+  ctx.font = `900 ${Math.max(8, layout.tileSize * 0.105)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, bounds.cx, y + h * 0.54);
+  ctx.restore();
 }
 
 function drawBuildingSprite(ctx, building, x, y, s) {
