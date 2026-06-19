@@ -1041,14 +1041,19 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(renderSource.includes('TERRAIN_HIGHLIGHTS') && renderSource.includes('function drawTileRelief'), 'Terrain should include relief and highlight rendering.');
   assert(renderSource.includes('function drawUnchartedTile') && renderSource.includes('function drawImperialMapFrame'), 'The world map should use parchment fog and an imperial campaign-map frame.');
   assert(renderSource.includes('function getCameraBounds') && renderSource.includes('canvas.__olundarState'), 'The map should use a focused tactical camera instead of shrinking the full world into tiny tokens.');
+  assert(renderSource.includes('Math.max(14, revealedWidth + 4)') && renderSource.includes('Math.min(6, Math.floor(layout.tileSize * 0.18))'), 'The map should hold a close tactical camera and keep minimap scale bounded.');
   assert(renderSource.includes("tile.terrain === 'plains'") && renderSource.includes('quadraticCurveTo'), 'Terrain should include painterly texture beyond flat tile fills.');
   assert(renderSource.includes('function drawLegionShield') && renderSource.includes('function drawHelmet'), 'Living units should keep Roman-era kit silhouettes.');
   assert(renderSource.includes('function drawBannerPennon') && renderSource.includes('function drawUnitRim'), 'Units and buildings should keep faction accents and readable bases.');
+  assert(renderSource.includes('function drawFormationStandard') && renderSource.includes('function drawTroopDepth'), 'Living units should render as readable formations, not isolated token figures.');
+  assert(renderSource.includes('function drawFarmstead') && renderSource.includes('function drawBarracksYard') && renderSource.includes('function drawShrine'), 'Buildings should differentiate economy, military, and civic structures with bespoke silhouettes.');
   assert(renderSource.includes('function drawPortalSprite') && renderSource.includes('function drawNecroStructure'), 'Deadwalker structures should keep distinctive necrotic silhouettes.');
   assert(renderSource.includes('createRadialGradient') && renderSource.includes('rgba(156, 243, 138'), 'Deadwalkers should retain their necrotic glow language.');
   assert(!renderSource.includes('drawSmallGlyph(ctx, UNIT_TYPES') && !renderSource.includes("drawSmallGlyph(ctx, 'C'"), 'Units should read through silhouettes rather than cheap letter tokens.');
   assert(styleSource.includes('color-scheme: light') && styleSource.includes('--crimson') && styleSource.includes('--lapis') && styleSource.includes('--bronze'), 'UI theme should keep a light imperial multi-material palette.');
   assert(styleSource.includes('.map-shell::before') && styleSource.includes('border-top-left-radius'), 'Map shell should keep decorative imperial frame treatment.');
+  assert(styleSource.includes('.objectives li') && styleSource.includes('color: #3b2817'), 'Objectives should remain readable against the light vellum panel.');
+  assert(styleSource.includes('.toast.bad') && styleSource.includes('color: #661b15'), 'Toast confirmations should stay readable in the light theme.');
   assert(styleSource.includes('rgba(255, 249, 224') && styleSource.includes('radial-gradient(circle at 82% 17%'), 'The first viewport should avoid generic black dashboard chrome.');
 });
 
