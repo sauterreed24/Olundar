@@ -142,7 +142,7 @@ focusFirstReadyUnit();
 
 function resizeCanvas() {
   const compactViewport = window.innerWidth <= 620;
-  const dprCap = compactViewport ? 1.6 : 2;
+  const dprCap = compactViewport ? 1.35 : 1.75;
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
@@ -2709,7 +2709,8 @@ function scrollBattlefieldIntoView() {
   const battlefield = canvas.parentElement;
   if (!battlefield) return;
   const topbar = document.querySelector('.topbar');
-  const offset = Math.ceil(topbar?.getBoundingClientRect().height || 0) + 24;
+  const resourceOffset = window.innerWidth <= 620 ? Math.ceil(resourceBar?.getBoundingClientRect().height || 0) : 0;
+  const offset = Math.ceil(topbar?.getBoundingClientRect().height || 0) + resourceOffset + 10;
   const top = Math.max(0, window.scrollY + battlefield.getBoundingClientRect().top - offset);
   window.scrollTo({
     top,
