@@ -96,6 +96,7 @@ The prototype uses a simple readable model:
 - Shrines improve anti-undead fighting nearby.
 - Onagers deal extra structure damage.
 - Selecting an Olundaran unit and targeting a visible enemy previews damage, range, HP outcome, defensive modifiers, siege bonuses, and portal reformation risk.
+- After a successful attack, the Orders panel keeps a Last Strike readout and the struck map tile receives an impact marker so combat decisions feel confirmed instead of silent.
 - The portal cannot be permanently destroyed until Vorgath is dead.
 
 ## Units

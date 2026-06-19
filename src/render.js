@@ -73,7 +73,7 @@ export function pointToTile(canvas, clientX, clientY) {
   };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null) {
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -88,8 +88,39 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawUnits(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawFog(ctx, state, layout);
+  drawBattleImpact(ctx, state, layout, battleImpact);
   drawMiniMap(ctx, state, layout, lensId);
   drawStatusRibbon(ctx, state, layout);
+}
+
+function drawBattleImpact(ctx, state, layout, impact) {
+  if (!impact || !isVisible(state, impact.x, impact.y)) return;
+  const x = layout.offsetX + impact.x * layout.tileSize;
+  const y = layout.offsetY + impact.y * layout.tileSize;
+  const s = layout.tileSize;
+  const color = impact.tone === 'bad' ? '#ff8a8a' : impact.tone === 'good' ? '#baf58c' : '#f0c866';
+  const fill = impact.tone === 'bad'
+    ? 'rgba(255, 138, 138, 0.20)'
+    : impact.tone === 'good'
+      ? 'rgba(186, 245, 140, 0.18)'
+      : 'rgba(240, 200, 102, 0.18)';
+  const label = impact.portalReforms ? 'REFORM' : impact.targetDestroyed ? 'BREAK' : `-${impact.damage || 0}`;
+  ctx.save();
+  ctx.lineWidth = Math.max(2, s * 0.08);
+  ctx.strokeStyle = 'rgba(5, 7, 10, 0.84)';
+  ctx.strokeRect(x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84);
+  ctx.strokeStyle = color;
+  ctx.strokeRect(x + s * 0.13, y + s * 0.13, s * 0.74, s * 0.74);
+  ctx.fillStyle = fill;
+  ctx.fillRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64);
+  ctx.fillStyle = 'rgba(5, 7, 10, 0.86)';
+  ctx.fillRect(x + s * 0.18, y + s * 0.04, s * 0.64, s * 0.24);
+  ctx.fillStyle = color;
+  ctx.font = `900 ${Math.max(8, s * 0.20)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + s * 0.5, y + s * 0.16);
+  ctx.restore();
 }
 
 function drawMissionFocus(ctx, state, layout, overlay) {

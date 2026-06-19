@@ -2126,6 +2126,8 @@ export function forecastUnitAttack(state, attackerId, defenderId) {
     targetName: defender.name,
     targetFaction: defender.faction,
     targetType: defender.type,
+    targetX: defender.x,
+    targetY: defender.y,
     damage,
     targetHpBefore,
     targetHpAfter,
@@ -2151,7 +2153,8 @@ export function attackUnit(state, attackerId, defenderId) {
   attacker.fortified = 0;
   const attackerName = attacker.name;
   const defenderName = defender.name;
-  if (defender.hp <= 0) {
+  const lethal = defender.hp <= 0;
+  if (lethal) {
     removeUnit(state, defender.id);
     attacker.xp += 1;
     if (defender.type === 'lichBoss') {
@@ -2164,7 +2167,7 @@ export function attackUnit(state, attackerId, defenderId) {
     addMessage(state, `${attackerName} hits ${defenderName} for ${damage}.`, attacker.faction === 'olundar' ? 'info' : 'danger');
   }
   updateVisibility(state);
-  return { ok: true, damage };
+  return { ...forecast, ok: true, damage, targetDestroyed: lethal };
 }
 
 export function forecastBuildingAttack(state, attackerId, buildingId) {
@@ -2188,6 +2191,8 @@ export function forecastBuildingAttack(state, attackerId, buildingId) {
     targetName: building.name,
     targetFaction: building.faction,
     targetType: building.type,
+    targetX: building.x,
+    targetY: building.y,
     damage,
     targetHpBefore,
     targetHpAfter,
@@ -2207,6 +2212,9 @@ export function attackBuilding(state, attackerId, buildingId) {
   const attacker = state.units.find((u) => u.id === attackerId);
   const building = state.buildings.find((b) => b.id === buildingId);
   const damage = forecast.damage;
+  const targetX = building.x;
+  const targetY = building.y;
+  const targetDestroyed = forecast.lethal && !forecast.portalReforms;
   building.hp -= damage;
   attacker.hasActed = true;
   if (building.faction === 'dead' || attacker.faction === 'olundar' || building.faction === 'olundar') {
@@ -2221,7 +2229,7 @@ export function attackBuilding(state, attackerId, buildingId) {
     }
   }
   updateVisibility(state);
-  return { ok: true, damage };
+  return { ...forecast, ok: true, damage, targetX, targetY, targetDestroyed };
 }
 
 function calculateBuildingDamage(state, attacker, building) {

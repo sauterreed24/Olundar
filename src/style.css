@@ -2012,6 +2012,62 @@ button:disabled {
   border-color: rgba(255, 138, 138, 0.38);
 }
 
+.battle-impact {
+  display: grid;
+  gap: 0.36rem;
+  margin: 0 0 0.65rem;
+  padding: 0.58rem 0.62rem;
+  border: 1px solid rgba(240, 200, 102, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(240, 200, 102, 0.13), rgba(5, 7, 11, 0.52));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+.battle-impact div {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.battle-impact span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.battle-impact strong {
+  color: #f9e6a8;
+  font-size: 0.82rem;
+}
+
+.battle-impact p {
+  margin: 0;
+  color: #ddd0ae;
+  line-height: 1.3;
+}
+
+.battle-impact p b {
+  color: #fff2b2;
+}
+
+.battle-impact button {
+  justify-self: start;
+  min-width: 0;
+  padding: 0.28rem 0.48rem;
+  font-size: 0.66rem;
+}
+
+.battle-impact.good {
+  border-color: rgba(186, 245, 140, 0.32);
+  background: linear-gradient(135deg, rgba(186, 245, 140, 0.14), rgba(5, 7, 11, 0.5));
+}
+
+.battle-impact.bad {
+  border-color: rgba(255, 138, 138, 0.34);
+  background: linear-gradient(135deg, rgba(255, 138, 138, 0.14), rgba(5, 7, 11, 0.5));
+}
+
 .forecast-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));

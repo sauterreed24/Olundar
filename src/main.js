@@ -114,6 +114,7 @@ let missionArchiveSortOrder = 'newest';
 let missionArchiveGroupMode = 'flat';
 let missionArchiveDetailMode = 'details';
 let focusedArchivedMissionId = null;
+let battleImpact = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -134,7 +135,7 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
   renderTopBar();
   renderMapLensBar();
   renderCouncil();
@@ -795,6 +796,11 @@ function missionSiteFocusOverlay() {
   };
 }
 
+function battleImpactOverlay() {
+  if (!battleImpact || !inMap(battleImpact.x, battleImpact.y)) return null;
+  return battleImpact;
+}
+
 function focusedArchivedMission() {
   if (!focusedArchivedMissionId) return null;
   const missions = getAftermathMissions(state);
@@ -830,6 +836,7 @@ function renderActions() {
   const heading = document.createElement('h2');
   heading.textContent = 'Orders';
   actionPanel.appendChild(heading);
+  if (battleImpact) actionPanel.appendChild(battleImpactCard());
 
   if (state.status !== 'playing') {
     actionPanel.appendChild(button('Review campaign recap', () => openCampaignRecap('current')));
@@ -1214,13 +1221,59 @@ function runAction(action, successCue = 'ui') {
 function handleResult(result, successCue = null) {
   if (!result) return false;
   if (!result.ok) {
+    if (successCue === 'attack') battleImpact = null;
     if (result.reason) toast(result.reason, 'bad');
     playAudioCue('error');
     return false;
   }
+  if (successCue === 'attack') captureBattleImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   return true;
+}
+
+function captureBattleImpact(result) {
+  if (!['unit', 'building'].includes(result.type) || !Number.isFinite(result.targetX) || !Number.isFinite(result.targetY)) return;
+  const hpBefore = Number.isFinite(result.targetHpBefore) ? result.targetHpBefore : null;
+  const hpAfter = Number.isFinite(result.targetHpAfter) ? result.targetHpAfter : null;
+  battleImpact = {
+    x: result.targetX,
+    y: result.targetY,
+    type: result.type,
+    tone: result.portalReforms ? 'bad' : result.targetDestroyed || result.lethal ? 'good' : 'info',
+    attackerName: result.attackerName || 'Attacker',
+    targetName: result.targetName || 'Target',
+    damage: Number.isFinite(result.damage) ? result.damage : 0,
+    hpBefore,
+    hpAfter,
+    targetDestroyed: !result.portalReforms && Boolean(result.targetDestroyed || result.lethal),
+    portalReforms: Boolean(result.portalReforms)
+  };
+  lastTile = { x: result.targetX, y: result.targetY };
+}
+
+function battleImpactCard() {
+  const card = document.createElement('article');
+  card.className = `battle-impact ${battleImpact.tone}`;
+  const hpText = battleImpact.portalReforms
+    ? `${battleImpact.hpBefore} -> reforms to ${battleImpact.hpAfter}`
+    : battleImpact.hpBefore !== null && battleImpact.hpAfter !== null
+      ? `${battleImpact.hpBefore} -> ${battleImpact.hpAfter}`
+      : 'resolved';
+  const outcome = battleImpact.portalReforms
+    ? 'The portal knits itself around Vorgath.'
+    : battleImpact.targetDestroyed
+      ? 'Target broken.'
+      : 'Target still stands.';
+  card.innerHTML = `
+    <div>
+      <span>Last Strike</span>
+      <strong>${escapeHtml(battleImpact.attackerName)} -> ${escapeHtml(battleImpact.targetName)}</strong>
+    </div>
+    <p><b>${escapeHtml(battleImpact.damage)}</b> damage. HP ${escapeHtml(hpText)}. ${escapeHtml(outcome)}</p>
+    <button type="button" data-action="clear-battle-impact" aria-label="Dismiss battle impact">Close</button>
+  `;
+  return card;
 }
 
 function requestEndTurn(force = false) {
@@ -1235,6 +1288,7 @@ function requestEndTurn(force = false) {
   }
   state.pendingEndTurn = null;
   state.mode = { type: 'select' };
+  battleImpact = null;
   endTurn(state);
   toast('Turn resolved. The world moves.');
   playAudioCue('turn');
@@ -1289,6 +1343,7 @@ function loadSerializedGame(raw, slot = null) {
     missionArchiveGroupMode = 'flat';
     missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
+    battleImpact = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
@@ -1329,6 +1384,7 @@ function importSaveFile(raw, fileName = '') {
     missionArchiveGroupMode = 'flat';
     missionArchiveDetailMode = 'details';
     focusedArchivedMissionId = null;
+    battleImpact = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
@@ -1624,6 +1680,7 @@ function startConfiguredCampaign(form) {
   missionArchiveGroupMode = 'flat';
   missionArchiveDetailMode = 'details';
   focusedArchivedMissionId = null;
+  battleImpact = null;
   closeCampaignRecap();
   closeCampaignSetup();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
@@ -1711,7 +1768,7 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   renderTilePanel();
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;
@@ -1766,6 +1823,15 @@ document.querySelector('#newTop').addEventListener('click', () => newCampaign())
 document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
 document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
+
+actionPanel.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.dataset.action === 'clear-battle-impact') {
+    battleImpact = null;
+    render();
+  }
+});
 
 missionPanel.addEventListener('click', (event) => {
   const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;

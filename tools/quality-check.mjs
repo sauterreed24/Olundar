@@ -1115,6 +1115,13 @@ check('building upgrades improve long-term planning', () => {
 });
 
 check('combat can damage enemies and protects portal before boss death', () => {
+  const mainSource = readProjectFile('src/main.js');
+  const renderSource = readProjectFile('src/render.js');
+  const styleSource = readProjectFile('src/style.css');
+  assert(mainSource.includes('function captureBattleImpact') && mainSource.includes('Last Strike') && mainSource.includes('data-action="clear-battle-impact"'), 'Successful attacks should show a dismissible Last Strike combat impact card.');
+  assert(renderSource.includes('function drawBattleImpact') && renderSource.includes('battleImpact') && renderSource.includes('REFORM'), 'Successful attacks should draw a target-tile impact marker.');
+  assert(styleSource.includes('.battle-impact') && styleSource.includes('.battle-impact.good') && styleSource.includes('.battle-impact.bad'), 'Combat impact cards need readable tone styling.');
+
   const state = createGame('quality-combat');
   const legion = state.units.find((u) => u.faction === 'olundar' && u.type === 'legionary');
   const thrall = state.units.find((u) => u.faction === 'dead' && u.type === 'boneThrall');
@@ -1123,6 +1130,8 @@ check('combat can damage enemies and protects portal before boss death', () => {
   const beforeHp = thrall.hp;
   const hit = attackUnit(state, legion.id, thrall.id);
   assert(hit.ok, hit.reason || 'Attack failed.');
+  assert(hit.type === 'unit' && hit.targetName === thrall.name && hit.targetX === thrall.x && hit.targetY === thrall.y, 'Unit attack results should expose the struck target and tile.');
+  assert(hit.targetHpBefore === beforeHp && hit.targetHpAfter < hit.targetHpBefore && hit.damage > 0, 'Unit attack results should expose a readable HP delta.');
   const maybeThrall = state.units.find((u) => u.id === thrall.id);
   assert(!maybeThrall || maybeThrall.hp < beforeHp, 'Attack did not damage target.');
 
@@ -1134,6 +1143,8 @@ check('combat can damage enemies and protects portal before boss death', () => {
   portal.hp = 1;
   const result = attackBuilding(state, onager.id, portal.id);
   assert(result.ok, result.reason || 'Portal attack failed.');
+  assert(result.type === 'building' && result.portalReforms && result.targetX === portal.x && result.targetY === portal.y, 'Building attack results should expose portal reformation impact data.');
+  assert(!result.targetDestroyed && result.targetHpBefore === 1 && result.targetHpAfter === 10, 'Portal reformation should not be reported as a destroyed target.');
   assert(state.status === 'playing' && portal.hp === 10, 'Portal should reform while boss lives.');
 });
 
