@@ -506,9 +506,7 @@ function focusedMissionRouteOverlay() {
 }
 
 function missionSiteFocusOverlay() {
-  if (!focusedArchivedMissionId) return null;
-  const missions = getAftermathMissions(state);
-  const mission = [...missions.recent, ...missions.archive].find((item) => item.id === focusedArchivedMissionId);
+  const mission = focusedArchivedMission();
   if (!mission) return null;
   return {
     missionId: mission.id,
@@ -519,6 +517,12 @@ function missionSiteFocusOverlay() {
     type: mission.type,
     completed: true
   };
+}
+
+function focusedArchivedMission() {
+  if (!focusedArchivedMissionId) return null;
+  const missions = getAftermathMissions(state);
+  return [...missions.recent, ...missions.archive].find((item) => item.id === focusedArchivedMissionId) || null;
 }
 
 function renderObjectives() {
@@ -780,6 +784,7 @@ function renderLog() {
 function renderTilePanel() {
   const tile = hoverTile || lastTile;
   let body = describeTilePanel(state, tile.x, tile.y);
+  body += missionSiteReceiptMarkup(tile);
   if (state.mode.type === 'build' && inMap(tile.x, tile.y)) {
     const def = BUILDING_TYPES[state.mode.buildingType];
     const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
@@ -787,6 +792,19 @@ function renderTilePanel() {
   }
   body += battleForecastReadout(tile);
   tilePanel.innerHTML = body;
+}
+
+function missionSiteReceiptMarkup(tile) {
+  const mission = focusedArchivedMission();
+  if (!mission || !tile || mission.x !== tile.x || mission.y !== tile.y) return '';
+  return `
+    <div class="mission-site-receipt">
+      <strong>T${escapeHtml(mission.completedTurn)} Field Receipt</strong>
+      <span>${escapeHtml(mission.name)}${mission.context ? ` / ${escapeHtml(mission.context)}` : ''}</span>
+      <p>${escapeHtml(mission.reward)}</p>
+      ${mission.completedBy ? `<small>Completed by ${escapeHtml(mission.completedBy)}.</small>` : ''}
+    </div>
+  `;
 }
 
 function battleForecastReadout(tile) {

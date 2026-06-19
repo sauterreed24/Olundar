@@ -427,6 +427,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionHistoryFilter') && mainSource.includes('data-action="set-mission-history"'), 'Completed mission outcomes should have a recent/archive filter.');
   assert(mainSource.includes('data-action="focus-completed-mission"') && mainSource.includes('focusCompletedMissionSite'), 'Completed mission outcomes should be able to focus their map site.');
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
+  assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(renderSource.includes('function drawMissionFocus') && renderSource.includes('missionFocusOverlay'), 'Focused completed mission sites should draw a dedicated map overlay.');
@@ -435,6 +436,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(styleSource.includes('.mission-route'), 'Mission cards need readable route-preview styling.');
   assert(styleSource.includes('.mission-result'), 'Mission completion result banners need compact styling.');
   assert(styleSource.includes('.mission-history-tools'), 'Mission outcome archive filters need compact styling.');
+  assert(styleSource.includes('.mission-site-receipt'), 'Focused archived mission receipts need compact tile-panel styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 
   const state = createGame('quality-aftermath-missions');
