@@ -278,6 +278,9 @@ function drawTiles(ctx, state, layout) {
       strokeTileDiamond(ctx, bounds, 'rgba(44, 33, 25, 0.12)', 1, 0.5);
     }
   }
+  drawTerrainContinuity(ctx, state, layout, sortedTiles);
+  drawRiverNetwork(ctx, state, layout, sortedTiles);
+  drawRoadNetwork(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout);
 }
 
@@ -337,6 +340,109 @@ function drawTileTopline(ctx, tile, bounds, visible, base) {
   ctx.globalAlpha = visible ? 0.12 : 0.06;
   strokeTileDiamond(ctx, bounds, shade(base, -40), Math.max(1, bounds.s * 0.01), 0.5);
   ctx.restore();
+}
+
+function drawTerrainContinuity(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain === 'river' || tile.terrain === 'blight') continue;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const neighbor = tileAt(state, tile.x + dx, tile.y + dy);
+      if (!neighbor || !isRevealed(state, neighbor.x, neighbor.y)) continue;
+      if (!terrainBlendMatches(tile, neighbor)) continue;
+      const a = tileCenter(layout, tile.x, tile.y);
+      const b = tileCenter(layout, neighbor.x, neighbor.y);
+      const visible = isVisible(state, tile.x, tile.y) && isVisible(state, neighbor.x, neighbor.y);
+      const base = TERRAIN_COLORS[tile.terrain] || '#b9aa78';
+      ctx.globalAlpha = visible ? 0.18 : 0.07;
+      ctx.strokeStyle = colorMix(base, TERRAIN_HIGHLIGHTS[tile.terrain] || '#fff2bd', 0.38);
+      ctx.lineWidth = layout.tileSize * (tile.terrain === 'forest' ? 0.72 : tile.terrain === 'marsh' ? 0.66 : 0.56);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+
+      ctx.globalAlpha = visible ? 0.10 : 0.04;
+      ctx.strokeStyle = '#fff2bd';
+      ctx.lineWidth = layout.tileSize * 0.26;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y - layout.halfTileHeight * 0.18);
+      ctx.lineTo(b.x, b.y - layout.halfTileHeight * 0.18);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawRiverNetwork(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || tile.terrain !== 'river') continue;
+    for (const [dx, dy] of [[1, 0], [0, 1], [1, -1]]) {
+      const neighbor = tileAt(state, tile.x + dx, tile.y + dy);
+      if (!neighbor || neighbor.terrain !== 'river' || !isRevealed(state, neighbor.x, neighbor.y)) continue;
+      const a = tileCenter(layout, tile.x, tile.y);
+      const b = tileCenter(layout, neighbor.x, neighbor.y);
+      const visible = isVisible(state, tile.x, tile.y) && isVisible(state, neighbor.x, neighbor.y);
+      ctx.globalAlpha = visible ? 0.54 : 0.24;
+      ctx.strokeStyle = 'rgba(34, 122, 168, 0.92)';
+      ctx.lineWidth = Math.max(7, layout.tileSize * 0.34);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo((a.x + b.x) * 0.5, Math.min(a.y, b.y) - layout.halfTileHeight * 0.20, b.x, b.y);
+      ctx.stroke();
+
+      ctx.globalAlpha = visible ? 0.72 : 0.28;
+      ctx.strokeStyle = 'rgba(225, 248, 255, 0.82)';
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(a.x - layout.halfTileWidth * 0.10, a.y - layout.halfTileHeight * 0.13);
+      ctx.quadraticCurveTo((a.x + b.x) * 0.5, Math.min(a.y, b.y) - layout.halfTileHeight * 0.32, b.x + layout.halfTileWidth * 0.10, b.y - layout.halfTileHeight * 0.13);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawRoadNetwork(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y) || !tile.road) continue;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const neighbor = tileAt(state, tile.x + dx, tile.y + dy);
+      if (!neighbor || !neighbor.road || !isRevealed(state, neighbor.x, neighbor.y)) continue;
+      const a = tileCenter(layout, tile.x, tile.y);
+      const b = tileCenter(layout, neighbor.x, neighbor.y);
+      const visible = isVisible(state, tile.x, tile.y) && isVisible(state, neighbor.x, neighbor.y);
+      ctx.globalAlpha = visible ? 0.78 : 0.34;
+      ctx.strokeStyle = 'rgba(72, 48, 26, 0.74)';
+      ctx.lineWidth = Math.max(4, layout.tileSize * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(219, 190, 121, 0.92)';
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y - layout.halfTileHeight * 0.03);
+      ctx.lineTo(b.x, b.y - layout.halfTileHeight * 0.03);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function terrainBlendMatches(tile, neighbor) {
+  if (tile.terrain === neighbor.terrain) return true;
+  const open = new Set(['plains', 'hills', 'ruins']);
+  const wet = new Set(['forest', 'marsh']);
+  return (open.has(tile.terrain) && open.has(neighbor.terrain)) || (wet.has(tile.terrain) && wet.has(neighbor.terrain));
 }
 
 function drawTerrainGround(ctx, tile, x, y, s, visible, base) {
