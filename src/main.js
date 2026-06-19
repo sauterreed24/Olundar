@@ -103,6 +103,13 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
   { id: 'summary', label: 'Summary' }
 ];
 const PACT_ACCEPTANCE_RELATION = 35;
+const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const BUILD_DOCTRINE_GROUPS = [
+  { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
+  { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'outpost'] },
+  { label: 'Muster halls', meta: 'Infantry, bows, cavalry, siege', types: ['barracks', 'archeryYard', 'stable', 'workshop'] },
+  { label: 'Imperial civic works', meta: 'Morale and influence', types: ['shrine'] }
+];
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
@@ -994,6 +1001,24 @@ function renderActions() {
     const status = selectedUnit.faction === 'olundar'
       ? (selectedUnit.hasActed ? 'Orders spent for this turn.' : 'Ready for direct orders.')
       : 'Foreign or hostile contact under observation.';
+    const isEngineer = def.tags.includes('builder') && selectedUnit.faction === 'olundar';
+    if (isEngineer) {
+      const buildSection = actionSection('Construction orders', 'Place roads, economy sites, defenses, and mustering halls from this engineer.', 'build-orders');
+      const doctrineCard = buildDoctrineCard(selectedUnit);
+      if (doctrineCard) buildSection.appendChild(doctrineCard);
+      const buildDrawer = orderDrawer('Full construction catalog', 'Grouped by doctrine', 'build-drawer', false);
+      for (const group of BUILD_DOCTRINE_GROUPS) {
+        const groupDrawer = orderDrawer(group.label, group.meta, 'build-group-drawer', false);
+        const grid = commandActions('build-actions');
+        for (const type of group.types.filter((item) => BUILD_ORDER.includes(item))) {
+          grid.appendChild(buildOrderButton(selectedUnit, type));
+        }
+        groupDrawer.appendChild(grid);
+        buildDrawer.appendChild(groupDrawer);
+      }
+      buildSection.appendChild(buildDrawer);
+      actionPanel.appendChild(buildSection);
+    }
     const unitSection = actionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
     const unitActions = commandActions('primary-orders');
     unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), {
@@ -1002,26 +1027,6 @@ function renderActions() {
     }));
     unitSection.appendChild(unitActions);
     actionPanel.appendChild(unitSection);
-
-    if (def.tags.includes('builder') && selectedUnit.faction === 'olundar') {
-      const buildSection = actionSection('Construction orders', 'Place roads, economy sites, defenses, and mustering halls from this engineer.', 'build-orders');
-      const grid = commandActions('build-actions');
-      const buildDrawer = orderDrawer('Construction catalog', 'Roads, mines, towers', 'build-drawer', !isMobileIntelDrawerMode());
-      const buildOrder = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
-      for (const type of buildOrder) {
-        const bDef = BUILDING_TYPES[type];
-        const disabled = selectedUnit.hasActed || !canAfford(state.factions.olundar.resources, bDef.cost);
-        grid.appendChild(orderButton(bDef.name, `${formatCost(bDef.cost)} | ${bDef.buildTurns} turns`, () => {
-          state.mode = { type: 'build', buildingType: type, builderId: selectedUnit.id };
-          playAudioCue('ui');
-          toast(`Build mode: click ${bDef.name} on this tile or an adjacent tile.`);
-          render();
-        }, { disabled }));
-      }
-      buildDrawer.appendChild(grid);
-      buildSection.appendChild(buildDrawer);
-      actionPanel.appendChild(buildSection);
-    }
   }
 
   if (selectedBuilding) {
@@ -1078,6 +1083,67 @@ function renderActions() {
   toolsDrawer.appendChild(tools);
   campaignSection.appendChild(toolsDrawer);
   actionPanel.appendChild(campaignSection);
+}
+
+function buildDoctrineCard(builder) {
+  const recommendations = buildDoctrineRecommendations(builder).slice(0, 3);
+  if (!recommendations.length) return null;
+  const card = document.createElement('article');
+  card.className = 'build-doctrine-card';
+  card.innerHTML = `
+    <div class="build-doctrine-head">
+      <span>Engineer Doctrine</span>
+      <b>${escapeHtml(mappedPercent())}% mapped</b>
+    </div>
+    <strong>Choose construction by campaign need</strong>
+    <p>Prioritize logistics, iron, ranged defense, and forward sight before browsing every imperial work.</p>
+  `;
+  const actions = commandActions('build-doctrine-actions');
+  for (const item of recommendations) {
+    actions.appendChild(buildOrderButton(builder, item.type, 'primary', item.label, item.meta));
+  }
+  card.appendChild(actions);
+  return card;
+}
+
+function buildDoctrineRecommendations(builder) {
+  const has = (type) => state.buildings.some((building) => building.faction === 'olundar' && building.type === type);
+  const candidates = [
+    { type: 'road', label: 'Extend road line', meta: 'Logistics spine | 1 turn' },
+    !has('mine') ? { type: 'mine', label: 'Claim iron hill', meta: 'Iron for legions and siege' } : null,
+    !has('archeryYard') ? { type: 'archeryYard', label: 'Raise archery yard', meta: 'Ranged kill zone' } : null,
+    !has('shrine') && state.factions.olundar.resources.influence <= 3 ? { type: 'shrine', label: 'Consecrate Sun Shrine', meta: 'Influence and morale' } : null,
+    !has('outpost') && mappedPercent() >= 12 ? { type: 'outpost', label: 'Plant frontier outpost', meta: 'Forward sight and muster' } : null,
+    !has('wall') ? { type: 'wall', label: 'Close a kill gate', meta: 'Chokepoint defense' } : null
+  ].filter(Boolean);
+  const affordable = candidates.filter((item) => canAfford(state.factions.olundar.resources, BUILDING_TYPES[item.type]?.cost || {}));
+  const fallback = candidates.length ? candidates : BUILD_ORDER.map((type) => ({
+    type,
+    label: BUILDING_TYPES[type].name,
+    meta: `${formatCost(BUILDING_TYPES[type].cost)} | ${turnCountLabel(BUILDING_TYPES[type].buildTurns)}`
+  }));
+  return (affordable.length ? affordable : fallback).filter((item) => BUILDING_TYPES[item.type] && !builder.hasActed);
+}
+
+function buildOrderButton(builder, type, tone = 'secondary', labelOverride = null, metaOverride = null) {
+  const bDef = BUILDING_TYPES[type];
+  const disabled = !bDef || builder.hasActed || !canAfford(state.factions.olundar.resources, bDef.cost);
+  const label = labelOverride || bDef.name;
+  const meta = metaOverride || `${formatCost(bDef.cost)} | ${turnCountLabel(bDef.buildTurns)}`;
+  return orderButton(label, meta, () => enterBuildMode(builder.id, type), { disabled, tone });
+}
+
+function turnCountLabel(turns) {
+  return `${turns} turn${turns === 1 ? '' : 's'}`;
+}
+
+function enterBuildMode(builderId, buildingType) {
+  const bDef = BUILDING_TYPES[buildingType];
+  if (!bDef) return;
+  state.mode = { type: 'build', buildingType, builderId };
+  playAudioCue('ui');
+  toast(`Build mode: click ${bDef.name} on this tile or an adjacent tile.`);
+  render();
 }
 
 function renderDiplomacy() {
@@ -2377,6 +2443,11 @@ function focusOpeningFollowThrough(previousStepId) {
   return true;
 }
 
+function scrollOpeningFollowThroughRail(previousStepId) {
+  if (!['scout', 'contact', 'front'].includes(previousStepId)) return;
+  actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
 function executeOpeningDirective(action) {
   const previousStepId = currentOpeningDirective()?.current?.id || null;
   if (action.kind === 'move') {
@@ -2390,6 +2461,7 @@ function executeOpeningDirective(action) {
       focusOpeningFollowThrough(previousStepId);
     }
     render();
+    if (ok) scrollOpeningFollowThroughRail(previousStepId);
     return;
   }
   if (action.kind === 'train') {
