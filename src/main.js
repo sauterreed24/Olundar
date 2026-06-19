@@ -989,8 +989,12 @@ function renderSelection() {
 function renderActions() {
   actionPanel.innerHTML = '';
   actionPanel.appendChild(orderHeader());
+  const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
+  const selectedBuilding = state.buildings.find((b) => b.id === state.selectedBuildingId);
   if (battleImpact) actionPanel.appendChild(battleImpactCard());
   if (turnReport && !isMobileIntelDrawerMode()) actionPanel.appendChild(turnReportCard());
+  const commandStrip = selectedCommandStrip(selectedUnit, selectedBuilding);
+  if (commandStrip) actionPanel.appendChild(commandStrip);
   const placementCard = buildPlacementCard();
   if (placementCard) actionPanel.appendChild(placementCard);
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
@@ -1010,9 +1014,6 @@ function renderActions() {
     actionPanel.appendChild(section);
     return;
   }
-
-  const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
-  const selectedBuilding = state.buildings.find((b) => b.id === state.selectedBuildingId);
 
   if (!selectedUnit && !selectedBuilding) {
     actionPanel.appendChild(orderNote('Select an Olundaran unit or structure to issue field orders. The campaign tools remain available below.'));
@@ -1105,6 +1106,61 @@ function renderActions() {
   toolsDrawer.appendChild(tools);
   campaignSection.appendChild(toolsDrawer);
   actionPanel.appendChild(campaignSection);
+}
+
+function selectedCommandStrip(selectedUnit, selectedBuilding) {
+  if (!selectedUnit && !selectedBuilding) return null;
+  const selection = selectedUnit
+    ? { unit: selectedUnit }
+    : { building: selectedBuilding };
+  const title = selectedUnit ? UNIT_TYPES[selectedUnit.type].name : BUILDING_TYPES[selectedBuilding.type].name;
+  const factionLabel = selectedUnit?.faction || selectedBuilding?.faction || 'unknown';
+  const status = selectedUnit
+    ? selectedUnit.hasActed ? 'Orders spent' : 'Ready'
+    : selectedBuilding.turnsLeft > 0 ? `${turnCountLabel(selectedBuilding.turnsLeft)} left` : 'Operational';
+  const role = selectedUnit
+    ? unitCommandRole(selectedUnit)
+    : selectedBuilding.queue?.length
+      ? `${selectedBuilding.queue.length}/${trainingQueueLimit(selectedBuilding)} queue`
+      : `Tier ${(selectedBuilding.upgraded || 0) + 1}`;
+  const hp = selectedUnit
+    ? `${selectedUnit.hp}/${selectedUnit.maxHp}`
+    : `${selectedBuilding.hp}/${selectedBuilding.maxHp}`;
+  const mobility = selectedUnit
+    ? `${UNIT_TYPES[selectedUnit.type].move} move`
+    : selectedBuilding.turnsLeft > 0 ? 'Building' : 'Holding';
+  const x = selectedUnit?.x ?? selectedBuilding.x;
+  const y = selectedUnit?.y ?? selectedBuilding.y;
+  const card = document.createElement('article');
+  card.className = 'mobile-command-strip';
+  card.innerHTML = `
+    ${selectionPortraitMarkup(selection)}
+    <div class="mobile-command-strip-main">
+      <div class="mobile-command-strip-head">
+        <span>${escapeHtml(factionLabel)} command</span>
+        <b>${escapeHtml(status)}</b>
+      </div>
+      <strong>${escapeHtml(title)}</strong>
+      <div class="mobile-command-strip-stats">
+        <span><b>${escapeHtml(hp)}</b><small>HP</small></span>
+        <span><b>${escapeHtml(mobility)}</b><small>${selectedUnit ? 'Move' : 'Work'}</small></span>
+        <span><b>${escapeHtml(role)}</b><small>Role</small></span>
+        <span><b>${escapeHtml(`${x},${y}`)}</b><small>Tile</small></span>
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+function unitCommandRole(unit) {
+  const tags = UNIT_TYPES[unit.type].tags || [];
+  if (tags.includes('builder')) return 'Builder';
+  if (tags.includes('ranged')) return 'Ranged';
+  if (tags.includes('mounted')) return 'Cavalry';
+  if (tags.includes('recon')) return 'Recon';
+  if (tags.includes('siege')) return 'Siege';
+  if (tags.includes('undead')) return 'Undead';
+  return 'Line';
 }
 
 function buildDoctrineCard(builder) {
