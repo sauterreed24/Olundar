@@ -1690,8 +1690,12 @@ function openingDirectiveAction(stepId) {
     return recommendedTrainingOrder();
   }
 
-  if (['engineer', 'iron'].includes(stepId)) {
+  if (stepId === 'engineer') {
     return openingBlockedInfrastructureAction(recommendedBuildPreview(stepId));
+  }
+
+  if (stepId === 'iron') {
+    return recommendedIronOrder();
   }
 
   return null;
@@ -1701,6 +1705,10 @@ function openingBlockedInfrastructureAction(action) {
   if (!action || action.kind !== 'build' || action.canExecute) return action;
   const builder = state.units.find((unit) => unit.id === action.unitId);
   if (!builder?.hasActed) return action;
+  return blockedBuilderRecovery(builder, action.label, action.label);
+}
+
+function blockedBuilderRecovery(builder, blockedLabel, nextLabel = blockedLabel) {
   const readyUnits = getReadyOlundarUnits(state).filter((unit) => unit.id !== builder.id);
   const guard = readyUnits.find((unit) => !UNIT_TYPES[unit.type].tags.includes('builder')) || readyUnits[0];
   if (guard) {
@@ -1709,7 +1717,7 @@ function openingBlockedInfrastructureAction(action) {
       unitId: guard.id,
       canExecute: true,
       label: `Fortify ${guard.name}`,
-      meta: `${action.label} needs a fresh engineer next turn`,
+      meta: `${blockedLabel} needs a fresh engineer next turn`,
       executeLabel: 'Do order',
       executeMeta: 'Hold the line before ending turn',
       previewMeta: `Focus ${guard.name}`,
@@ -1721,7 +1729,7 @@ function openingBlockedInfrastructureAction(action) {
     kind: 'end-turn',
     canExecute: true,
     label: 'End turn for fresh engineer',
-    meta: `${action.label} is ready for turn ${state.turn + 1}`,
+    meta: `${nextLabel} is ready for turn ${state.turn + 1}`,
     executeLabel: 'Do order',
     executeMeta: `Advance to turn ${state.turn + 1}`,
     previewMeta: 'Review turn pass',
@@ -1863,7 +1871,7 @@ function recommendedTrainingOrder() {
 function recommendedBuildPreview(stepId) {
   const engineer = openingUnitByTag('builder');
   if (!engineer) return null;
-  const buildOrder = stepId === 'iron' ? ['mine', 'road', 'watchtower'] : ['road', 'farm', 'lumberCamp', 'mine', 'watchtower'];
+  const buildOrder = ['road', 'farm', 'lumberCamp', 'mine', 'watchtower'];
   const sites = [{ x: engineer.x, y: engineer.y }, ...neighborsOf(engineer.x, engineer.y)];
   for (const type of buildOrder) {
     for (const site of sites) {
@@ -1896,6 +1904,182 @@ function recommendedBuildPreview(stepId) {
     meta: 'Choose a valid construction site',
     previewMeta: 'Select builder',
     previewToast: `${engineer.name} is ready for construction.`
+  };
+}
+
+function recommendedIronOrder() {
+  const engineer = openingUnitByTag('builder');
+  if (!engineer) return null;
+  const mine = recommendedMineBuild(engineer);
+  if (mine) return openingBlockedInfrastructureAction(mine);
+  if (engineer.hasActed) return blockedBuilderRecovery(engineer, 'Hill Mine route', 'Hill Mine route');
+  const target = bestIronMineTarget(engineer);
+  if (!target) {
+    return {
+      kind: 'focus',
+      unitId: engineer.id,
+      x: engineer.x,
+      y: engineer.y,
+      label: `Focus ${engineer.name}`,
+      meta: 'Scout hills or ruins for the first mine',
+      previewMeta: 'Select builder',
+      previewToast: `${engineer.name} needs a visible hill or ruin route before claiming iron.`
+    };
+  }
+  const roadAdvance = bestIronRoadAdvance(engineer, target);
+  if (roadAdvance) return roadAdvance;
+  const roadExtension = recommendedIronRoadExtension(engineer, target);
+  if (roadExtension) return roadExtension;
+  return bestIronAdvance(engineer, target) || {
+    kind: 'focus',
+    unitId: engineer.id,
+    x: engineer.x,
+    y: engineer.y,
+    label: `Focus ${engineer.name}`,
+    meta: `Plan the road toward ${target.x},${target.y}`,
+    previewMeta: 'Select builder',
+    previewToast: `${engineer.name} needs a clearer route to the first mine site.`
+  };
+}
+
+function recommendedMineBuild(engineer) {
+  const sites = [{ x: engineer.x, y: engineer.y }, ...neighborsOf(engineer.x, engineer.y)];
+  for (const site of sites) {
+    const result = canBuildOn(state, 'mine', site.x, site.y);
+    if (!result.ok) continue;
+    return {
+      kind: 'build',
+      unitId: engineer.id,
+      buildingType: 'mine',
+      x: site.x,
+      y: site.y,
+      canExecute: !engineer.hasActed,
+      disabled: engineer.hasActed,
+      label: 'Start Hill Mine',
+      meta: `${site.x},${site.y} iron site | ${formatCost(BUILDING_TYPES.mine.cost)}`,
+      executeLabel: 'Do order',
+      executeMeta: `Hill Mine at ${site.x},${site.y}`,
+      previewMeta: 'Preview Hill Mine site',
+      previewToast: `${engineer.name} can open iron production at ${site.x},${site.y}.`,
+      successToast: `Hill Mine started at ${site.x},${site.y}.`
+    };
+  }
+  return null;
+}
+
+function bestIronMineTarget(engineer) {
+  const candidates = [];
+  for (const tile of state.map.tiles) {
+    if (!['hills', 'ruins'].includes(tile.terrain)) continue;
+    if (buildingAt(state, tile.x, tile.y)) continue;
+    const path = findPath(state, engineer, tile.x, tile.y, Infinity);
+    if (!path) continue;
+    const roadBias = tile.road ? -8 : 0;
+    const terrainBias = tile.terrain === 'hills' ? -4 : 5;
+    const revealedBias = state.revealed[tile.y * MAP_WIDTH + tile.x] ? -2 : 0;
+    const dawnHillBias = gridDistance(tile.x, tile.y, 14, 8) * 0.12;
+    const score = path.cost * 10 + terrainBias + roadBias + revealedBias + dawnHillBias;
+    candidates.push({ x: tile.x, y: tile.y, terrain: tile.terrain, road: tile.road, cost: path.cost, score });
+  }
+  return candidates.sort((a, b) => a.score - b.score || a.cost - b.cost || a.y - b.y || a.x - b.x)[0] || null;
+}
+
+function bestIronRoadAdvance(engineer, target) {
+  const currentPath = findPath(state, engineer, target.x, target.y, Infinity);
+  if (!currentPath) return null;
+  const def = UNIT_TYPES[engineer.type];
+  const candidates = [];
+  for (const tile of state.map.tiles) {
+    if (!tile.road || (tile.x === engineer.x && tile.y === engineer.y)) continue;
+    const movePath = findPath(state, engineer, tile.x, tile.y, def.move);
+    if (!movePath) continue;
+    const remainingPath = findPath(state, { ...engineer, x: tile.x, y: tile.y }, target.x, target.y, Infinity);
+    if (!remainingPath || remainingPath.cost >= currentPath.cost) continue;
+    const playerRoad = state.buildings.some((building) => building.faction === 'olundar' && building.type === 'road' && building.turnsLeft <= 0 && building.x === tile.x && building.y === tile.y);
+    candidates.push({
+      x: tile.x,
+      y: tile.y,
+      cost: movePath.cost,
+      remaining: remainingPath.cost,
+      score: remainingPath.cost * 10 + movePath.cost - (playerRoad ? 6 : 1)
+    });
+  }
+  const destination = candidates.sort((a, b) => a.score - b.score || a.remaining - b.remaining || a.cost - b.cost)[0];
+  if (!destination) return null;
+  return ironMoveDirective(engineer, destination, target, 'Advance along the iron road', `road march | ${destination.cost}/${def.move} move`);
+}
+
+function recommendedIronRoadExtension(engineer, target) {
+  const sites = [{ x: engineer.x, y: engineer.y }, ...neighborsOf(engineer.x, engineer.y)];
+  const candidates = [];
+  for (const site of sites) {
+    const result = canBuildOn(state, 'road', site.x, site.y);
+    if (!result.ok) continue;
+    const remainingPath = findPath(state, { ...engineer, x: site.x, y: site.y }, target.x, target.y, Infinity);
+    if (!remainingPath) continue;
+    candidates.push({
+      ...site,
+      remaining: remainingPath.cost,
+      score: remainingPath.cost * 10 + gridDistance(site.x, site.y, target.x, target.y)
+    });
+  }
+  const site = candidates.sort((a, b) => a.score - b.score || a.remaining - b.remaining || a.y - b.y || a.x - b.x)[0];
+  if (!site) return null;
+  return {
+    kind: 'build',
+    unitId: engineer.id,
+    buildingType: 'road',
+    x: site.x,
+    y: site.y,
+    canExecute: true,
+    label: 'Extend iron road',
+    meta: `toward ${target.x},${target.y} ${TERRAIN[target.terrain].name} | ${formatCost(BUILDING_TYPES.road.cost)}`,
+    executeLabel: 'Do order',
+    executeMeta: `Iron road at ${site.x},${site.y}`,
+    previewMeta: 'Preview iron road',
+    previewToast: `${engineer.name} can extend supply toward the first Hill Mine route.`,
+    successToast: `Iron road extended toward ${target.x},${target.y}.`
+  };
+}
+
+function bestIronAdvance(engineer, target) {
+  const currentPath = findPath(state, engineer, target.x, target.y, Infinity);
+  if (!currentPath) return null;
+  const def = UNIT_TYPES[engineer.type];
+  const candidates = [];
+  for (const tile of state.map.tiles) {
+    if (tile.x === engineer.x && tile.y === engineer.y) continue;
+    const movePath = findPath(state, engineer, tile.x, tile.y, def.move);
+    if (!movePath) continue;
+    const remainingPath = findPath(state, { ...engineer, x: tile.x, y: tile.y }, target.x, target.y, Infinity);
+    if (!remainingPath || remainingPath.cost >= currentPath.cost) continue;
+    candidates.push({
+      x: tile.x,
+      y: tile.y,
+      cost: movePath.cost,
+      remaining: remainingPath.cost,
+      score: remainingPath.cost * 10 + movePath.cost - (tile.road ? 2 : 0)
+    });
+  }
+  const destination = candidates.sort((a, b) => a.score - b.score || a.remaining - b.remaining || a.cost - b.cost)[0];
+  if (!destination) return null;
+  return ironMoveDirective(engineer, destination, target, 'March toward hill iron', `${destination.cost}/${def.move} move | ${target.x},${target.y} mine route`);
+}
+
+function ironMoveDirective(engineer, destination, target, label, meta) {
+  return {
+    kind: 'move',
+    unitId: engineer.id,
+    x: destination.x,
+    y: destination.y,
+    canExecute: true,
+    label,
+    meta,
+    executeLabel: 'Do order',
+    executeMeta: `${destination.x},${destination.y} sector`,
+    previewMeta: `Preview route to ${destination.x},${destination.y}`,
+    previewToast: `${engineer.name} can move toward the ${TERRAIN[target.terrain].name} mine route at ${target.x},${target.y}.`,
+    successToast: `${engineer.name} advances toward iron at ${target.x},${target.y}.`
   };
 }
 
@@ -1936,7 +2120,7 @@ function executeOpeningDirective(action) {
     hoverTile = lastTile;
     const result = moveUnit(state, action.unitId, action.x, action.y);
     const ok = handleResult(result, 'move');
-    if (ok) toast(`${action.label} to ${action.x},${action.y}.`, 'good');
+    if (ok) toast(action.successToast || `${action.label} to ${action.x},${action.y}.`, 'good');
     render();
     return;
   }
