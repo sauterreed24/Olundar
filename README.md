@@ -4,6 +4,14 @@ A lightweight, turn-based exploration, survival, diplomacy, and war strategy gam
 
 The prototype is intentionally dependency-light: plain HTML, CSS, and modern JavaScript modules. It is designed to run in a browser, scale down to older phones, and remain easy to port later to a PWA or app-store shell.
 
+## Play on GitHub
+
+The `main` branch is configured to deploy the static game through GitHub Pages at:
+
+<https://sauterreed24.github.io/Olundar/>
+
+The deployment workflow runs `npm run quality:check` before publishing, then uploads the dependency-free browser app directly from the repository root. GitHub Pages must be enabled for the repository; on plans that do not support Pages for private repositories, the repo must be public before this URL can serve the game.
+
 ## What is playable now
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
@@ -34,8 +42,9 @@ The prototype is intentionally dependency-light: plain HTML, CSS, and modern Jav
 - Optional procedural audio cues and a low-volume ambient bed, enabled only after the player turns audio on.
 - Player settings for audio volume, reduced motion, and compact/standard/expanded map scale.
 - Installable PWA shell with web app manifest, maskable icon, and service-worker app-shell caching for offline reloads.
-- Canvas-rendered sprites plus a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
-- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, result banners, mission outcome archives, archive type filters, archive text search, archive sort controls, archive route and ruling grouping, archive reward summaries, archive detail toggles, archived-site map focus, completed-site receipts, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
+- Upgraded canvas-rendered tactical sprites with shields, weapons, cavalry silhouettes, siege gear, Deadwalker glow, richer buildings, terrain relief, and a vector reference sprite sheet at `assets/sprites/olundar-sprite-sheet.svg`.
+- GitHub Pages deployment through `.github/workflows/pages.yml` so the latest `main` build can be played in a browser from GitHub.
+- `npm run quality:check` gate covering syntax, data integrity, map generation, campaign setup, named save slots, save-file import, audio cue budgets, player settings, PWA shell integrity, GitHub Pages deployability, enhanced canvas sprite rendering, onboarding guidance, campaign recaps, diplomacy ledger behavior, diplomatic memory, faction-specific promises and follow-through demands, living-faction war aims, allied field orders, crisis rulings, aftermaths, aftermath mission chains, canvas site markers, focus controls, route previews, focused route overlays, mission dispatch actions, result banners, mission outcome archives, archive type filters, archive text search, archive sort controls, archive route and ruling grouping, archive reward summaries, archive detail toggles, archived-site map focus, completed-site receipts, terrain rewards, strategic map lenses, advisor logic, pathing, training, construction, upgrades, combat forecasts, portal rules, and a 24-turn simulation.
 
 ## Run it locally
 
@@ -86,6 +95,8 @@ Explore through fog, survive the Deadwalker expansion, build a war economy, use 
 
 ```text
 olundar_game/
+  .github/
+    workflows/pages.yml
   index.html
   manifest.webmanifest
   package.json
@@ -124,6 +135,8 @@ olundar_game/
 - Procedural audio cues stay browser-safe, distinct, and lightweight.
 - Player settings normalize audio volume, motion, and map-scale choices.
 - PWA manifest, icon, install prompt wiring, service worker, and app-shell cache reference real files.
+- GitHub Pages workflow must publish the static app from `main` only after the quality gate passes.
+- Canvas renderer must keep polished terrain relief, unit kit silhouettes, Deadwalker glow, and building detail visible without external assets.
 - The First Six Turns guide appears at campaign start and updates from real construction, training, iron, contact, and Deadwalker evidence.
 - Campaign recaps summarize active imports, victories, defeats, objective milestones, and after-action advice from live state.
 - Diplomacy ledger entries track uncontacted civilizations, active pacts/trade, aid or pressure history, duplicate accord prevention, and rivalries.
