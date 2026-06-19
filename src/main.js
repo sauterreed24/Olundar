@@ -125,7 +125,7 @@ function resizeCanvas() {
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
-  const idealHeight = width * (MAP_HEIGHT / MAP_WIDTH);
+  const idealHeight = width * 0.8;
   const maxHeight = Math.max(mapScale.maxHeightFloor, window.innerHeight - mapScale.maxHeightOffset);
   const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
   canvas.width = Math.floor(width * dpr);

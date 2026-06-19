@@ -2494,6 +2494,66 @@ button:hover:not(:disabled) {
   color: #1f542c;
 }
 
+.map-shell {
+  isolation: isolate;
+}
+
+.map-lens-bar {
+  position: absolute;
+  z-index: 4;
+  top: 0.72rem;
+  left: 0.72rem;
+  right: auto;
+  width: min(45rem, calc(100% - 1.44rem));
+  border: 1px solid rgba(143, 36, 24, 0.20);
+  border-radius: 8px;
+  padding: 0.44rem;
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.90), rgba(229, 205, 151, 0.76)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.64), transparent 12rem);
+  box-shadow:
+    0 12px 28px rgba(92, 58, 24, 0.15),
+    inset 0 1px 0 rgba(255,255,255,0.78);
+  backdrop-filter: blur(8px);
+}
+
+.map-lens-bar .lens-label {
+  align-self: center;
+  min-width: 4.4rem;
+}
+
+.lens-buttons {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  width: 100%;
+}
+
+.lens-buttons button {
+  min-height: 1.8rem;
+  padding: 0.28rem 0.38rem;
+}
+
+.map-help {
+  position: absolute;
+  z-index: 4;
+  left: 0.78rem;
+  right: 0.78rem;
+  bottom: 0.72rem;
+  width: auto;
+  border: 1px solid rgba(143, 36, 24, 0.14);
+  border-radius: 999px;
+  padding: 0.42rem;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 229, 0.88), rgba(229, 205, 151, 0.72));
+  box-shadow:
+    0 12px 28px rgba(92, 58, 24, 0.13),
+    inset 0 1px 0 rgba(255,255,255,0.74);
+  backdrop-filter: blur(8px);
+}
+
+.map-help span {
+  background: rgba(255, 255, 255, 0.62);
+}
+
 .objectives li {
   color: #3b2817;
 }
@@ -2572,13 +2632,49 @@ button:hover:not(:disabled) {
   }
 
   .map-lens-bar {
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
     align-items: stretch;
-    flex-direction: column;
-    gap: 0.38rem;
+    flex-direction: row;
+    gap: 0.34rem;
+    padding: 0.34rem;
+  }
+
+  .map-lens-bar .lens-label {
+    display: none;
   }
 
   .lens-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .lens-buttons button {
+    min-height: 1.65rem;
+    padding: 0.22rem 0.28rem;
+    font-size: 0.66rem;
+  }
+
+  .map-help {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    border-radius: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.26rem;
+  }
+
+  .map-help span {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.38rem;
+    font-size: 0.64rem;
+    white-space: nowrap;
+  }
+
+  .map-help span:nth-child(n + 3) {
+    display: none;
   }
 
   .council-stats {
