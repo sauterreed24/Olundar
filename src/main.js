@@ -102,6 +102,7 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
   { id: 'details', label: 'Details' },
   { id: 'summary', label: 'Summary' }
 ];
+const PACT_ACCEPTANCE_RELATION = 35;
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
@@ -967,6 +968,8 @@ function renderActions() {
   if (turnReport) actionPanel.appendChild(turnReportCard());
   const doctrineCard = openingDoctrineCard();
   if (doctrineCard) actionPanel.appendChild(doctrineCard);
+  const envoyCard = diplomacyOpportunityCard();
+  if (envoyCard) actionPanel.appendChild(envoyCard);
 
   if (state.status !== 'playing') {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
@@ -1808,6 +1811,74 @@ function openingDoctrineCard() {
   }));
   card.appendChild(actions);
   return card;
+}
+
+function diplomacyOpportunityCard() {
+  const opportunity = currentDiplomacyOpportunity();
+  if (!opportunity || state.status !== 'playing') return null;
+  const card = document.createElement('article');
+  card.className = 'opening-doctrine diplomacy-doctrine';
+  card.innerHTML = `
+    <div class="opening-doctrine-head">
+      <span>Envoy Opportunity</span>
+      <b>${escapeHtml(opportunity.badge)}</b>
+    </div>
+    <strong>${escapeHtml(opportunity.title)}</strong>
+    <p>${escapeHtml(opportunity.detail)}</p>
+    <small>${escapeHtml(opportunity.phase)}</small>
+    <div class="doctrine-recommendation">
+      <span>Diplomatic Order</span>
+      <strong>${escapeHtml(opportunity.recommendation)}</strong>
+      <small>${escapeHtml(opportunity.meta)}</small>
+    </div>
+  `;
+  const actions = commandActions('doctrine-actions envoy-actions');
+  actions.appendChild(orderButton('Seal Survival Pact', opportunity.cost, () => runAction(() => executeDiplomacyOpportunity(opportunity), 'diplomacy'), {
+    tone: 'primary'
+  }));
+  actions.appendChild(orderButton('Show ally lens', 'Shared sight and pact options', () => focusDiplomacyOpportunity(opportunity.entry.id)));
+  card.appendChild(actions);
+  return card;
+}
+
+function currentDiplomacyOpportunity() {
+  const ledger = getDiplomacyLedger(state);
+  const pactTrustGain = DIPLOMACY_ACTIONS.pact?.relation || 0;
+  const entry = ledger.entries.find((item) => {
+    if (!item.discovered || item.pact || item.atWar || item.relation + pactTrustGain < PACT_ACCEPTANCE_RELATION) return false;
+    return item.actions.some((action) => action.id === 'pact' && !action.disabled);
+  });
+  if (!entry) return null;
+  const action = entry.actions.find((item) => item.id === 'pact');
+  return {
+    entry,
+    action,
+    badge: `${entry.relation} trust`,
+    title: `Bind ${entry.name} to the living front`,
+    detail: `${entry.name} has enough trust for an oath offer to become a Survival Pact. Shared vision and emergency aid should not be buried below routine field orders.`,
+    phase: 'Diplomacy into survival',
+    recommendation: 'Offer Survival Pact',
+    meta: `${entry.posture.label} - ${entry.advice}`,
+    cost: action.cost
+  };
+}
+
+function executeDiplomacyOpportunity(opportunity) {
+  const result = performDiplomacy(state, opportunity.entry.id, opportunity.action.id);
+  if (!result.ok) return result;
+  activeMapLens = 'alliance';
+  return {
+    ...result,
+    reason: `${opportunity.entry.name} signs the Survival Pact. Alliance vision is now on the map.`
+  };
+}
+
+function focusDiplomacyOpportunity(factionId) {
+  activeMapLens = 'alliance';
+  render();
+  const card = diplomacyPanel.querySelector(`.diplo-card.known`);
+  const target = [...diplomacyPanel.querySelectorAll('.diplo-card.known')].find((item) => item.textContent.includes(state.factions[factionId]?.name || '')) || card;
+  target?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
 }
 
 function openingDirectiveAction(stepId) {
