@@ -3495,6 +3495,18 @@ button:hover:not(:disabled) {
   border-left-color: rgba(54, 126, 69, 0.76);
 }
 
+.map-intel.order {
+  border-left-color: rgba(143, 36, 24, 0.82);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 223, 0.96), rgba(232, 197, 126, 0.86)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.76), transparent 10rem);
+}
+
+.map-intel.order .map-intel-head span,
+.map-intel.order .map-intel-head strong {
+  color: #8f2418;
+}
+
 .map-intel.attack {
   border-left-color: rgba(143, 36, 24, 0.72);
 }

@@ -1283,6 +1283,17 @@ function mapIntelState(tile) {
   if (road) baseStats.push({ value: 'road', label: 'logistics' });
   if (mapTile?.blight) baseStats.push({ value: `${mapTile.blight}/9`, label: 'blight' });
 
+  const openingAction = openingDirectiveForTile(tile);
+  if (openingAction) {
+    return {
+      tone: 'order',
+      kicker: 'Opening order',
+      title: openingAction.label,
+      detail: `Click to execute this guided order. ${openingAction.meta}`,
+      stats: [...baseStats, { value: openingAction.executeMeta || 'ready', label: 'command' }]
+    };
+  }
+
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
     const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
@@ -3111,6 +3122,11 @@ function inMap(x, y) {
   return x >= 0 && y >= 0 && x < MAP_WIDTH && y < MAP_HEIGHT;
 }
 
+function canvasCursorForTile(tile) {
+  if (!tile || !inMap(tile.x, tile.y)) return '';
+  return openingDirectiveForTile(tile) ? 'pointer' : '';
+}
+
 canvas.addEventListener('click', canvasClicked);
 canvas.addEventListener('mousemove', (event) => {
   const tile = pointToTile(canvas, event.clientX, event.clientY);
@@ -3120,12 +3136,14 @@ canvas.addEventListener('mousemove', (event) => {
     hoverTile = tile;
     lastTile = tile;
   }
+  canvas.style.cursor = canvasCursorForTile(hoverTile);
   renderTilePanel();
   renderMapIntel();
   drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;
+  canvas.style.cursor = '';
   render();
 });
 
