@@ -2468,6 +2468,39 @@ button:hover:not(:disabled) {
   color: #8f2418;
 }
 
+.command-card,
+.order-card {
+  border-color: rgba(143, 36, 24, 0.30);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 238, 0.98), rgba(236, 211, 158, 0.93)),
+    radial-gradient(circle at 12% 0%, rgba(143, 36, 24, 0.10), transparent 12rem);
+}
+
+.command-card h2,
+.order-card h2 {
+  margin-bottom: 0.28rem;
+}
+
+.order-card {
+  border-color: rgba(77, 140, 89, 0.28);
+}
+
+.order-card .button-grid {
+  gap: 0.34rem;
+}
+
+.order-card button {
+  min-height: 2rem;
+  padding: 0.34rem 0.46rem;
+}
+
+.guide-more {
+  margin: 0.52rem 0 0 !important;
+  color: #5d4a2e !important;
+  font-size: 0.78rem !important;
+  font-weight: 700;
+}
+
 .battle-impact {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.46), 0 10px 20px rgba(92, 58, 24, 0.10);
 }
@@ -2614,13 +2647,67 @@ button:hover:not(:disabled) {
 
 @media (max-width: 620px) {
   .topbar {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.42rem 0.58rem 0.5rem;
+  }
+
+  .brand {
+    gap: 0.45rem;
+  }
+
+  .brand h1 {
+    font-size: 1.22rem;
+    line-height: 1;
+  }
+
+  .brand p {
+    display: none;
+  }
+
+  .sun {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
   }
 
   .turnbox {
-    align-items: flex-start;
-    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    flex-direction: row;
+    gap: 0.45rem;
+  }
+
+  .turnbox strong {
+    font-size: 0.78rem;
+  }
+
+  .top-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .top-actions button,
+  .top-actions #audioTop,
+  .top-actions #settingsTop,
+  .top-actions #installTop {
+    flex: 0 1 auto;
+    min-width: auto;
+    min-height: 1.82rem;
+    padding: 0.28rem 0.45rem;
+    font-size: 0.72rem;
+  }
+
+  .top-actions #saveTop,
+  .top-actions #loadTop,
+  .top-actions #newTop {
+    display: none;
   }
 
   .layout {
@@ -2628,7 +2715,16 @@ button:hover:not(:disabled) {
   }
 
   .resourcebar {
-    padding: 0.45rem 0.65rem;
+    flex-wrap: wrap;
+    gap: 0.32rem;
+    overflow: hidden;
+    padding: 0.34rem 0.58rem;
+  }
+
+  .resource {
+    flex: 0 1 auto;
+    padding: 0.24rem 0.5rem;
+    font-size: 0.72rem;
   }
 
   .map-lens-bar {

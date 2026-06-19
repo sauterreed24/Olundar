@@ -211,6 +211,10 @@ function renderGuide() {
     guidePanel.innerHTML = '';
     return;
   }
+  const openSteps = guide.steps.filter((step) => !step.done);
+  const recentlyDone = guide.steps.filter((step) => step.done).slice(-1);
+  const visibleSteps = [...recentlyDone, ...openSteps.slice(0, 3)];
+  const hiddenCount = Math.max(0, guide.steps.length - visibleSteps.length);
   guidePanel.innerHTML = `
     <div class="guide-head">
       <div>
@@ -221,7 +225,7 @@ function renderGuide() {
     </div>
     <p class="guide-summary">${escapeHtml(guide.summary)}</p>
     <ol class="guide-steps">
-      ${guide.steps.map((step) => `
+      ${visibleSteps.map((step) => `
         <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current' : ''}">
           <span class="step-status">${step.done ? 'Done' : step.id === guide.currentId ? 'Next' : 'Open'}</span>
           <strong>${escapeHtml(step.label)}</strong>
@@ -229,6 +233,7 @@ function renderGuide() {
         </li>
       `).join('')}
     </ol>
+    ${hiddenCount ? `<p class="guide-more">${hiddenCount} later opening ${hiddenCount === 1 ? 'order' : 'orders'} stay queued below the current priorities.</p>` : ''}
   `;
 }
 
