@@ -431,9 +431,50 @@ function missionArchiveGroupedRecordsMarkup(missions) {
         <strong>${escapeHtml(group.title)}</strong>
         <span>${escapeHtml(group.summary)}</span>
       </div>
+      ${selectedMissionArchiveGroupMode() === 'rulings' ? missionArchiveGroupSummaryMarkup(group.records) : ''}
       ${group.records.map((mission) => missionHistoryRecordMarkup(mission)).join('')}
     </section>
   `).join('');
+}
+
+function missionArchiveGroupSummaryMarkup(records) {
+  const summary = missionArchiveGroupRewardSummary(records);
+  return `
+    <div class="mission-archive-group-summary">
+      <span>${escapeHtml(summary.rewards)}</span>
+      <span>${escapeHtml(summary.followUps)}</span>
+    </div>
+  `;
+}
+
+function missionArchiveGroupRewardSummary(records) {
+  const terrainCaches = records.filter((mission) => /site yields/i.test(mission.reward)).length;
+  const followUps = records.reduce((sum, mission) => sum + missionArchiveFollowUpCount(mission.reward), 0);
+  const tags = missionArchiveRewardTags(records);
+  const rewardParts = [`${records.length} field reward${records.length === 1 ? '' : 's'}`];
+  if (terrainCaches) rewardParts.push(`${terrainCaches} terrain cache${terrainCaches === 1 ? '' : 's'}`);
+  rewardParts.push(...tags);
+  return {
+    rewards: `Rewards: ${rewardParts.join(', ')}`,
+    followUps: `Follow-ups: ${followUps || 'no'} marker${followUps === 1 ? '' : 's'}`
+  };
+}
+
+function missionArchiveRewardTags(records) {
+  const counts = [
+    ['influence', /influence|trust|relations?/i],
+    ['morale', /morale/i],
+    ['gold', /gold|coin/i],
+    ['field XP', /experience|xp/i],
+    ['fortification', /holdings|repaired|reinforces?/i],
+    ['supplies', /supplies|stores|caches|resources/i]
+  ].map(([label, pattern]) => [label, records.filter((mission) => pattern.test(mission.reward)).length])
+    .filter(([, count]) => count);
+  return counts.slice(0, 4).map(([label, count]) => `${count} ${label}`);
+}
+
+function missionArchiveFollowUpCount(text = '') {
+  return (String(text).match(/follow-up marker opens/gi) || []).length;
 }
 
 function missionArchiveGroups(missions) {

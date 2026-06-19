@@ -430,6 +430,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionArchiveSearch') && mainSource.includes('data-action="search-mission-archive"'), 'Archived mission outcomes should support compact text search.');
   assert(mainSource.includes('missionArchiveSortOrder') && mainSource.includes('data-action="set-mission-archive-sort"'), 'Archived mission outcomes should support newest/oldest sort controls.');
   assert(mainSource.includes('missionArchiveGroupMode') && mainSource.includes('data-action="set-mission-archive-group"') && mainSource.includes("{ id: 'rulings', label: 'Rulings' }"), 'Archived mission outcomes should support route-chain and ruling-origin grouping controls.');
+  assert(mainSource.includes('missionArchiveGroupRewardSummary') && mainSource.includes('missionArchiveFollowUpCount'), 'Ruling-grouped mission archives should summarize rewards and spawned follow-up markers.');
   assert(mainSource.includes('data-action="focus-completed-mission"') && mainSource.includes('focusCompletedMissionSite'), 'Completed mission outcomes should be able to focus their map site.');
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
   assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
@@ -447,6 +448,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(styleSource.includes('.mission-archive-search'), 'Mission archive text search needs compact styling.');
   assert(styleSource.includes('.mission-archive-sort'), 'Mission archive sort controls need compact styling.');
   assert(styleSource.includes('.mission-archive-group-mode') && styleSource.includes('.mission-archive-group-head'), 'Mission archive route grouping needs compact styling.');
+  assert(styleSource.includes('.mission-archive-group-summary'), 'Mission archive ruling groups need compact summary-row styling.');
   assert(styleSource.includes('.mission-site-receipt'), 'Focused archived mission receipts need compact tile-panel styling.');
   assert(styleSource.includes('.mission.focused'), 'Focused mission cards need visible selected-state styling.');
 

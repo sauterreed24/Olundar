@@ -1229,6 +1229,22 @@ button:disabled {
   font-size: 0.68rem;
 }
 
+.mission-archive-group-summary {
+  display: grid;
+  gap: 0.16rem;
+  padding: 0.34rem 0.42rem;
+  border: 1px solid rgba(186, 245, 140, 0.13);
+  border-radius: 7px;
+  color: #ddd0ae;
+  background: rgba(186, 245, 140, 0.06);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.mission-archive-group-summary span:first-child {
+  color: #f7edd0;
+}
+
 .mission-history-record,
 .mission-history > .history-empty {
   display: grid;
