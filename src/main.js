@@ -96,6 +96,7 @@ let focusedMissionId = null;
 let missionResultBanner = null;
 let missionHistoryFilter = 'recent';
 let missionArchiveTypeFilter = 'all';
+let missionArchiveSearch = '';
 let focusedArchivedMissionId = null;
 
 initAudioPreference();
@@ -342,11 +343,12 @@ function missionHistoryMarkup(missions) {
   if (!missions.recent.length && !missions.archive.length) return '';
   const filter = missionHistoryFilter === 'archive' || (!missions.recent.length && missions.archive.length) ? 'archive' : 'recent';
   const typeFilter = selectedMissionArchiveType();
-  const archive = filter === 'archive' ? filteredArchiveMissions(missions.archive, typeFilter) : [];
+  const search = normalizedMissionArchiveSearch();
+  const archive = filter === 'archive' ? filteredArchiveMissions(missions.archive, typeFilter, search) : [];
   const history = filter === 'archive' ? archive : missions.recent;
   const title = filter === 'archive' ? missionArchiveTitle(typeFilter, archive.length, missions.archiveCount) : `Completed (${missions.recentCount})`;
-  const archiveNote = filter === 'archive' && typeFilter !== 'all'
-    ? `<small class="mission-history-note">Filtered: ${escapeHtml(missionArchiveTypeLabel(typeFilter))} (${archive.length}/${missions.archiveCount}).</small>`
+  const archiveNote = filter === 'archive' && (typeFilter !== 'all' || search)
+    ? `<small class="mission-history-note">Filtered: ${escapeHtml(missionArchiveFilterLabel(typeFilter, search))} (${archive.length}/${missions.archiveCount}).</small>`
     : '';
 
   return `
@@ -359,6 +361,7 @@ function missionHistoryMarkup(missions) {
         </div>
       </div>
       ${filter === 'archive' ? missionArchiveTypeFilterMarkup(missions.archive, typeFilter) : ''}
+      ${filter === 'archive' ? missionArchiveSearchMarkup(search) : ''}
       ${history.length ? history.map((mission) => missionHistoryRecordMarkup(mission)).join('') : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
     </div>
@@ -377,9 +380,20 @@ function missionArchiveTypeFilterMarkup(archive, selected) {
   `;
 }
 
-function filteredArchiveMissions(archive, typeFilter = 'all') {
-  if (typeFilter === 'all') return archive;
-  return archive.filter((mission) => mission.type === typeFilter);
+function missionArchiveSearchMarkup(search) {
+  return `
+    <form class="mission-archive-search" data-action="search-mission-archive">
+      <input name="archiveSearch" value="${escapeHtml(search)}" maxlength="40" placeholder="Search archive" autocomplete="off" />
+      <button type="submit">Find</button>
+      <button type="button" data-action="clear-mission-archive-search" ${search ? '' : 'disabled'}>Clear</button>
+    </form>
+  `;
+}
+
+function filteredArchiveMissions(archive, typeFilter = 'all', search = '') {
+  const typed = typeFilter === 'all' ? archive : archive.filter((mission) => mission.type === typeFilter);
+  if (!search) return typed;
+  return typed.filter((mission) => missionArchiveSearchText(mission).includes(search));
 }
 
 function archiveTypeCount(archive, typeFilter = 'all') {
@@ -397,6 +411,34 @@ function missionArchiveTypeLabel(typeFilter = 'all') {
 function missionArchiveTitle(typeFilter, visibleCount, archiveCount) {
   if (typeFilter === 'all') return `Archive (${archiveCount})`;
   return `${missionArchiveTypeLabel(typeFilter)} (${visibleCount})`;
+}
+
+function normalizedMissionArchiveSearch() {
+  return missionArchiveSearch.trim().toLowerCase();
+}
+
+function missionArchiveSearchText(mission) {
+  return [
+    mission.name,
+    mission.context,
+    mission.reward,
+    mission.completedBy,
+    mission.site,
+    mission.terrain,
+    mission.type,
+    `t${mission.completedTurn}`
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function missionArchiveFilterLabel(typeFilter, search) {
+  return [typeFilter !== 'all' ? missionArchiveTypeLabel(typeFilter) : '', search ? `"${search}"` : ''].filter(Boolean).join(' + ') || 'All';
+}
+
+function clearFocusedArchivedMissionIfFilteredOut() {
+  if (!focusedArchivedMissionId) return;
+  const visible = filteredArchiveMissions(getAftermathMissions(state).archive, selectedMissionArchiveType(), normalizedMissionArchiveSearch())
+    .some((mission) => mission.id === focusedArchivedMissionId);
+  if (!visible) focusedArchivedMissionId = null;
 }
 
 function missionHistoryRecordMarkup(mission) {
@@ -1054,6 +1096,7 @@ function loadSerializedGame(raw, slot = null) {
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
     missionArchiveTypeFilter = 'all';
+    missionArchiveSearch = '';
     focusedArchivedMissionId = null;
     focusCampaign();
     localStorage.setItem(SAVE_KEY, raw);
@@ -1090,6 +1133,7 @@ function importSaveFile(raw, fileName = '') {
     missionResultBanner = null;
     missionHistoryFilter = 'recent';
     missionArchiveTypeFilter = 'all';
+    missionArchiveSearch = '';
     focusedArchivedMissionId = null;
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
@@ -1381,6 +1425,7 @@ function startConfiguredCampaign(form) {
   missionResultBanner = null;
   missionHistoryFilter = 'recent';
   missionArchiveTypeFilter = 'all';
+  missionArchiveSearch = '';
   focusedArchivedMissionId = null;
   closeCampaignRecap();
   closeCampaignSetup();
@@ -1539,13 +1584,39 @@ missionPanel.addEventListener('click', (event) => {
   else if (target.dataset.action === 'set-mission-archive-type') {
     const next = MISSION_ARCHIVE_TYPE_FILTERS.some((item) => item.id === target.dataset.filter) ? target.dataset.filter : 'all';
     missionArchiveTypeFilter = next;
-    if (next !== 'all' && focusedArchivedMission()?.type !== next) focusedArchivedMissionId = null;
+    clearFocusedArchivedMissionIfFilteredOut();
+    render();
+  }
+  else if (target.dataset.action === 'clear-mission-archive-search') {
+    missionArchiveSearch = '';
     render();
   }
   else if (target.dataset.action === 'close-mission-result') {
     missionResultBanner = null;
     render();
   }
+});
+
+missionPanel.addEventListener('submit', (event) => {
+  if (!(event.target instanceof HTMLFormElement) || event.target.dataset.action !== 'search-mission-archive') return;
+  event.preventDefault();
+  const data = new FormData(event.target);
+  missionArchiveSearch = String(data.get('archiveSearch') || '').slice(0, 40);
+  clearFocusedArchivedMissionIfFilteredOut();
+  render();
+});
+
+missionPanel.addEventListener('input', (event) => {
+  if (!(event.target instanceof HTMLInputElement) || event.target.name !== 'archiveSearch') return;
+  missionArchiveSearch = event.target.value.slice(0, 40);
+  clearFocusedArchivedMissionIfFilteredOut();
+});
+
+missionPanel.addEventListener('change', (event) => {
+  if (!(event.target instanceof HTMLInputElement) || event.target.name !== 'archiveSearch') return;
+  missionArchiveSearch = event.target.value.slice(0, 40);
+  clearFocusedArchivedMissionIfFilteredOut();
+  render();
 });
 
 setupOverlay.addEventListener('click', (event) => {
