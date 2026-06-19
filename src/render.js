@@ -88,8 +88,8 @@ function getCameraBounds(state) {
   const maxY = revealed.length ? Math.max(...revealed.map((tile) => tile.y)) : selected?.y || MAP_HEIGHT - 1;
   const revealedWidth = maxX - minX + 1;
   const revealedHeight = maxY - minY + 1;
-  const width = Math.min(MAP_WIDTH, Math.max(20, revealedWidth + 10));
-  const height = Math.min(MAP_HEIGHT, Math.max(15, revealedHeight + 8));
+  const width = Math.min(MAP_WIDTH, Math.max(14, revealedWidth + 4));
+  const height = Math.min(MAP_HEIGHT, Math.max(11, revealedHeight + 4));
   const centerX = selected ? selected.x : (minX + maxX) / 2;
   const centerY = selected ? selected.y : (minY + maxY) / 2;
   return {
@@ -806,6 +806,24 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     }
   } else if (building.type === 'road') {
     // Road drawn as terrain overlay.
+  } else if (building.type === 'farm') {
+    drawFarmstead(ctx, x, y, s, color);
+  } else if (building.type === 'lumberCamp') {
+    drawLumberCamp(ctx, x, y, s, color);
+  } else if (building.type === 'mine') {
+    drawMineCamp(ctx, x, y, s, color);
+  } else if (building.type === 'barracks') {
+    drawBarracksYard(ctx, x, y, s, color);
+  } else if (building.type === 'archeryYard') {
+    drawArcheryYard(ctx, x, y, s, color);
+  } else if (building.type === 'stable') {
+    drawStableYard(ctx, x, y, s, color);
+  } else if (building.type === 'workshop') {
+    drawWorkshopYard(ctx, x, y, s, color);
+  } else if (building.type === 'shrine') {
+    drawShrine(ctx, x, y, s, color);
+  } else if (building.type === 'outpost') {
+    drawOutpost(ctx, x, y, s, color);
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
     drawNecroStructure(ctx, building, x, y, s);
   } else {
@@ -886,6 +904,266 @@ function drawNecroStructure(ctx, building, x, y, s) {
   }
 }
 
+function drawFarmstead(ctx, x, y, s, color) {
+  ctx.fillStyle = '#b78638';
+  for (let i = 0; i < 4; i += 1) {
+    const py = y + s * (0.34 + i * 0.095);
+    ctx.fillRect(x + s * 0.12, py, s * 0.50, s * 0.052);
+    ctx.fillStyle = i % 2 === 0 ? '#e3c269' : '#8aa857';
+  }
+  ctx.strokeStyle = 'rgba(63, 85, 37, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.026);
+  for (let i = 0; i < 4; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.14, y + s * (0.40 + i * 0.09));
+    ctx.quadraticCurveTo(x + s * 0.34, y + s * (0.36 + i * 0.09), x + s * 0.62, y + s * (0.42 + i * 0.09));
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#f4df9b';
+  ctx.fillRect(x + s * 0.54, y + s * 0.45, s * 0.25, s * 0.27);
+  ctx.fillStyle = '#7f352a';
+  roof(ctx, x + s * 0.50, y + s * 0.45, s * 0.33, s * 0.16);
+  ctx.fillStyle = '#4f3421';
+  ctx.fillRect(x + s * 0.62, y + s * 0.57, s * 0.07, s * 0.15);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + s * 0.72, y + s * 0.52, s * 0.06, s * 0.08);
+  ctx.strokeStyle = 'rgba(255, 245, 190, 0.66)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  ctx.strokeRect(x + s * 0.12, y + s * 0.32, s * 0.70, s * 0.43);
+}
+
+function drawLumberCamp(ctx, x, y, s, color) {
+  for (const [px, py, scale] of [[0.23, 0.50, 0.95], [0.40, 0.36, 0.8], [0.68, 0.46, 0.88]]) {
+    triangle(ctx, x + s * px, y + s * py, s * 0.20 * scale, '#1f5b36');
+    ctx.fillStyle = '#593923';
+    ctx.fillRect(x + s * (px - 0.025), y + s * (py + 0.13 * scale), s * 0.05, s * 0.14);
+  }
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.fillStyle = i % 2 ? '#8d623c' : '#6e482c';
+    const lx = x + s * (0.24 + i * 0.15);
+    const ly = y + s * (0.66 - i * 0.035);
+    ctx.fillRect(lx, ly, s * 0.28, s * 0.07);
+    ctx.strokeRect(lx, ly, s * 0.28, s * 0.07);
+    ctx.beginPath();
+    ctx.arc(lx, ly + s * 0.035, s * 0.035, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#dbc07d';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.60, y + s * 0.70);
+  ctx.lineTo(x + s * 0.76, y + s * 0.48);
+  ctx.lineTo(x + s * 0.88, y + s * 0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  drawBannerPennon(ctx, x + s * 0.81, y + s * 0.28, s * 0.22, color);
+}
+
+function drawMineCamp(ctx, x, y, s, color) {
+  const mouth = ctx.createLinearGradient(x, y + s * 0.35, x, y + s * 0.78);
+  mouth.addColorStop(0, '#7b7062');
+  mouth.addColorStop(1, '#2a241f');
+  ctx.fillStyle = '#887966';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.16, y + s * 0.74);
+  ctx.lineTo(x + s * 0.32, y + s * 0.36);
+  ctx.lineTo(x + s * 0.54, y + s * 0.52);
+  ctx.lineTo(x + s * 0.70, y + s * 0.30);
+  ctx.lineTo(x + s * 0.88, y + s * 0.74);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#c6bea5';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.33, y + s * 0.39);
+  ctx.lineTo(x + s * 0.40, y + s * 0.53);
+  ctx.lineTo(x + s * 0.51, y + s * 0.51);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = mouth;
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.52, y + s * 0.70, s * 0.20, s * 0.22, 0, Math.PI, Math.PI * 2);
+  ctx.lineTo(x + s * 0.72, y + s * 0.78);
+  ctx.lineTo(x + s * 0.32, y + s * 0.78);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#33271e';
+  ctx.lineWidth = Math.max(1, s * 0.04);
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.76, y + s * 0.38);
+  ctx.lineTo(x + s * 0.62, y + s * 0.58);
+  ctx.moveTo(x + s * 0.67, y + s * 0.38);
+  ctx.lineTo(x + s * 0.81, y + s * 0.58);
+  ctx.stroke();
+}
+
+function drawBarracksYard(ctx, x, y, s, color) {
+  ctx.fillStyle = '#7c4b2f';
+  ctx.fillRect(x + s * 0.15, y + s * 0.46, s * 0.70, s * 0.28);
+  ctx.fillStyle = '#cfc0a0';
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillRect(x + s * (0.18 + i * 0.17), y + s * 0.37, s * 0.09, s * 0.10);
+  }
+  ctx.fillStyle = color;
+  roof(ctx, x + s * 0.11, y + s * 0.45, s * 0.78, s * 0.21);
+  ctx.fillStyle = '#2f2017';
+  ctx.fillRect(x + s * 0.44, y + s * 0.56, s * 0.13, s * 0.18);
+  ctx.strokeStyle = '#f6e0a0';
+  ctx.lineWidth = Math.max(1, s * 0.028);
+  for (let i = 0; i < 3; i += 1) {
+    const px = x + s * (0.23 + i * 0.20);
+    ctx.beginPath();
+    ctx.moveTo(px, y + s * 0.26);
+    ctx.lineTo(px, y + s * 0.76);
+    ctx.stroke();
+    drawLegionShield(ctx, px + s * 0.05, y + s * 0.62, s * 0.58, '#d6dde5', color);
+  }
+}
+
+function drawArcheryYard(ctx, x, y, s, color) {
+  ctx.strokeStyle = '#6b4a2d';
+  ctx.lineWidth = Math.max(2, s * 0.06);
+  ctx.beginPath();
+  ctx.arc(x + s * 0.31, y + s * 0.54, s * 0.17, -Math.PI / 2, Math.PI / 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#f4e2b4';
+  ctx.lineWidth = Math.max(1, s * 0.026);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.31, y + s * 0.37);
+  ctx.lineTo(x + s * 0.31, y + s * 0.71);
+  ctx.stroke();
+  ctx.fillStyle = '#d9c27b';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.68, y + s * 0.55, s * 0.19, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, s * 0.045);
+  for (const r of [0.15, 0.09, 0.035]) {
+    ctx.beginPath();
+    ctx.arc(x + s * 0.68, y + s * 0.55, s * r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#4f3421';
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  for (let i = 0; i < 4; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (0.41 + i * 0.04), y + s * 0.73);
+    ctx.lineTo(x + s * (0.55 + i * 0.04), y + s * 0.27);
+    ctx.stroke();
+  }
+}
+
+function drawStableYard(ctx, x, y, s, color) {
+  ctx.fillStyle = '#8a5b36';
+  ctx.fillRect(x + s * 0.18, y + s * 0.43, s * 0.64, s * 0.31);
+  ctx.fillStyle = '#f0d090';
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillRect(x + s * (0.24 + i * 0.13), y + s * 0.48, s * 0.045, s * 0.25);
+  }
+  ctx.fillStyle = color;
+  roof(ctx, x + s * 0.14, y + s * 0.42, s * 0.72, s * 0.20);
+  ctx.fillStyle = '#3b2619';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.49, y + s * 0.68, s * 0.20, s * 0.08, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + s * 0.66, y + s * 0.61, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  for (const px of [0.37, 0.47, 0.57, 0.64]) ctx.fillRect(x + s * px, y + s * 0.72, s * 0.026, s * 0.11);
+  ctx.strokeStyle = '#f7e1a4';
+  ctx.lineWidth = Math.max(1, s * 0.023);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.23, y + s * 0.40);
+  ctx.lineTo(x + s * 0.77, y + s * 0.40);
+  ctx.stroke();
+}
+
+function drawWorkshopYard(ctx, x, y, s, color) {
+  ctx.fillStyle = '#6b4a2d';
+  ctx.fillRect(x + s * 0.18, y + s * 0.50, s * 0.55, s * 0.22);
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(2, s * 0.05);
+  ctx.strokeRect(x + s * 0.18, y + s * 0.50, s * 0.55, s * 0.22);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.23, y + s * 0.72);
+  ctx.lineTo(x + s * 0.72, y + s * 0.50);
+  ctx.moveTo(x + s * 0.72, y + s * 0.72);
+  ctx.lineTo(x + s * 0.23, y + s * 0.50);
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, s * 0.055);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.44, y + s * 0.50);
+  ctx.lineTo(x + s * 0.74, y + s * 0.25);
+  ctx.stroke();
+  ctx.fillStyle = '#8a8e91';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.77, y + s * 0.23, s * 0.055, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#b78a4b';
+  for (const px of [0.28, 0.62]) {
+    ctx.beginPath();
+    ctx.arc(x + s * px, y + s * 0.74, s * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#ffcf6b';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.24, y + s * 0.42, s * 0.055, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawShrine(ctx, x, y, s, color) {
+  const glow = ctx.createRadialGradient(x + s * 0.5, y + s * 0.43, s * 0.04, x + s * 0.5, y + s * 0.43, s * 0.42);
+  glow.addColorStop(0, 'rgba(255, 216, 102, 0.42)');
+  glow.addColorStop(1, 'rgba(255, 216, 102, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + s * 0.06, y + s * 0.06, s * 0.88, s * 0.88);
+  ctx.fillStyle = '#efe1b4';
+  ctx.fillRect(x + s * 0.23, y + s * 0.68, s * 0.54, s * 0.08);
+  ctx.fillRect(x + s * 0.27, y + s * 0.34, s * 0.46, s * 0.08);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.fillRect(x + s * (0.31 + i * 0.16), y + s * 0.41, s * 0.06, s * 0.27);
+  }
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.22, y + s * 0.34);
+  ctx.lineTo(x + s * 0.50, y + s * 0.17);
+  ctx.lineTo(x + s * 0.78, y + s * 0.34);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#ffd866';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.50, y + s * 0.27, s * 0.055, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawOutpost(ctx, x, y, s, color) {
+  ctx.fillStyle = '#6e482c';
+  ctx.fillRect(x + s * 0.41, y + s * 0.32, s * 0.18, s * 0.45);
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, s * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.40, y + s * 0.40);
+  ctx.lineTo(x + s * 0.60, y + s * 0.76);
+  ctx.moveTo(x + s * 0.60, y + s * 0.40);
+  ctx.lineTo(x + s * 0.40, y + s * 0.76);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  roof(ctx, x + s * 0.30, y + s * 0.30, s * 0.40, s * 0.19);
+  ctx.fillStyle = '#e8d099';
+  ctx.fillRect(x + s * 0.33, y + s * 0.42, s * 0.34, s * 0.10);
+  ctx.fillStyle = '#5b3a24';
+  for (let i = 0; i < 5; i += 1) {
+    ctx.fillRect(x + s * (0.13 + i * 0.16), y + s * 0.70, s * 0.06, s * 0.15);
+  }
+  drawBannerPennon(ctx, x + s * 0.64, y + s * 0.16, s * 0.24, color);
+}
+
 function drawBannerPennon(ctx, x, y, h, color) {
   ctx.strokeStyle = '#2b1d12';
   ctx.lineWidth = Math.max(1, h * 0.08);
@@ -928,6 +1206,9 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   } else {
     drawLivingSoldier(ctx, unit, color, x, y, s);
   }
+  if (!def.tags.includes('undead') && unit.type !== 'onager') {
+    drawFormationStandard(ctx, unit, x, y, s, color);
+  }
   if (unit.hasActed && unit.faction === 'olundar') {
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.beginPath();
@@ -954,12 +1235,72 @@ function drawUnitRim(ctx, unit, cx, cy, s, color) {
   ctx.restore();
 }
 
+function drawFormationStandard(ctx, unit, x, y, s, color) {
+  const tall = unit.type === 'cavalry' || unit.type === 'spearGuard';
+  const poleX = x + s * (unit.type === 'archer' ? 0.30 : 0.76);
+  const topY = y + s * (tall ? 0.13 : 0.19);
+  ctx.save();
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, s * 0.027);
+  ctx.beginPath();
+  ctx.moveTo(poleX, topY);
+  ctx.lineTo(poleX, y + s * 0.68);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(poleX, topY + s * 0.02);
+  ctx.lineTo(poleX + s * 0.20, topY + s * 0.08);
+  ctx.lineTo(poleX + s * 0.04, topY + s * 0.17);
+  ctx.lineTo(poleX, topY + s * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#f6e4a6';
+  ctx.beginPath();
+  ctx.arc(poleX + s * 0.035, topY + s * 0.085, s * 0.025, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTroopDepth(ctx, unit, color, x, y, s) {
+  const positions = unit.type === 'archer'
+    ? [[0.34, 0.49], [0.62, 0.52]]
+    : unit.type === 'scout'
+      ? [[0.36, 0.56]]
+      : [[0.34, 0.54], [0.63, 0.56]];
+  ctx.save();
+  ctx.globalAlpha = 0.58;
+  ctx.strokeStyle = '#2b2218';
+  ctx.lineWidth = Math.max(1, s * 0.02);
+  for (const [px, py] of positions) {
+    ctx.fillStyle = unit.type === 'archer' ? '#7c4d2d' : color;
+    ctx.beginPath();
+    ctx.ellipse(x + s * px, y + s * (py + 0.12), s * 0.065, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d2c2a0';
+    ctx.beginPath();
+    ctx.arc(x + s * px, y + s * py, s * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    if (unit.type === 'archer') {
+      ctx.strokeStyle = '#4b2f1d';
+      ctx.lineWidth = Math.max(1, s * 0.022);
+      ctx.beginPath();
+      ctx.arc(x + s * (px + 0.05), y + s * (py + 0.11), s * 0.09, -Math.PI / 2, Math.PI / 2);
+      ctx.stroke();
+    } else if (unit.type !== 'engineer') {
+      drawLegionShield(ctx, x + s * (px - 0.055), y + s * (py + 0.15), s * 0.36, '#d6dde5', color);
+    }
+  }
+  ctx.restore();
+}
+
 function drawLivingSoldier(ctx, unit, color, x, y, s) {
   const cx = x + s * 0.5;
   const accent = UNIT_ACCENTS[unit.type] || '#d6dde5';
   const armor = unit.type === 'legionary' || unit.type === 'spearGuard';
   ctx.strokeStyle = '#2b2218';
   ctx.lineWidth = Math.max(1, s * 0.025);
+  drawTroopDepth(ctx, unit, color, x, y, s);
 
   ctx.fillStyle = armor ? '#c7ccd1' : color;
   ctx.beginPath();
@@ -1302,7 +1643,7 @@ function drawSelection(ctx, state, layout, hoverTile) {
 }
 
 function drawMiniMap(ctx, state, layout, lensId = 'normal') {
-  const scale = Math.max(2, Math.floor(layout.tileSize * 0.22));
+  const scale = Math.max(2, Math.min(6, Math.floor(layout.tileSize * 0.18)));
   const w = MAP_WIDTH * scale;
   const h = MAP_HEIGHT * scale;
   const x0 = layout.frameX + layout.mapWidth - w - 8;
