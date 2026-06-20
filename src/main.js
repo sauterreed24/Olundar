@@ -131,12 +131,17 @@ const BUILD_DOCTRINE_GROUPS = [
   { label: 'Muster halls', meta: 'Infantry, bows, cavalry, siege', types: ['barracks', 'archeryYard', 'stable', 'workshop'] },
   { label: 'Imperial civic works', meta: 'Morale and influence', types: ['shrine'] }
 ];
+const IDLE_HELP_DELAY_MS = 10000;
+const IDLE_ACTIVITY_THROTTLE_MS = 650;
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
 let toastTimer = null;
+let idleHelpTimer = null;
+let idleHelpVisible = false;
+let lastIdleActivityAt = 0;
 let playerSettings = readSettings();
 let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
@@ -389,9 +394,12 @@ function currentOpeningDirective() {
 
 function renderMapHelp() {
   if (!mapHelp) return;
+  const showIdleHelp = idleHelpVisible && state.status === 'playing';
+  mapHelp.classList.toggle('idle-help-active', showIdleHelp);
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
     mapHelp.innerHTML = [
+      ...(showIdleHelp ? idleBuildHelpChips(def) : []),
       `<span class="next-directive"><b>Build</b> ${escapeHtml(def.name)}</span>`,
       '<span>Green sites are valid</span>',
       '<span>Red sites are blocked</span>',
@@ -413,13 +421,35 @@ function renderMapHelp() {
       '<span>E ends turn | Esc cancels build</span>'
     ];
   const chips = [
-    ...(directive ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
+    ...(showIdleHelp ? idleContextualHelpChips(directive) : []),
+    ...(directive && !showIdleHelp ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
     movementFieldMapHelpChip(),
-    endTurnReviewMapHelpChip(),
-    deadwalkerMapHelpChip(),
+    ...(showIdleHelp ? [] : [endTurnReviewMapHelpChip(), deadwalkerMapHelpChip()]),
     ...hints
   ].filter(Boolean);
   mapHelp.innerHTML = chips.join('');
+}
+
+function idleBuildHelpChips(def) {
+  return [
+    `<span class="idle-help-chip idle-help-label"><b>Council nudge</b> Pick a green ${escapeHtml(def.name)} site or press Esc to cancel.</span>`
+  ];
+}
+
+function idleContextualHelpChips(directive = null) {
+  if (!idleHelpVisible || state.status !== 'playing') return [];
+  const chips = ['<span class="idle-help-chip idle-help-label"><b>Council nudge</b> Need the next order?</span>'];
+  const endWarnings = state.pendingEndTurn === state.turn ? getEndTurnWarnings(state) : [];
+  const deadwalker = deadwalkerMapHelpChip();
+  if (directive) {
+    chips.push(`<button type="button" class="idle-help-chip map-help-action" data-map-help-action="opening" aria-label="Focus the recommended opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`);
+  } else if (endWarnings.length) {
+    chips.push('<button type="button" class="idle-help-chip map-help-action" data-map-help-action="end-turn-review" aria-label="Review ready forces before ending the turn"><b>Review</b> ready forces</button>');
+  } else if (getReadyOlundarUnits(state).length > 0) {
+    chips.push('<button type="button" class="idle-help-chip map-help-action" data-map-help-action="next-ready" aria-label="Cycle to a ready Olundaran force"><b>Ready</b> next force</button>');
+  }
+  if (deadwalker) chips.push(deadwalker.replace('class="deadwalker-directive map-help-action"', 'class="idle-help-chip deadwalker-directive map-help-action"'));
+  return chips.slice(0, 3);
 }
 
 function movementFieldMapHelpChip() {
@@ -5325,6 +5355,34 @@ function scheduleHoverRender() {
   });
 }
 
+function resetIdleHelpTimer(renderHelp = false) {
+  if (idleHelpTimer !== null) {
+    window.clearTimeout(idleHelpTimer);
+    idleHelpTimer = null;
+  }
+  if (idleHelpVisible) {
+    idleHelpVisible = false;
+    if (renderHelp) renderMapHelp();
+  }
+  if (state.status !== 'playing') return;
+  idleHelpTimer = window.setTimeout(showIdleHelpChips, IDLE_HELP_DELAY_MS);
+}
+
+function showIdleHelpChips() {
+  idleHelpTimer = null;
+  if (state.status !== 'playing' || tacticalPauseVisible) return;
+  idleHelpVisible = true;
+  renderMapHelp();
+}
+
+function notePlayerActivity(event) {
+  if (idleHelpVisible && event?.type === 'mousemove' && event.target instanceof HTMLElement && event.target.closest('.map-help')) return;
+  const now = Date.now();
+  if (!idleHelpVisible && now - lastIdleActivityAt < IDLE_ACTIVITY_THROTTLE_MS) return;
+  lastIdleActivityAt = now;
+  resetIdleHelpTimer(true);
+}
+
 mobileIntelDrawer?.addEventListener('toggle', () => {
   if (!syncingMobileIntelDrawer && isMobileIntelDrawerMode()) {
     mobileIntelDrawerTouched = true;
@@ -5346,7 +5404,14 @@ mapHelp?.addEventListener('click', (event) => {
   }
   if (action === 'end-turn-review') {
     focusEndTurnReviewInCompactRail();
+    return;
   }
+  if (action === 'next-ready') {
+    selectNextReadyUnit();
+  }
+});
+['click', 'keydown', 'wheel', 'mousemove', 'scroll'].forEach((eventName) => {
+  window.addEventListener(eventName, notePlayerActivity, { passive: true });
 });
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('keydown', (event) => {
@@ -5714,3 +5779,4 @@ async function bootEngine() {
 }
 
 bootEngine();
+resetIdleHelpTimer();
