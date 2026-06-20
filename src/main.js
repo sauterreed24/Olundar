@@ -1059,13 +1059,13 @@ function renderActions() {
       buildSection.appendChild(buildDrawer);
       actionPanel.appendChild(buildSection);
     }
-    const unitSection = actionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
+    const unitSection = mobileCollapsibleActionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
     const unitActions = commandActions('primary-orders');
     unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), {
       disabled: selectedUnit.hasActed || selectedUnit.faction !== 'olundar',
       tone: 'primary'
     }));
-    unitSection.appendChild(unitActions);
+    appendOrderContent(unitSection, unitActions);
     actionPanel.appendChild(unitSection);
   }
 
@@ -1102,14 +1102,14 @@ function renderActions() {
   }
 
   const readyUnits = getReadyOlundarUnits(state).length;
-  const campaignSection = actionSection('Campaign tempo', `${readyUnits} ready unit${readyUnits === 1 ? '' : 's'} before the council should end the turn.`, 'campaign-orders');
+  const campaignSection = mobileCollapsibleActionSection('Campaign tempo', `${readyUnits} ready unit${readyUnits === 1 ? '' : 's'} before the council should end the turn.`, 'campaign-orders');
   const primaryCampaign = commandActions('campaign-primary');
   primaryCampaign.appendChild(orderButton('Next ready unit', 'Jump to an unused Olundaran force', () => selectNextReadyUnit(), {
     disabled: !readyUnits,
     tone: 'primary'
   }));
   primaryCampaign.appendChild(orderButton('End turn', 'Resolve enemies, training, blight, and diplomacy', () => requestEndTurn(), { tone: 'danger' }));
-  campaignSection.appendChild(primaryCampaign);
+  appendOrderContent(campaignSection, primaryCampaign);
 
   const tools = commandActions('campaign-tools');
   tools.appendChild(orderButton('Save slots', 'Store this campaign', () => openSaveManager('save')));
@@ -1121,7 +1121,7 @@ function renderActions() {
   toolsDrawer.className = 'campaign-tools-drawer';
   toolsDrawer.innerHTML = '<summary><span>Campaign tools</span> <small>Save, load, export</small></summary>';
   toolsDrawer.appendChild(tools);
-  campaignSection.appendChild(toolsDrawer);
+  appendOrderContent(campaignSection, toolsDrawer);
   actionPanel.appendChild(campaignSection);
 }
 
@@ -3625,6 +3625,32 @@ function actionSection(title, detail = '', className = '') {
     </div>
   `;
   return section;
+}
+
+function mobileCollapsibleActionSection(title, detail = '', className = '') {
+  const section = document.createElement('details');
+  section.className = `order-section mobile-collapsible-order ${className}`.trim();
+  if (!isMobileIntelDrawerMode()) section.open = true;
+  section.innerHTML = `
+    <summary class="mobile-collapsible-summary">
+      <span>${escapeHtml(title)}</span>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+    </summary>
+    <div class="mobile-collapsible-body">
+      <div class="order-section-head">
+        <h3>${escapeHtml(title)}</h3>
+        ${detail ? `<p>${escapeHtml(detail)}</p>` : ''}
+      </div>
+    </div>
+  `;
+  return section;
+}
+
+function appendOrderContent(section, child) {
+  const body = section.classList.contains('mobile-collapsible-order')
+    ? section.querySelector('.mobile-collapsible-body')
+    : null;
+  (body || section).appendChild(child);
 }
 
 function commandActions(className = '') {

@@ -3097,6 +3097,14 @@ button:hover:not(:disabled) {
   border-top: 1px solid rgba(143, 36, 24, 0.12);
 }
 
+.mobile-collapsible-summary {
+  display: none;
+}
+
+.mobile-collapsible-body {
+  display: grid;
+}
+
 .order-section-head h3 {
   margin: 0;
   color: #6b3518;
@@ -5741,6 +5749,95 @@ button:hover:not(:disabled),
 
   .panel {
     padding: 0.58rem;
+  }
+
+  .mobile-collapsible-order {
+    margin-top: 0.44rem;
+    padding-top: 0.44rem;
+  }
+
+  .mobile-collapsible-order:not([open]) {
+    padding-top: 0.34rem;
+  }
+
+  .mobile-collapsible-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.48rem;
+    min-height: 2.24rem;
+    padding: 0.34rem 0.48rem;
+    border: 1px solid rgba(38, 121, 132, 0.12);
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, rgba(255,255,253,0.97), rgba(235, 247, 223, 0.86)),
+      radial-gradient(circle at 0% 0%, rgba(255,255,255,0.80), transparent 8rem);
+    color: #245134;
+    cursor: pointer;
+    list-style: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.78),
+      0 5px 12px rgba(58, 89, 62, 0.07);
+  }
+
+  .mobile-collapsible-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-collapsible-summary::marker {
+    content: "";
+  }
+
+  .mobile-collapsible-summary::after {
+    content: "+";
+    display: grid;
+    place-items: center;
+    width: 1.34rem;
+    height: 1.34rem;
+    flex: 0 0 auto;
+    border: 1px solid rgba(185, 54, 46, 0.22);
+    border-radius: 50%;
+    background: rgba(255,255,255,0.64);
+    color: #8d3024;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .mobile-collapsible-order[open] .mobile-collapsible-summary::after {
+    content: "-";
+  }
+
+  .mobile-collapsible-summary span,
+  .mobile-collapsible-summary small {
+    min-width: 0;
+  }
+
+  .mobile-collapsible-summary span {
+    color: #8d3024;
+    font-family: Cinzel, Georgia, serif;
+    font-size: 0.92rem;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .mobile-collapsible-summary small {
+    overflow: hidden;
+    color: #4f614a;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1.12;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-collapsible-order[open] .mobile-collapsible-body {
+    margin-top: 0.42rem;
+  }
+
+  .mobile-collapsible-order .mobile-collapsible-body > .order-section-head {
+    display: none;
   }
 
   .mobile-command-strip {
