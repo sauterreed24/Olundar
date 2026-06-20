@@ -8,6 +8,13 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icons/olundar-icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs"
+        }
+      }
+    </script>
   </head>
   <body>
     <header class="topbar">
@@ -92,6 +99,11 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="introOverlay" class="intro-overlay" hidden></div>
+    <div id="tacticalPauseOverlay" class="tactical-pause-overlay" hidden></div>
+    <div id="modOverlay" class="setup-overlay" hidden>
+      <section id="modPanel" class="setup-dialog mod-dialog" role="dialog" aria-modal="true" aria-labelledby="modMenuTitle"></section>
+    </div>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

@@ -225,10 +225,19 @@ export function pointToTile(canvas, clientX, clientY) {
   return candidates[0] ? { x: candidates[0].x, y: candidates[0].y } : { x: -1, y: -1 };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+function resolveRenderSurface(surface) {
+  const canvas = surface?.canvas || surface;
+  const renderer = surface?.__pixiRenderer || canvas?.__pixiRenderer || null;
+  return { canvas, renderer, ctx: renderer?.getDrawContext?.() || canvas.__olundarDrawContext };
+}
+
+export function drawGame(surface, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+  const { canvas, renderer, ctx: abstractCtx } = resolveRenderSurface(surface);
   canvas.__olundarState = state;
-  const ctx = canvas.getContext('2d');
+  const ctx = abstractCtx;
+  if (!ctx) throw new Error('Canvas 2D context must come from the Pixi renderer abstraction.');
   const layout = getLayout(canvas);
+  if (renderer && !renderer.beginFrame(state)) return layout;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackdrop(ctx, canvas);
   ctx.save();
@@ -267,6 +276,26 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawMiniMap(ctx, state, layout, lensId);
   drawHollowCrownCompass(ctx, state, layout);
   drawStatusRibbon(ctx, state, layout);
+  if (renderer) {
+    renderer.queuePresent(state, layout);
+    applyBlightPulseGrade(ctx, state, layout, renderer);
+  }
+  return layout;
+}
+
+function applyBlightPulseGrade(ctx, state, layout, renderer) {
+  const sortedTiles = cameraSortedTiles(state.map, layout, 2);
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y)) continue;
+    if (tile.terrain !== 'blight' && !(tile.blight > 0)) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const pulse = 0.14 + Math.sin(renderer.blightPulse + tile.x * 0.4 + tile.y * 0.3) * 0.08;
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = 'rgba(156, 243, 138, 0.42)';
+    fillTileDiamond(ctx, bounds, 'rgba(156, 243, 138, 0.42)', bounds.s * 0.12);
+    ctx.restore();
+  }
 }
 
 function drawBattleImpact(ctx, state, layout, impact) {
