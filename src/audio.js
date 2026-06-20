@@ -1,27 +1,38 @@
 export const AUDIO_STORAGE_KEY = 'olundar.audio.enabled';
+export const AUDIO_BUS_STORAGE_KEY = 'olundar.audio.buses';
 export const DEFAULT_AUDIO_VOLUME = 58;
 
+export const AUDIO_BUSES = ['sfx', 'ambient', 'music', 'ui'];
+
 export const AUDIO_CUES = {
-  ui: { notes: [392, 494], duration: 0.06, spacing: 0.035, type: 'triangle', gain: 0.028 },
-  select: { notes: [330, 440], duration: 0.07, spacing: 0.04, type: 'sine', gain: 0.03 },
-  move: { notes: [196, 247], duration: 0.1, spacing: 0.055, type: 'triangle', gain: 0.032 },
-  attack: { notes: [131, 98], duration: 0.12, spacing: 0.035, type: 'sawtooth', gain: 0.04, slide: -18, noise: true },
-  build: { notes: [196, 247, 330], duration: 0.09, spacing: 0.045, type: 'square', gain: 0.026 },
-  train: { notes: [262, 330, 392], duration: 0.08, spacing: 0.045, type: 'triangle', gain: 0.028 },
-  diplomacy: { notes: [294, 392, 523], duration: 0.1, spacing: 0.05, type: 'sine', gain: 0.026 },
-  turn: { notes: [165, 220, 330], duration: 0.12, spacing: 0.06, type: 'triangle', gain: 0.03 },
-  warning: { notes: [220, 185], duration: 0.1, spacing: 0.06, type: 'square', gain: 0.03 },
-  error: { notes: [147, 110], duration: 0.12, spacing: 0.05, type: 'sawtooth', gain: 0.035 },
-  save: { notes: [330, 392, 523], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025 },
-  load: { notes: [523, 392, 330], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025 },
-  fanfare: { notes: [262, 330, 392, 523], duration: 0.1, spacing: 0.065, type: 'triangle', gain: 0.032 }
+  ui: { notes: [392, 494], duration: 0.06, spacing: 0.035, type: 'triangle', gain: 0.028, bus: 'ui' },
+  select: { notes: [330, 440], duration: 0.07, spacing: 0.04, type: 'sine', gain: 0.03, bus: 'sfx' },
+  move: { notes: [196, 247], duration: 0.1, spacing: 0.055, type: 'triangle', gain: 0.032, bus: 'sfx' },
+  attack: { notes: [131, 98], duration: 0.12, spacing: 0.035, type: 'sawtooth', gain: 0.04, slide: -18, noise: true, bus: 'sfx' },
+  build: { notes: [196, 247, 330], duration: 0.09, spacing: 0.045, type: 'square', gain: 0.026, bus: 'sfx' },
+  train: { notes: [262, 330, 392], duration: 0.08, spacing: 0.045, type: 'triangle', gain: 0.028, bus: 'sfx' },
+  diplomacy: { notes: [294, 392, 523], duration: 0.1, spacing: 0.05, type: 'sine', gain: 0.026, bus: 'ui' },
+  turn: { notes: [165, 220, 330], duration: 0.12, spacing: 0.06, type: 'triangle', gain: 0.03, bus: 'ui' },
+  warning: { notes: [220, 185], duration: 0.1, spacing: 0.06, type: 'square', gain: 0.03, bus: 'ui' },
+  error: { notes: [147, 110], duration: 0.12, spacing: 0.05, type: 'sawtooth', gain: 0.035, bus: 'ui' },
+  save: { notes: [330, 392, 523], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025, bus: 'ui' },
+  load: { notes: [523, 392, 330], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025, bus: 'ui' },
+  fanfare: { notes: [262, 330, 392, 523], duration: 0.1, spacing: 0.065, type: 'triangle', gain: 0.032, bus: 'music' },
+  tension: { notes: [110, 98, 87], duration: 0.12, spacing: 0.07, type: 'sawtooth', gain: 0.022, bus: 'music' }
 };
+
+const DEFAULT_BUS_VOLUMES = { sfx: 88, ambient: 72, music: 64, ui: 80 };
 
 let audioContext = null;
 let masterGain = null;
+let busGains = {};
 let ambientNodes = [];
+let musicNodes = [];
 let enabled = false;
 let volume = DEFAULT_AUDIO_VOLUME;
+let busVolumes = { ...DEFAULT_BUS_VOLUMES };
+let musicLayer = 'explore';
+let combatActive = false;
 
 export function validateAudioCueRegistry(registry = AUDIO_CUES) {
   const ids = Object.keys(registry);
@@ -46,6 +57,9 @@ export function validateAudioCueRegistry(registry = AUDIO_CUES) {
     if (!Number.isFinite(cue.gain) || cue.gain <= 0 || cue.gain > 0.05) {
       throw new Error(`${id} gain should stay subtle.`);
     }
+    if (cue.bus && !AUDIO_BUSES.includes(cue.bus)) {
+      throw new Error(`${id} references unknown bus ${cue.bus}.`);
+    }
     for (const note of cue.notes) {
       if (!Number.isFinite(note) || note < 70 || note > 1200) {
         throw new Error(`${id} has an out-of-range note.`);
@@ -54,12 +68,18 @@ export function validateAudioCueRegistry(registry = AUDIO_CUES) {
     totalDuration += cue.duration + spacing * Math.max(0, cue.notes.length - 1);
   }
 
-  return { count: ids.length, ids, totalDuration: Number(totalDuration.toFixed(3)) };
+  return { count: ids.length, ids, totalDuration: Number(totalDuration.toFixed(3)), buses: AUDIO_BUSES };
 }
 
 export function initAudioPreference(storage = null) {
   const store = storage || safeStorage();
   enabled = store?.getItem(AUDIO_STORAGE_KEY) === 'true';
+  try {
+    const savedBuses = JSON.parse(store?.getItem(AUDIO_BUS_STORAGE_KEY) || '{}');
+    busVolumes = { ...DEFAULT_BUS_VOLUMES, ...normalizeBusVolumes(savedBuses) };
+  } catch {
+    busVolumes = { ...DEFAULT_BUS_VOLUMES };
+  }
   return enabled;
 }
 
@@ -71,13 +91,22 @@ export function getAudioVolume() {
   return volume;
 }
 
+export function getBusVolumes() {
+  return { ...busVolumes };
+}
+
 export function setAudioVolume(nextVolume) {
   volume = normalizeVolume(nextVolume);
-  if (masterGain && audioContext) {
-    const target = volume / 100;
-    masterGain.gain.setTargetAtTime(target, audioContext.currentTime, 0.025);
-  }
+  applyMasterGain();
   return volume;
+}
+
+export function setBusVolume(bus, value) {
+  if (!AUDIO_BUSES.includes(bus)) return busVolumes;
+  busVolumes[bus] = normalizeVolume(value);
+  applyBusGain(bus);
+  persistBusVolumes();
+  return busVolumes;
 }
 
 export function setAudioEnabled(nextEnabled, storage = null) {
@@ -89,8 +118,13 @@ export function setAudioEnabled(nextEnabled, storage = null) {
     // Storage can be blocked in private or embedded browser contexts.
   }
 
-  if (enabled) startAmbient();
-  else stopAmbient();
+  if (enabled) {
+    startAmbient();
+    updateMusicLayers();
+  } else {
+    stopAmbient();
+    stopMusicLayers();
+  }
 
   return enabled;
 }
@@ -106,8 +140,12 @@ export function playAudioCue(id) {
   if (!context || !masterGain) return false;
 
   startAmbient();
+  updateMusicLayers();
+  const bus = cue.bus || 'sfx';
+  const busGain = busGains[bus] || masterGain;
   const now = context.currentTime + 0.012;
   const spacing = cue.spacing ?? 0.045;
+  const busLevel = (busVolumes[bus] ?? 80) / 100;
 
   cue.notes.forEach((frequency, index) => {
     const startAt = now + spacing * index;
@@ -122,17 +160,35 @@ export function playAudioCue(id) {
     }
 
     gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(cue.gain, startAt + 0.01);
+    gain.gain.exponentialRampToValueAtTime(cue.gain * busLevel, startAt + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
 
     oscillator.connect(gain);
-    gain.connect(masterGain);
+    gain.connect(busGain);
     oscillator.start(startAt);
     oscillator.stop(stopAt + 0.02);
   });
 
-  if (cue.noise) playNoise(context, now, cue.gain * 0.55);
+  if (cue.noise) playNoise(context, now, cue.gain * busLevel * 0.55, busGain);
   return true;
+}
+
+export function setMusicLayer(layer) {
+  musicLayer = layer;
+  updateMusicLayers();
+}
+
+export function setCombatMusicActive(active) {
+  combatActive = Boolean(active);
+  updateMusicLayers();
+}
+
+export function updateDynamicMusic(state) {
+  if (!enabled || !state) return;
+  const marchTurns = state.deadwalker?.nextMarchTurn ? state.deadwalker.nextMarchTurn - state.turn : 99;
+  if (marchTurns <= 3) setMusicLayer('tension');
+  else if (combatActive) setMusicLayer('combat');
+  else setMusicLayer('explore');
 }
 
 function safeStorage() {
@@ -152,10 +208,37 @@ function ensureAudioContext() {
     masterGain = audioContext.createGain();
     masterGain.gain.value = volume / 100;
     masterGain.connect(audioContext.destination);
+    for (const bus of AUDIO_BUSES) {
+      const gain = audioContext.createGain();
+      gain.gain.value = (busVolumes[bus] ?? 80) / 100;
+      gain.connect(masterGain);
+      busGains[bus] = gain;
+    }
   }
 
   if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
   return audioContext;
+}
+
+function applyMasterGain() {
+  if (masterGain && audioContext) {
+    masterGain.gain.setTargetAtTime(volume / 100, audioContext.currentTime, 0.025);
+  }
+}
+
+function applyBusGain(bus) {
+  const gain = busGains[bus];
+  if (gain && audioContext) {
+    gain.gain.setTargetAtTime((busVolumes[bus] ?? 80) / 100, audioContext.currentTime, 0.025);
+  }
+}
+
+function persistBusVolumes() {
+  try {
+    safeStorage()?.setItem(AUDIO_BUS_STORAGE_KEY, JSON.stringify(busVolumes));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function normalizeVolume(value) {
@@ -164,10 +247,18 @@ function normalizeVolume(value) {
   return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
+function normalizeBusVolumes(value = {}) {
+  const out = { ...DEFAULT_BUS_VOLUMES };
+  for (const bus of AUDIO_BUSES) {
+    if (value[bus] !== undefined) out[bus] = normalizeVolume(value[bus]);
+  }
+  return out;
+}
+
 function startAmbient() {
   if (ambientNodes.length) return true;
   const context = ensureAudioContext();
-  if (!context || !masterGain) return false;
+  if (!context || !busGains.ambient) return false;
 
   const now = context.currentTime;
   const bedGain = context.createGain();
@@ -190,7 +281,7 @@ function startAmbient() {
   lfoGain.connect(bedGain.gain);
   lowDrone.connect(bedGain);
   highDrone.connect(bedGain);
-  bedGain.connect(masterGain);
+  bedGain.connect(busGains.ambient);
 
   lowDrone.start(now);
   highDrone.start(now);
@@ -200,8 +291,36 @@ function startAmbient() {
 }
 
 function stopAmbient() {
+  stopNodeList(ambientNodes);
+  ambientNodes = [];
+}
+
+function updateMusicLayers() {
+  if (!enabled) return;
+  stopMusicLayers();
+  const context = ensureAudioContext();
+  if (!context || !busGains.music) return;
+  const now = context.currentTime;
+  const bedGain = context.createGain();
+  bedGain.gain.setValueAtTime(0.0001, now);
+  bedGain.gain.linearRampToValueAtTime(musicLayer === 'tension' ? 0.03 : 0.02, now + 0.5);
+  const osc = context.createOscillator();
+  osc.type = musicLayer === 'combat' ? 'triangle' : 'sine';
+  osc.frequency.value = musicLayer === 'tension' ? 92 : musicLayer === 'combat' ? 110 : 73;
+  osc.connect(bedGain);
+  bedGain.connect(busGains.music);
+  osc.start(now);
+  musicNodes = [osc, bedGain];
+}
+
+function stopMusicLayers() {
+  stopNodeList(musicNodes);
+  musicNodes = [];
+}
+
+function stopNodeList(nodes) {
   const context = audioContext;
-  for (const node of ambientNodes) {
+  for (const node of nodes) {
     try {
       if (typeof node.stop === 'function') node.stop(context ? context.currentTime + 0.03 : 0);
     } catch {
@@ -213,10 +332,9 @@ function stopAmbient() {
       // Disconnected nodes are harmless.
     }
   }
-  ambientNodes = [];
 }
 
-function playNoise(context, startAt, gainLevel) {
+function playNoise(context, startAt, gainLevel, destination) {
   const length = Math.floor(context.sampleRate * 0.05);
   const buffer = context.createBuffer(1, length, context.sampleRate);
   const data = buffer.getChannelData(0);
@@ -232,7 +350,7 @@ function playNoise(context, startAt, gainLevel) {
   gain.gain.setValueAtTime(gainLevel, startAt);
   gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.05);
   source.connect(gain);
-  gain.connect(masterGain);
+  gain.connect(destination);
   source.start(startAt);
   source.stop(startAt + 0.055);
 }

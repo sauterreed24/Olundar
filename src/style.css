@@ -7705,7 +7705,86 @@ body {
     min-width: 4.15rem;
   }
 
-  .resource b {
-    margin-right: 0.10rem;
+  .map-intel-tooltip {
+    font-size: 0.72rem;
+    color: #4a3728;
+    margin: 0.2rem 0 0.35rem;
+    line-height: 1.35;
+  }
+
+  .guide-ui-highlight {
+    outline: 2px solid rgba(240, 200, 102, 0.95);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(240, 200, 102, 0.22);
+    animation: guidePulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes guidePulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(240, 200, 102, 0.18); }
+    50% { box-shadow: 0 0 0 8px rgba(240, 200, 102, 0.34); }
+  }
+
+  .tactical-pause-overlay,
+  .campaign-intro-overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 6;
+  }
+
+  .tactical-pause-overlay:not([hidden]) {
+    pointer-events: auto;
+    background: rgba(24, 18, 12, 0.42);
+    backdrop-filter: blur(3px);
+  }
+
+  .tactical-pause-card,
+  .campaign-intro-banner {
+    max-width: min(24rem, 92%);
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(240, 200, 102, 0.45);
+    background: linear-gradient(180deg, rgba(255, 252, 238, 0.98), rgba(245, 232, 198, 0.94));
+    box-shadow: 0 18px 40px rgba(42, 31, 18, 0.22);
+    text-align: center;
+  }
+
+  .campaign-intro-overlay .campaign-intro-banner {
+    animation: introUnfurl 1.4s ease-out both;
+  }
+
+  @keyframes introUnfurl {
+    from { opacity: 0; transform: translateY(12px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .bus-volume-grid {
+    display: grid;
+    gap: 0.55rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .mod-menu-drawer {
+    margin: 0.8rem 0 1rem;
+    border: 1px solid rgba(120, 86, 42, 0.22);
+    border-radius: 0.8rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(255, 250, 236, 0.72);
+  }
+
+  .mod-menu-drawer textarea {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(120, 86, 42, 0.25);
+    padding: 0.55rem;
+    resize: vertical;
+  }
+
+  .damage-overlay {
+    z-index: 4;
   }
 }
