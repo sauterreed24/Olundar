@@ -941,6 +941,38 @@ function openingActionTarget(action) {
   return { target, unit, building };
 }
 
+function openingActionSource(action) {
+  const unit = action?.unitId ? state.units.find((item) => item.id === action.unitId) : null;
+  const building = action?.buildingId ? state.buildings.find((item) => item.id === action.buildingId) : null;
+  if (unit) return { type: 'unit', unit, label: unit.name, x: unit.x, y: unit.y };
+  if (building) return { type: 'building', building, label: BUILDING_TYPES[building.type]?.name || 'Structure', x: building.x, y: building.y };
+  return null;
+}
+
+function openingActionMatchesSelection(action) {
+  const source = openingActionSource(action);
+  if (!source) return true;
+  if (source.unit) return state.selectedUnitId === source.unit.id;
+  if (source.building) return state.selectedBuildingId === source.building.id;
+  return true;
+}
+
+function focusOpeningActionSource(action, options = {}) {
+  const source = openingActionSource(action);
+  if (!source) return false;
+  if (source.unit) selectUnit(source.unit.id);
+  if (source.building) selectBuilding(source.building.id);
+  lastTile = { x: source.x, y: source.y };
+  hoverTile = Number.isFinite(action.x) && Number.isFinite(action.y)
+    ? { x: action.x, y: action.y }
+    : lastTile;
+  if (options.toast !== false) toast(`${source.label} focused for ${action.label}.`, 'info');
+  playAudioCue('select');
+  render();
+  if (window.innerWidth <= 980) scrollBattlefieldIntoView();
+  return true;
+}
+
 function openingDirectiveForTile(tile) {
   if (state.status !== 'playing' || state.mode.type !== 'select') return null;
   const directive = currentOpeningDirective();
@@ -2451,6 +2483,8 @@ function openingDoctrineCard() {
   if (!directive || state.status !== 'playing') return null;
   const { guide, current } = directive;
   const recommendation = openingDirectiveAction(current.id);
+  const recommendationSource = recommendation ? openingActionSource(recommendation) : null;
+  const selectionMismatch = Boolean(recommendationSource && !openingActionMatchesSelection(recommendation));
   const card = document.createElement('article');
   card.className = 'opening-doctrine';
   card.innerHTML = `
@@ -2470,7 +2504,12 @@ function openingDoctrineCard() {
     ` : ''}
   `;
   const actions = commandActions('doctrine-actions');
-  if (recommendation?.canExecute) {
+  if (recommendation?.canExecute && selectionMismatch) {
+    actions.appendChild(orderButton(`Focus ${recommendationSource.label}`, 'Selects the order source', () => focusOpeningActionSource(recommendation), {
+      disabled: Boolean(recommendation.disabled),
+      tone: 'primary'
+    }));
+  } else if (recommendation?.canExecute) {
     actions.appendChild(orderButton(recommendation.executeLabel || 'Do order', recommendation.executeMeta || recommendation.meta, () => executeOpeningDirective(recommendation), {
       disabled: Boolean(recommendation.disabled),
       tone: 'primary'
@@ -3318,6 +3357,16 @@ function continueTurnReportOrders() {
 }
 
 function selectNextReadyUnit() {
+  const directive = currentOpeningDirective();
+  const openingAction = directive ? openingDirectiveAction(directive.current.id) : null;
+  if (openingAction?.unitId && state.selectedUnitId !== openingAction.unitId) {
+    const unit = state.units.find((item) => item.id === openingAction.unitId && item.faction === 'olundar' && !item.hasActed);
+    if (unit && focusOpeningActionSource(openingAction)) return;
+  }
+  if (openingAction?.buildingId && state.selectedBuildingId !== openingAction.buildingId) {
+    const building = state.buildings.find((item) => item.id === openingAction.buildingId && item.faction === 'olundar' && item.turnsLeft <= 0);
+    if (building && focusOpeningActionSource(openingAction)) return;
+  }
   const readyUnits = getReadyOlundarUnits(state);
   const currentIndex = readyUnits.findIndex((unit) => unit.id === state.selectedUnitId);
   const unit = currentIndex >= 0 && readyUnits.length > 1
