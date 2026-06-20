@@ -2716,6 +2716,7 @@ function openingDirectiveAction(stepId) {
   if (['scout', 'contact', 'front'].includes(stepId)) {
     const scout = openingUnitByTag('recon');
     const destination = scout ? bestScoutAdvance(scout) : null;
+    if (scout?.hasActed) return blockedScoutRecovery(scout, scoutRecoveryLabel(stepId));
     if (!scout || !destination) return null;
     return {
       kind: 'move',
@@ -2746,6 +2747,41 @@ function openingDirectiveAction(stepId) {
   }
 
   return null;
+}
+
+function scoutRecoveryLabel(stepId) {
+  if (stepId === 'contact') return 'First contact';
+  if (stepId === 'front') return 'Deadwalker front';
+  return 'Scout advance';
+}
+
+function blockedScoutRecovery(scout, nextLabel) {
+  const readyUnits = getReadyOlundarUnits(state).filter((unit) => unit.id !== scout.id);
+  const guard = readyUnits.find((unit) => !UNIT_TYPES[unit.type].tags.includes('builder')) || readyUnits[0];
+  if (guard) {
+    return {
+      kind: 'fortify',
+      unitId: guard.id,
+      canExecute: true,
+      label: 'Hold while scout reports',
+      meta: `${nextLabel} continues next turn`,
+      executeLabel: 'Do order',
+      executeMeta: 'Fortify, then end turn',
+      previewMeta: `Focus ${guard.name}`,
+      previewToast: `${guard.name} can hold the roads while ${scout.name} reports from the frontier.`,
+      successToast: `${guard.name} holds while ${scout.name} reports.`
+    };
+  }
+  return {
+    kind: 'end-turn',
+    canExecute: true,
+    label: 'End turn for fresh scout',
+    meta: `${nextLabel} resumes turn ${state.turn + 1}`,
+    executeLabel: 'Do order',
+    executeMeta: `Advance to turn ${state.turn + 1}`,
+    previewMeta: 'Review turn pass',
+    previewToast: `End the turn so ${scout.name} can scout again.`
+  };
 }
 
 function openingBlockedInfrastructureAction(action) {
