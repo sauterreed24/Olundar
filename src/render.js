@@ -4637,8 +4637,11 @@ function drawSelectedCommandAquila(ctx, bounds, layout, color, active) {
 }
 
 function drawSelectedCommandPlaque(ctx, bounds, layout, unit, color, active) {
-  const compact = layout.tileSize < 46 || layout.mapWidth < 560;
-  if (compact) return;
+  const compact = layout.tileSize < 46 || layout.mapWidth < 560 || layout.canvasWidth < 640;
+  if (compact) {
+    drawSelectedCommandCompactTag(ctx, bounds, layout, unit, color, active);
+    return;
+  }
   const def = UNIT_TYPES[unit.type];
   const label = active ? 'READY' : unit.hasActed ? 'SPENT' : def.role.toUpperCase();
   const w = Math.max(48, layout.tileSize * 0.82);
@@ -4660,6 +4663,53 @@ function drawSelectedCommandPlaque(ctx, bounds, layout, unit, color, active) {
   ctx.textBaseline = 'middle';
   ctx.fillText(label, bounds.cx, y + h * 0.54);
   ctx.restore();
+}
+
+function drawSelectedCommandCompactTag(ctx, bounds, layout, unit, color, active) {
+  const label = unitMapLabel(unit);
+  const w = Math.max(42, Math.min(layout.tileSize * 1.12, 22 + label.length * layout.tileSize * 0.105));
+  const h = Math.max(15, layout.tileSize * 0.24);
+  const x = bounds.cx - w * 0.50;
+  const y = bounds.cy - layout.tileSize * 0.90;
+  ctx.save();
+  ctx.shadowColor = active ? 'rgba(255, 216, 104, 0.34)' : 'rgba(63, 40, 20, 0.18)';
+  ctx.shadowBlur = layout.tileSize * 0.055;
+  roundRectPath(ctx, x, y, w, h, h * 0.42);
+  const fill = ctx.createLinearGradient(x, y, x, y + h);
+  fill.addColorStop(0, '#fffdf2');
+  fill.addColorStop(0.52, active ? '#fff1c5' : '#efe4ca');
+  fill.addColorStop(1, colorMix(color, '#ffffff', active ? 0.74 : 0.84));
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = active ? colorMix(color, '#f0c866', 0.38) : 'rgba(111, 80, 45, 0.44)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.fill();
+  ctx.stroke();
+
+  const sealR = h * 0.27;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x + h * 0.52, y + h * 0.50, sealR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = active ? '#fff4ba' : 'rgba(255, 247, 214, 0.76)';
+  ctx.beginPath();
+  ctx.arc(x + h * 0.52, y + h * 0.50, sealR * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = active ? '#7e241d' : '#5f4b35';
+  ctx.font = `900 ${Math.max(7, h * 0.43)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w * 0.58, y + h * 0.54, w - h * 1.12);
+  ctx.restore();
+}
+
+function unitMapLabel(unit) {
+  if (unit.type === 'scout') return 'SCOUT';
+  if (unit.type === 'spearGuard') return 'SPEAR';
+  if (unit.type === 'corpseArcher') return 'BONE BOW';
+  const def = UNIT_TYPES[unit.type] || {};
+  const source = def.role || def.name || unit.type || 'UNIT';
+  return source.replace(/[^a-z0-9 ]/gi, '').trim().slice(0, 8).toUpperCase() || 'UNIT';
 }
 
 function drawBuildingSprite(ctx, building, x, y, s) {
@@ -5168,6 +5218,7 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   ctx.shadowOffsetY = s * 0.04;
   drawUnitPlinth(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, !unit.hasActed);
   drawUnitRim(ctx, unit, cx, y + s * 0.78, s, enemy ? '#9cf38a' : color);
+  drawUnitFormationSilhouette(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, enemy);
   if (def.tags.includes('undead')) {
     drawUndead(ctx, unit, x, y, s);
   } else if (unit.type === 'cavalry') {
@@ -5189,6 +5240,121 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
     drawFortifiedChevron(ctx, x, y, s);
   }
   drawHealthBar(ctx, x + s * 0.18, y + s * 0.89, s * 0.64, s * 0.065, unit.hp / unit.maxHp, { gold: unit.faction === 'olundar' && !unit.hasActed });
+  ctx.restore();
+}
+
+function drawUnitFormationSilhouette(ctx, unit, x, y, s, color, enemy) {
+  const def = UNIT_TYPES[unit.type];
+  const undead = def.tags.includes('undead');
+  const spent = unit.hasActed && unit.faction === 'olundar';
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = undead ? 'rgba(156, 243, 138, 0.20)' : 'rgba(55, 35, 18, 0.22)';
+  ctx.shadowBlur = s * 0.045;
+  ctx.globalAlpha = spent ? 0.42 : 0.70;
+
+  if (undead) {
+    ctx.strokeStyle = 'rgba(8, 15, 11, 0.68)';
+    ctx.lineWidth = Math.max(1, s * 0.038);
+    for (const px of [0.38, 0.50, 0.62]) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * px, y + s * 0.34);
+      ctx.lineTo(x + s * (px - 0.04), y + s * 0.67);
+      ctx.moveTo(x + s * (px - 0.08), y + s * 0.47);
+      ctx.lineTo(x + s * (px + 0.07), y + s * 0.52);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(156, 243, 138, 0.58)';
+    ctx.lineWidth = Math.max(1, s * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.28, y + s * 0.69);
+    ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.76, x + s * 0.73, y + s * 0.67);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  const backplate = ctx.createLinearGradient(x + s * 0.24, y + s * 0.28, x + s * 0.76, y + s * 0.78);
+  backplate.addColorStop(0, colorMix(color, '#fff1b0', 0.34));
+  backplate.addColorStop(0.62, colorMix(color, '#7b4b24', 0.16));
+  backplate.addColorStop(1, 'rgba(41, 30, 21, 0.34)');
+  ctx.fillStyle = backplate;
+
+  if (unit.type === 'archer') {
+    ctx.strokeStyle = 'rgba(73, 43, 22, 0.70)';
+    ctx.lineWidth = Math.max(1, s * 0.038);
+    for (const px of [0.40, 0.52, 0.64]) {
+      ctx.beginPath();
+      ctx.arc(x + s * px, y + s * 0.57, s * 0.15, -Math.PI / 2, Math.PI / 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + s * (px + 0.10), y + s * 0.36);
+      ctx.lineTo(x + s * (px + 0.10), y + s * 0.72);
+      ctx.stroke();
+    }
+  } else if (unit.type === 'scout') {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.50, y + s * 0.22);
+    ctx.lineTo(x + s * 0.25, y + s * 0.69);
+    ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.78, x + s * 0.75, y + s * 0.69);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243, 232, 167, 0.62)';
+    ctx.lineWidth = Math.max(1, s * 0.026);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.32, y + s * 0.64);
+    ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.45, x + s * 0.70, y + s * 0.36);
+    ctx.stroke();
+  } else if (unit.type === 'engineer') {
+    ctx.strokeStyle = colorMix(color, '#51321d', 0.18);
+    ctx.lineWidth = Math.max(1, s * 0.044);
+    for (const [x1, y1, x2, y2] of [[0.30, 0.69, 0.68, 0.35], [0.36, 0.39, 0.74, 0.72], [0.28, 0.58, 0.78, 0.58]]) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * x1, y + s * y1);
+      ctx.lineTo(x + s * x2, y + s * y2);
+      ctx.stroke();
+    }
+  } else if (unit.type === 'cavalry') {
+    ctx.beginPath();
+    ctx.ellipse(x + s * 0.52, y + s * 0.62, s * 0.38, s * 0.15, -0.02, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(43, 29, 18, 0.58)';
+    ctx.lineWidth = Math.max(1, s * 0.032);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.32, y + s * 0.72);
+    ctx.lineTo(x + s * 0.22, y + s * 0.80);
+    ctx.moveTo(x + s * 0.62, y + s * 0.72);
+    ctx.lineTo(x + s * 0.74, y + s * 0.80);
+    ctx.stroke();
+  } else if (unit.type === 'onager') {
+    ctx.strokeStyle = 'rgba(74, 49, 28, 0.70)';
+    ctx.lineWidth = Math.max(1, s * 0.044);
+    ctx.strokeRect(x + s * 0.25, y + s * 0.52, s * 0.50, s * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.36, y + s * 0.53);
+    ctx.lineTo(x + s * 0.71, y + s * 0.26);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = colorMix(color, '#4f2e1c', 0.20);
+    ctx.lineWidth = Math.max(1, s * 0.026);
+    for (const [px, py] of [[0.33, 0.60], [0.49, 0.56], [0.65, 0.60]]) {
+      drawLegionShield(ctx, x + s * px, y + s * py, s * 0.56, unit.type === 'spearGuard' ? '#e3d276' : '#dce2e7', color);
+      ctx.beginPath();
+      ctx.moveTo(x + s * (px + 0.06), y + s * 0.28);
+      ctx.lineTo(x + s * (px + 0.06), y + s * 0.74);
+      ctx.stroke();
+    }
+  }
+
+  if (!enemy) {
+    ctx.globalAlpha = spent ? 0.18 : 0.34;
+    ctx.strokeStyle = 'rgba(255, 244, 184, 0.72)';
+    ctx.lineWidth = Math.max(1, s * 0.014);
+    ctx.beginPath();
+    ctx.ellipse(x + s * 0.50, y + s * 0.77, s * 0.34, s * 0.06, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
