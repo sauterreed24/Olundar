@@ -255,14 +255,16 @@ function renderMapHelp() {
   }
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
-  const hints = compactDirective ? [] : [
-    '<span>Gold field marks terrain-adjusted movement radius</span>',
-    '<span>Standards mark key moves</span>',
-    '<span>Laurels mark supplied ground</span>',
-    '<span>Hover previews route cost</span>',
-    '<span>Red rim marks attack reach</span>',
-    '<span>E ends turn | Esc cancels build</span>'
-  ];
+  const hints = compactDirective
+    ? ['<span>Gold outlines legal moves</span>', '<span>Blue outlines road moves</span>']
+    : [
+      '<span>Gold outlines every legal terrain-cost move</span>',
+      '<span>Blue outlines road-speed moves</span>',
+      '<span>Laurels mark supplied ground</span>',
+      '<span>Hover previews route cost</span>',
+      '<span>Red rim marks attack reach</span>',
+      '<span>E ends turn | Esc cancels build</span>'
+    ];
   const chips = [
     ...(directive ? [`<span class="next-directive"><b>Next</b> ${escapeHtml(directive.current.label)}</span>`] : []),
     ...hints
@@ -2032,11 +2034,7 @@ function syncMobileIntelDrawer() {
 
 function mobileIntelNeedsAttention() {
   if (state.status !== 'playing') return true;
-  return panelHasVisibleContent(crisisPanel) || panelHasVisibleContent(missionPanel) || panelHasVisibleContent(operationsPanel);
-}
-
-function panelHasVisibleContent(panel) {
-  return Boolean(panel && !panel.hidden && panel.textContent.trim());
+  return false;
 }
 
 function isMobileIntelDrawerMode() {
@@ -2429,16 +2427,17 @@ function pactFieldCommandCard() {
   const opportunity = currentPactFieldCommand();
   if (!opportunity || state.status !== 'playing') return null;
   const { entry, recommendation } = opportunity;
+  const compact = isCompactCommandRailMode();
   const activeOrder = entry.fieldOrder || entry.fieldOrders.find((order) => order.active);
   const card = document.createElement('article');
-  card.className = 'opening-doctrine diplomacy-doctrine pact-command';
+  card.className = `opening-doctrine diplomacy-doctrine pact-command ${compact ? 'compact-pact-command' : ''}`.trim();
   card.innerHTML = `
     <div class="opening-doctrine-head">
       <span>Pact Field Command</span>
       <b>${escapeHtml(opportunity.badge)}</b>
     </div>
     <strong>${escapeHtml(entry.name)}: ${escapeHtml(activeOrder?.name || 'Awaiting order')}</strong>
-    <p>${escapeHtml(opportunity.detail)}</p>
+    <p>${escapeHtml(compact ? compactPactCommandDetail(recommendation, activeOrder) : opportunity.detail)}</p>
     <small>${escapeHtml(opportunity.phase)}</small>
     <div class="doctrine-recommendation">
       <span>Recommended Pact Order</span>
@@ -2458,6 +2457,14 @@ function pactFieldCommandCard() {
   actions.appendChild(orderButton('Show ally lens', 'Shared sight and pact positions', () => focusDiplomacyOpportunity(entry.id)));
   card.appendChild(actions);
   return card;
+}
+
+function compactPactCommandDetail(recommendation, activeOrder) {
+  const active = activeOrder?.name ? `${activeOrder.name} active.` : 'Choose an ally stance.';
+  const next = recommendation?.name && recommendation.name !== activeOrder?.name
+    ? ` Recommended: ${recommendation.name}.`
+    : '';
+  return `${active}${next} Use the buttons to retask this pact without opening the ledger.`;
 }
 
 function currentPactFieldCommand() {

@@ -3,36 +3,36 @@ import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
-  plains: '#d2e978',
-  forest: '#23854b',
-  hills: '#dca75b',
-  mountains: '#b6c4bd',
-  river: '#20aedd',
-  marsh: '#7fb56a',
-  ruins: '#d0bd91',
-  blight: '#706685'
+  plains: '#d8ed76',
+  forest: '#2f9b56',
+  hills: '#e1bc63',
+  mountains: '#c4d0c9',
+  river: '#24bde7',
+  marsh: '#8cc979',
+  ruins: '#d9cba7',
+  blight: '#74658e'
 };
 
 const TERRAIN_HIGHLIGHTS = {
-  plains: '#fff6ad',
-  forest: '#9bef73',
-  hills: '#ffd48a',
-  mountains: '#f5fff9',
-  river: '#d7fbff',
-  marsh: '#d0f49a',
-  ruins: '#ffe9ad',
-  blight: '#b7ff8d'
+  plains: '#fff9ba',
+  forest: '#b2ff82',
+  hills: '#ffe19b',
+  mountains: '#fbfff9',
+  river: '#dcfcff',
+  marsh: '#dcffad',
+  ruins: '#fff0c2',
+  blight: '#c6ff93'
 };
 
 const TERRAIN_PALETTES = {
-  plains: { shadow: '#6f9f3b', base: '#d2e978', light: '#fff6ad', accent: '#99c44e', crown: '#efe070' },
-  forest: { shadow: '#0f4d2c', base: '#23854b', light: '#9bef73', accent: '#1e6b3b', crown: '#155532' },
-  hills: { shadow: '#965e28', base: '#dca75b', light: '#ffd48a', accent: '#bb7838', crown: '#f2bd67' },
-  mountains: { shadow: '#6f7c78', base: '#b6c4bd', light: '#f5fff9', accent: '#84948d', crown: '#e5eee7' },
-  river: { shadow: '#086d9a', base: '#20aedd', light: '#d7fbff', accent: '#79e5f6', crown: '#efffff' },
-  marsh: { shadow: '#437647', base: '#7fb56a', light: '#d0f49a', accent: '#91c36f', crown: '#e4f3aa' },
-  ruins: { shadow: '#7d6c52', base: '#d0bd91', light: '#ffe9ad', accent: '#a58b68', crown: '#e6d0a1' },
-  blight: { shadow: '#302840', base: '#706685', light: '#b7ff8d', accent: '#7ced6b', crown: '#daffc0' }
+  plains: { shadow: '#78a846', base: '#d8ed76', light: '#fff9ba', accent: '#a7cf57', crown: '#f5e878' },
+  forest: { shadow: '#155f38', base: '#2f9b56', light: '#b2ff82', accent: '#247744', crown: '#1b613a' },
+  hills: { shadow: '#a77531', base: '#e1bc63', light: '#ffe19b', accent: '#c58c44', crown: '#f6cc72' },
+  mountains: { shadow: '#7d8984', base: '#c4d0c9', light: '#fbfff9', accent: '#90a09a', crown: '#edf5ee' },
+  river: { shadow: '#087aa8', base: '#24bde7', light: '#dcfcff', accent: '#80ecfa', crown: '#f2ffff' },
+  marsh: { shadow: '#4d8652', base: '#8cc979', light: '#dcffad', accent: '#9bd579', crown: '#e8f8b4' },
+  ruins: { shadow: '#8b7b5f', base: '#d9cba7', light: '#fff0c2', accent: '#b49a70', crown: '#ebd8aa' },
+  blight: { shadow: '#332842', base: '#74658e', light: '#c6ff93', accent: '#86f06f', crown: '#e0ffbf' }
 };
 
 const UNIT_ACCENTS = {
@@ -2356,6 +2356,7 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
   }
   drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove);
   drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
+  drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove);
   ctx.restore();
 }
 
@@ -2756,8 +2757,8 @@ function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
   const reachableSet = new Set(reachable.map((item) => tileKey(item.x, item.y)));
   const overlayScale = movementOverlayScale(layout);
   ctx.save();
-  ctx.shadowColor = 'rgba(255, 218, 126, 0.28)';
-  ctx.shadowBlur = layout.tileSize * 0.12 * overlayScale;
+  ctx.shadowColor = 'rgba(255, 237, 151, 0.42)';
+  ctx.shadowBlur = layout.tileSize * 0.16 * overlayScale;
   for (const item of reachable) {
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       if (reachableSet.has(tileKey(item.x + dx, item.y + dy))) continue;
@@ -2767,39 +2768,103 @@ function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
   ctx.restore();
 }
 
+function drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove = null) {
+  const overlayScale = movementOverlayScale(layout);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(255, 252, 203, 0.30)';
+  ctx.shadowBlur = layout.tileSize * 0.08 * overlayScale;
+  for (const item of reachable) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    const hovered = sameTile(item, hoverMove);
+    const frontier = item.frontier || item.cost >= maxMove;
+    const rough = item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
+    const road = item.road;
+    const outer = road
+      ? 'rgba(20, 113, 153, 0.70)'
+      : item.supplied
+        ? 'rgba(63, 137, 66, 0.58)'
+        : frontier
+          ? 'rgba(158, 96, 25, 0.72)'
+          : rough
+            ? 'rgba(138, 85, 27, 0.54)'
+            : 'rgba(124, 91, 33, 0.38)';
+    const inner = road
+      ? 'rgba(223, 252, 255, 0.94)'
+      : item.supplied
+        ? 'rgba(241, 255, 184, 0.86)'
+        : frontier
+          ? 'rgba(255, 249, 178, 0.95)'
+          : 'rgba(255, 247, 204, 0.72)';
+    const width = layout.tileSize * (hovered ? 0.054 : frontier ? 0.038 : rough || road ? 0.030 : 0.022) * overlayScale;
+    strokeTileDiamond(ctx, bounds, outer, Math.max(1.2, width * 1.42), hovered ? 0.4 : 2.6);
+    strokeTileDiamond(ctx, bounds, inner, Math.max(1, width), hovered ? 2.6 : 5.4);
+    if (frontier || hovered) drawMovementCommandCornerPins(ctx, bounds, layout, item, hovered);
+  }
+  ctx.restore();
+}
+
+function drawMovementCommandCornerPins(ctx, bounds, layout, item, hovered = false) {
+  const overlayScale = movementOverlayScale(layout);
+  const pinColor = item.road
+    ? 'rgba(218, 250, 255, 0.98)'
+    : item.supplied
+      ? 'rgba(236, 255, 176, 0.96)'
+      : 'rgba(255, 244, 155, 0.98)';
+  const edgeColor = item.road ? 'rgba(29, 104, 137, 0.76)' : 'rgba(115, 71, 23, 0.68)';
+  const r = Math.max(2.2, layout.tileSize * (hovered ? 0.060 : 0.044) * overlayScale);
+  const points = [
+    [bounds.cx, bounds.cy - bounds.halfH + layout.tileSize * 0.065],
+    [bounds.cx + bounds.halfW - layout.tileSize * 0.060, bounds.cy],
+    [bounds.cx, bounds.cy + bounds.halfH - layout.tileSize * 0.065],
+    [bounds.cx - bounds.halfW + layout.tileSize * 0.060, bounds.cy]
+  ];
+  ctx.save();
+  ctx.fillStyle = pinColor;
+  ctx.strokeStyle = edgeColor;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.010 * overlayScale);
+  for (const [x, y] of points) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
   const overlayScale = movementOverlayScale(layout);
   const [start, end] = frontierEdgePoints(bounds, dx, dy);
   const typeColor = item.road
-    ? 'rgba(128, 229, 255, 0.96)'
+    ? 'rgba(156, 236, 255, 0.98)'
     : item.supplied
-      ? 'rgba(205, 250, 126, 0.94)'
+      ? 'rgba(219, 255, 136, 0.96)'
       : item.cost >= maxMove || item.terrainPressure > 2.7
-        ? 'rgba(255, 181, 62, 0.98)'
-        : 'rgba(255, 232, 132, 0.94)';
+        ? 'rgba(255, 201, 82, 1)'
+        : 'rgba(255, 242, 150, 0.98)';
   const commandGold = item.cost >= maxMove
-    ? 'rgba(255, 236, 146, 1)'
-    : 'rgba(255, 248, 190, 0.98)';
-  ctx.strokeStyle = 'rgba(20, 74, 90, 0.78)';
-  ctx.lineWidth = Math.max(5, layout.tileSize * 0.136 * overlayScale);
+    ? 'rgba(255, 251, 172, 1)'
+    : 'rgba(255, 253, 214, 0.98)';
+  ctx.strokeStyle = 'rgba(24, 94, 118, 0.76)';
+  ctx.lineWidth = Math.max(6, layout.tileSize * 0.150 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255, 255, 244, 0.74)';
-  ctx.lineWidth = Math.max(3, layout.tileSize * 0.090 * overlayScale);
+  ctx.strokeStyle = 'rgba(255, 255, 250, 0.86)';
+  ctx.lineWidth = Math.max(3.4, layout.tileSize * 0.098 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.012);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.012);
   ctx.stroke();
   ctx.strokeStyle = commandGold;
-  ctx.lineWidth = Math.max(2.5, layout.tileSize * 0.062 * overlayScale);
+  ctx.lineWidth = Math.max(2.8, layout.tileSize * 0.068 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.018);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.018);
   ctx.stroke();
   ctx.strokeStyle = typeColor;
-  ctx.lineWidth = Math.max(1.2, layout.tileSize * 0.028 * overlayScale);
+  ctx.lineWidth = Math.max(1.4, layout.tileSize * 0.032 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.036);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.036);
@@ -3149,8 +3214,8 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
   if (compact) return item.road || item.supplied || item.cost <= 2 || item.frontier || item.terrainCost > 1;
-  if (item.road || item.cost <= 2) return true;
-  return item.cost >= maxMove && tileNoise(item, 940) > 0.86;
+  if (item.road || item.supplied || item.cost <= 2 || item.terrainCost > 1) return true;
+  return item.cost >= maxMove && tileNoise(item, 940) > 0.62;
 }
 
 function isCommandFrontierTile(item, reachableSet, maxMove) {
