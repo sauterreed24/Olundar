@@ -256,7 +256,7 @@ function renderMapHelp() {
   const directive = currentOpeningDirective();
   const compactDirective = Boolean(directive && window.innerWidth <= 620);
   const hints = compactDirective
-    ? ['<span>Gold outlines legal moves</span>', '<span>Blue outlines road moves</span>']
+    ? ['<span>Gold legal moves | Blue road moves</span>']
     : [
       '<span>Gold outlines every legal terrain-cost move</span>',
       '<span>Blue outlines road-speed moves</span>',
