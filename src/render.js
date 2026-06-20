@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 
@@ -239,6 +239,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawImperialColorGrade(ctx, state, layout);
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
+  drawDeadwalkerPressureTelegraph(ctx, state, layout);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
   const placementFocusMode = state.mode.type === 'build';
   if (!placementFocusMode) {
@@ -6501,6 +6502,301 @@ function drawHollowCrownCompass(ctx, state, layout) {
   const cy = y + h * 0.50;
   drawHollowCrownDial(ctx, cx, cy, h * 0.36, direction, located);
   drawHollowCrownCompassText(ctx, x + h * 0.92, y, w - h * 1.02, h, status, pressure, distance, located, compact);
+  ctx.restore();
+}
+
+function drawDeadwalkerPressureTelegraph(ctx, state, layout) {
+  if (state.status !== 'playing' || state.flags?.portalDestroyed) return;
+  const data = deadwalkerPressureTelegraphData(state, layout);
+  if (!data) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (data.kind === 'known') {
+    drawKnownDeadwalkerThreatLane(ctx, layout, data);
+  } else {
+    drawHiddenDeadwalkerOmenFront(ctx, layout, data);
+  }
+  ctx.restore();
+}
+
+function deadwalkerPressureTelegraphData(state, layout) {
+  const livingTarget = primaryLivingThreatTarget(state);
+  if (!livingTarget) return null;
+  const known = knownDeadwalkerMapThreats(state, livingTarget)
+    .sort((a, b) => Number(!a.visible) - Number(!b.visible) || a.distance - b.distance || b.priority - a.priority)[0] || null;
+  if (known) {
+    return {
+      kind: 'known',
+      threat: known,
+      target: livingTarget,
+      label: known.canAttack ? 'ATTACK' : 'MARCH',
+      detail: known.name
+    };
+  }
+  const portal = state.buildings.find((building) => building.faction === 'dead' && building.type === 'portal')
+    || state.units.find((unit) => unit.faction === 'dead' && unit.type === 'lichBoss');
+  if (!portal) return null;
+  return {
+    kind: 'omen',
+    source: portal,
+    target: livingTarget,
+    next: nextDeadwalkerTelegraphSurge(state),
+    direction: hollowCrownDirection(layout, {
+      x: layout.camera.x + layout.camera.width * 0.5,
+      y: layout.camera.y + layout.camera.height * 0.5
+    }, portal)
+  };
+}
+
+function primaryLivingThreatTarget(state) {
+  return state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+    || state.buildings.find((building) => building.faction === 'olundar')
+    || state.units.find((unit) => unit.faction === 'olundar')
+    || state.buildings.find((building) => building.faction !== 'dead' && isEnemy(state, 'dead', building.faction))
+    || state.units.find((unit) => unit.faction !== 'dead' && isEnemy(state, 'dead', unit.faction));
+}
+
+function knownDeadwalkerMapThreats(state, fallbackTarget) {
+  const entities = [
+    ...state.units.filter((unit) => unit.faction === 'dead' && (isVisible(state, unit.x, unit.y) || isRevealed(state, unit.x, unit.y))).map((entity) => ({ entity, building: false })),
+    ...state.buildings.filter((building) => building.faction === 'dead' && (isVisible(state, building.x, building.y) || isRevealed(state, building.x, building.y))).map((entity) => ({ entity, building: true }))
+  ];
+  return entities.map(({ entity, building }) => {
+    const target = nearestLivingMapThreatTarget(state, entity.x, entity.y) || fallbackTarget;
+    if (!target) return null;
+    const def = building ? BUILDING_TYPES[entity.type] : UNIT_TYPES[entity.type];
+    const distance = manhattan(entity.x, entity.y, target.x, target.y);
+    const range = building ? 2 : def?.range || 1;
+    return {
+      entity,
+      target,
+      building,
+      name: entity.name || def?.name || 'Deadwalker',
+      visible: isVisible(state, entity.x, entity.y),
+      distance,
+      canAttack: distance <= range,
+      priority: distance <= range ? 12 : building ? 8 : 6
+    };
+  }).filter(Boolean);
+}
+
+function nearestLivingMapThreatTarget(state, x, y) {
+  return [
+    ...state.units.filter((unit) => unit.faction !== 'dead' && isEnemy(state, 'dead', unit.faction)),
+    ...state.buildings.filter((building) => building.faction !== 'dead' && isEnemy(state, 'dead', building.faction))
+  ].sort((a, b) => manhattan(x, y, a.x, a.y) - manhattan(x, y, b.x, b.y))[0] || null;
+}
+
+function nextDeadwalkerTelegraphSurge(state) {
+  const pressure = DIFFICULTY_PRESETS[state.campaign?.difficultyId]?.deadwalker || DIFFICULTY_PRESETS.standard.deadwalker;
+  const checks = [
+    { cadence: pressure.thrallEvery, label: 'Bone Thrall' },
+    { cadence: pressure.archerEvery, label: 'Corpse Archer' },
+    { cadence: pressure.knightEvery, label: 'Grave Knight' },
+    { cadence: pressure.outpostEvery, label: 'Deadwork' }
+  ].filter((item) => item.cadence > 0);
+  for (let turn = state.turn + 1; turn <= state.turn + 12; turn += 1) {
+    const labels = checks.filter((item) => turn >= pressure.startTurn && turn % item.cadence === 0).map((item) => item.label);
+    if (labels.length) return { turn, label: labels[0], count: labels.length };
+  }
+  return null;
+}
+
+function drawKnownDeadwalkerThreatLane(ctx, layout, data) {
+  const from = tileCenter(layout, data.threat.entity.x, data.threat.entity.y);
+  const to = tileCenter(layout, data.threat.target.x, data.threat.target.y);
+  const immediate = data.threat.canAttack;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  drawDeadwalkerPressurePath(ctx, from, to, layout, immediate, data.threat.visible);
+  drawDeadwalkerThreatSeal(ctx, tileBounds(layout, data.threat.entity.x, data.threat.entity.y), layout, data.label, immediate);
+  if (data.threat.target) drawDeadwalkerTargetReticle(ctx, tileBounds(layout, data.threat.target.x, data.threat.target.y), layout, immediate);
+  ctx.restore();
+}
+
+function drawDeadwalkerPressurePath(ctx, from, to, layout, immediate, visible) {
+  const s = layout.tileSize;
+  const alpha = visible ? (immediate ? 0.72 : 0.48) : 0.32;
+  const mid = {
+    x: (from.x + to.x) * 0.5,
+    y: (from.y + to.y) * 0.5 - s * 0.28
+  };
+  ctx.save();
+  ctx.shadowColor = immediate ? 'rgba(152, 30, 22, 0.34)' : 'rgba(156, 243, 138, 0.22)';
+  ctx.shadowBlur = s * (immediate ? 0.12 : 0.08);
+  ctx.strokeStyle = immediate ? `rgba(138, 30, 24, ${alpha})` : `rgba(58, 109, 56, ${alpha})`;
+  ctx.lineWidth = Math.max(3, s * 0.070);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y + layout.halfTileHeight * 0.12);
+  ctx.quadraticCurveTo(mid.x, mid.y, to.x, to.y + layout.halfTileHeight * 0.12);
+  ctx.stroke();
+  ctx.strokeStyle = immediate ? `rgba(255, 167, 118, ${Math.min(0.90, alpha + 0.14)})` : `rgba(189, 255, 150, ${Math.min(0.82, alpha + 0.12)})`;
+  ctx.lineWidth = Math.max(1.4, s * 0.028);
+  ctx.setLineDash([s * 0.18, s * 0.13]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y + layout.halfTileHeight * 0.09);
+  ctx.quadraticCurveTo(mid.x, mid.y - s * 0.05, to.x, to.y + layout.halfTileHeight * 0.09);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  drawDeadwalkerPressureArrowhead(ctx, from, to, layout, immediate);
+  ctx.restore();
+}
+
+function drawDeadwalkerThreatSeal(ctx, bounds, layout, label, immediate) {
+  const s = layout.tileSize;
+  const w = Math.max(52, Math.min(s * 1.38, label.length * s * 0.14 + s * 0.52));
+  const h = Math.max(18, s * 0.30);
+  const x = bounds.cx - w * 0.5;
+  const y = bounds.cy - s * 0.82;
+  ctx.save();
+  ctx.shadowColor = immediate ? 'rgba(125, 25, 18, 0.32)' : 'rgba(48, 91, 41, 0.24)';
+  ctx.shadowBlur = s * 0.08;
+  roundRectPath(ctx, x, y, w, h, h * 0.34);
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, immediate ? 'rgba(255, 240, 224, 0.96)' : 'rgba(244, 255, 225, 0.94)');
+  fill.addColorStop(1, immediate ? 'rgba(255, 183, 136, 0.82)' : 'rgba(194, 255, 162, 0.72)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = immediate ? 'rgba(143, 36, 24, 0.72)' : 'rgba(66, 118, 50, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  ctx.stroke();
+  ctx.fillStyle = immediate ? '#8f2418' : '#265329';
+  ctx.font = `900 ${Math.max(8, h * 0.45)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, bounds.cx, y + h * 0.54, w - 6);
+  ctx.restore();
+}
+
+function drawDeadwalkerTargetReticle(ctx, bounds, layout, immediate) {
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.strokeStyle = immediate ? 'rgba(170, 34, 27, 0.70)' : 'rgba(80, 128, 57, 0.44)';
+  ctx.lineWidth = Math.max(1.5, s * 0.026);
+  ctx.setLineDash([s * 0.09, s * 0.06]);
+  ctx.beginPath();
+  ctx.ellipse(bounds.cx, bounds.cy + layout.halfTileHeight * 0.20, s * 0.38, s * 0.14, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHiddenDeadwalkerOmenFront(ctx, layout, data) {
+  const edge = pressureEdgePoint(layout, data.direction);
+  const inward = {
+    x: edge.x - Math.cos(data.direction) * layout.tileSize * 1.42,
+    y: edge.y - Math.sin(data.direction) * layout.tileSize * 1.42
+  };
+  const label = data.next ? `${data.next.turn === 2 ? 'NEXT' : `T${data.next.turn}`} ${deadwalkerCompactSurgeLabel(data.next.label)}` : 'OMEN';
+  ctx.save();
+  drawHiddenOmenWake(ctx, edge, inward, layout);
+  drawDeadwalkerPressureArrowhead(ctx, edge, inward, layout, false);
+  drawHiddenOmenBadge(ctx, layout, edge, inward, label);
+  ctx.restore();
+}
+
+function deadwalkerCompactSurgeLabel(label) {
+  if (/thrall/i.test(label)) return 'BONE';
+  if (/archer/i.test(label)) return 'BOW';
+  if (/knight/i.test(label)) return 'KNIGHT';
+  if (/deadwork/i.test(label)) return 'DEADWORK';
+  return String(label || 'SURGE').toUpperCase().slice(0, 8);
+}
+
+function pressureEdgePoint(layout, direction) {
+  const cx = layout.frameX + layout.mapWidth * 0.5;
+  const cy = layout.frameY + layout.mapHeight * 0.5;
+  const dx = Math.cos(direction);
+  const dy = Math.sin(direction);
+  const candidates = [];
+  if (Math.abs(dx) > 0.001) {
+    candidates.push((layout.frameX - cx) / dx, (layout.frameX + layout.mapWidth - cx) / dx);
+  }
+  if (Math.abs(dy) > 0.001) {
+    candidates.push((layout.frameY - cy) / dy, (layout.frameY + layout.mapHeight - cy) / dy);
+  }
+  const t = Math.min(...candidates.filter((value) => value > 0));
+  return {
+    x: clamp(cx + dx * t, layout.frameX + layout.tileSize * 0.42, layout.frameX + layout.mapWidth - layout.tileSize * 0.42),
+    y: clamp(cy + dy * t, layout.frameY + layout.tileSize * 0.42, layout.frameY + layout.mapHeight - layout.tileSize * 0.42)
+  };
+}
+
+function drawHiddenOmenWake(ctx, edge, inward, layout) {
+  const s = layout.tileSize;
+  const gradient = ctx.createLinearGradient(edge.x, edge.y, inward.x, inward.y);
+  gradient.addColorStop(0, 'rgba(156, 243, 138, 0.26)');
+  gradient.addColorStop(0.55, 'rgba(105, 155, 82, 0.13)');
+  gradient.addColorStop(1, 'rgba(105, 155, 82, 0)');
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = Math.max(8, s * 0.22);
+  ctx.beginPath();
+  ctx.moveTo(edge.x, edge.y);
+  ctx.lineTo(inward.x, inward.y);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = 'rgba(81, 97, 61, 0.30)';
+  ctx.lineWidth = Math.max(2.2, s * 0.055);
+  ctx.setLineDash([s * 0.16, s * 0.12]);
+  ctx.beginPath();
+  ctx.moveTo(edge.x, edge.y);
+  ctx.lineTo(inward.x, inward.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawHiddenOmenBadge(ctx, layout, edge, inward, label) {
+  const s = layout.tileSize;
+  const compact = layout.mapWidth < 620 || layout.tileSize < 42;
+  const w = Math.max(compact ? 62 : 82, Math.min(compact ? s * 1.70 : s * 2.15, label.length * s * 0.13 + s * 0.58));
+  const h = Math.max(compact ? 18 : 22, s * (compact ? 0.34 : 0.38));
+  const x = clamp(inward.x - w * 0.5, layout.frameX + 6, layout.frameX + layout.mapWidth - w - 6);
+  const y = clamp(inward.y - h * 0.5, layout.frameY + 6, layout.frameY + layout.mapHeight - h - 6);
+  ctx.save();
+  ctx.shadowColor = 'rgba(45, 72, 37, 0.24)';
+  ctx.shadowBlur = s * 0.07;
+  roundRectPath(ctx, x, y, w, h, h * 0.36);
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, 'rgba(255, 252, 229, 0.95)');
+  fill.addColorStop(1, 'rgba(216, 255, 184, 0.78)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(72, 111, 58, 0.48)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.stroke();
+  ctx.fillStyle = '#7d2d22';
+  ctx.font = `900 ${Math.max(8, h * 0.42)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w * 0.52, y + h * 0.54, w - 8);
+  ctx.restore();
+}
+
+function drawDeadwalkerPressureArrowhead(ctx, from, to, layout, immediate) {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const s = layout.tileSize;
+  const x = to.x;
+  const y = to.y;
+  const size = Math.max(6, s * (immediate ? 0.18 : 0.14));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = immediate ? 'rgba(143, 36, 24, 0.82)' : 'rgba(83, 132, 63, 0.72)';
+  ctx.strokeStyle = 'rgba(255, 252, 218, 0.70)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size * 0.46, -size * 0.50);
+  ctx.lineTo(-size * 0.22, 0);
+  ctx.lineTo(-size * 0.46, size * 0.50);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
