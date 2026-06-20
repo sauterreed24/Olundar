@@ -1363,6 +1363,45 @@ check('deadwalker marches escalate and target Olundar', () => {
   assert(nearCapital || state.status !== 'playing', 'Deadwalker marches should bring real pressure to Olundar Prime.');
 });
 
+check('deadwalker march tactics prioritize siege, retreat wounded, and flank', () => {
+  const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+  const priority = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-march-tactics-priority' });
+  priority.units = [];
+  const hunter = addUnit(priority, 'boneThrall', 'dead', 12, 16, { name: 'Siege Hunter' });
+  hunter.march = true;
+  const onager = addUnit(priority, 'onager', 'olundar', 11, 16, { name: 'Priority Onager' });
+  const decoy = addUnit(priority, 'scout', 'olundar', 12, 17, { name: 'Wounded Decoy' });
+  decoy.hp = 1;
+  endTurn(priority);
+  assert(onager.hp < onager.maxHp, 'Deadwalker marchers should strike adjacent onagers before weaker bodyguards.');
+  assert(decoy.hp === 1, 'Onager priority should not be bypassed by lowest-HP target sorting.');
+
+  const retreat = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-march-tactics-retreat' });
+  retreat.units = [];
+  const capital = retreat.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const haven = addBuilding(retreat, 'bonePit', 'dead', 16, 16, { complete: true, name: 'Rear Bone Pit' });
+  const wounded = addUnit(retreat, 'boneThrall', 'dead', 12, 16, { name: 'Cracked Thrall' });
+  wounded.march = true;
+  wounded.hp = 2;
+  const beforeHaven = distance(wounded, haven);
+  const beforeCapital = distance(wounded, capital);
+  endTurn(retreat);
+  const woundedAfter = retreat.units.find((unit) => unit.id === wounded.id);
+  assert(woundedAfter && distance(woundedAfter, haven) < beforeHaven, 'Wounded Deadwalker marchers should retreat toward the nearest deadwork.');
+  assert(distance(woundedAfter, capital) > beforeCapital, 'Wounded retreat should pull pressure off the capital line.');
+
+  const flank = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-march-tactics-flank' });
+  flank.units = [];
+  flank.buildings = flank.buildings.filter((building) => building.faction === 'dead' || (building.faction === 'olundar' && building.type === 'city'));
+  const flankCapital = flank.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const flanker = addUnit(flank, 'boneThrall', 'dead', flankCapital.x + 3, flankCapital.y, { name: 'Flank Thrall' });
+  flanker.march = true;
+  endTurn(flank);
+  const flankerAfter = flank.units.find((unit) => unit.id === flanker.id);
+  assert(flankerAfter && flankerAfter.y !== flankCapital.y, 'A near-capital marcher should leave the center line for a flank lane.');
+});
+
 check('deadwalker pressure scales coherently with difficulty', () => {
   const firstMarch = (id) => {
     const s = createGame({ scenarioId: 'founding', difficultyId: id, seed: 'quality-scale' });

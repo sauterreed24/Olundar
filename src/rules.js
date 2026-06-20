@@ -3011,13 +3011,17 @@ function runDeadwalkerTurn(state) {
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
   for (const unit of deadUnits) {
     if (!state.units.includes(unit)) continue;
-    const acted = aiTryAttack(state, unit);
-    if (acted) continue;
     if (unit.march && capital) {
-      aiAdvanceToward(state, unit, capital.x, capital.y);
-      aiTryAttack(state, unit);
+      const plan = deadwalkerMarchPlan(state, unit, capital);
+      if (plan.mode === 'retreat' && executeDeadwalkerRetreat(state, unit, plan.target)) continue;
+      const acted = aiTryAttack(state, unit, { priorityUnitType: 'onager' });
+      if (acted) continue;
+      aiAdvanceToward(state, unit, plan.target.x, plan.target.y);
+      aiTryAttack(state, unit, { priorityUnitType: 'onager' });
       continue;
     }
+    const acted = aiTryAttack(state, unit);
+    if (acted) continue;
     const target = nearestLivingTarget(state, unit.x, unit.y);
     if (!target) continue;
     aiMoveToward(state, unit, target.x, target.y);
@@ -3103,12 +3107,81 @@ function marchComposition(menace) {
   return ['boneThrall'];
 }
 
+function deadwalkerMarchPlan(state, unit, capital) {
+  const retreat = woundedDeadwalkerRetreatTarget(state, unit);
+  if (retreat) return { mode: 'retreat', target: retreat };
+  const onager = priorityOnagerTarget(state, unit, capital);
+  if (onager) return { mode: 'onager', target: onager };
+  return { mode: 'flank', target: deadwalkerFlankTarget(state, unit, capital) || capital };
+}
+
+function woundedDeadwalkerRetreatTarget(state, unit) {
+  const maxHp = unit.maxHp || getUnitDef(unit)?.hp || 1;
+  if (unit.hp > Math.ceil(maxHp * 0.35)) return null;
+  return state.buildings
+    .filter((building) => building.faction === 'dead' && building.turnsLeft <= 0)
+    .map((building) => ({ kind: 'building', ref: building, x: building.x, y: building.y, dist: manhattan(unit.x, unit.y, building.x, building.y) }))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
+}
+
+function executeDeadwalkerRetreat(state, unit, target) {
+  if (!target) return false;
+  if (manhattan(unit.x, unit.y, target.x, target.y) <= 1) {
+    unit.hasActed = true;
+    unit.fortified = Math.max(unit.fortified || 0, 1);
+    return true;
+  }
+  return aiAdvanceToward(state, unit, target.x, target.y);
+}
+
+function priorityOnagerTarget(state, unit, capital) {
+  return state.units
+    .filter((target) => target.type === 'onager' && isEnemy(state, unit.faction, target.faction))
+    .map((target) => ({
+      kind: 'unit',
+      ref: target,
+      x: target.x,
+      y: target.y,
+      dist: manhattan(unit.x, unit.y, target.x, target.y),
+      capitalDist: manhattan(capital.x, capital.y, target.x, target.y)
+    }))
+    .filter((target) => target.dist <= 14 || target.capitalDist <= 8)
+    .sort((a, b) => a.dist - b.dist || a.capitalDist - b.capitalDist)[0] || null;
+}
+
+function deadwalkerFlankTarget(state, unit, capital) {
+  if (manhattan(unit.x, unit.y, capital.x, capital.y) > 10) return capital;
+  const lane = numericId(unit.id) % 2 === 0 ? 1 : -1;
+  const candidates = [
+    { x: capital.x + 2, y: capital.y + lane * 2 },
+    { x: capital.x + 1, y: capital.y + lane * 3 },
+    { x: capital.x - 1, y: capital.y + lane * 2 },
+    { x: capital.x + 3, y: capital.y + lane },
+    { x: capital.x + 2, y: capital.y - lane * 2 },
+    { x: capital.x + 1, y: capital.y - lane * 3 }
+  ];
+  return candidates
+    .filter((point) => canEnter(state, unit, point.x, point.y))
+    .map((point) => ({ ...point, dist: manhattan(unit.x, unit.y, point.x, point.y) }))
+    .sort((a, b) => a.dist - b.dist)[0] || capital;
+}
+
+function numericId(id) {
+  const match = String(id || '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
 // Step a unit along a real route toward an open tile beside the target so marchers
 // reliably navigate mountains, rivers, and rival armies instead of stalling.
 function aiAdvanceToward(state, unit, tx, ty) {
   const def = getUnitDef(unit);
   const goal = openApproachTile(state, unit, tx, ty);
   if (goal) {
+    if (goal.x === unit.x && goal.y === unit.y) {
+      unit.hasActed = true;
+      unit.fortified = Math.max(unit.fortified || 0, 1);
+      return true;
+    }
     const route = findPath(state, unit, goal.x, goal.y, Infinity);
     if (route && route.path.length) {
       let budget = def.move;
@@ -3131,7 +3204,7 @@ function aiAdvanceToward(state, unit, tx, ty) {
     }
   }
   aiMoveToward(state, unit, tx, ty);
-  return true;
+  return Boolean(unit.hasActed);
 }
 
 function openApproachTile(state, unit, tx, ty) {
@@ -3334,11 +3407,11 @@ function nearestFactionBuilding(state, x, y, factionId, types) {
     .sort((a, b) => a.dist - b.dist)[0] || null;
 }
 
-function aiTryAttack(state, unit) {
+function aiTryAttack(state, unit, options = {}) {
   const def = getUnitDef(unit);
   const enemyUnit = state.units
     .filter((target) => isEnemy(state, unit.faction, target.faction) && manhattan(unit.x, unit.y, target.x, target.y) <= def.range)
-    .sort((a, b) => a.hp - b.hp)[0];
+    .sort((a, b) => aiAttackPriorityScore(b, options) - aiAttackPriorityScore(a, options) || a.hp - b.hp)[0];
   if (enemyUnit) {
     attackUnit(state, unit.id, enemyUnit.id);
     return true;
@@ -3351,6 +3424,12 @@ function aiTryAttack(state, unit) {
     return true;
   }
   return false;
+}
+
+function aiAttackPriorityScore(target, options = {}) {
+  let score = 0;
+  if (options.priorityUnitType && target.type === options.priorityUnitType) score += 100;
+  return score;
 }
 
 function aiMoveToward(state, unit, tx, ty) {
