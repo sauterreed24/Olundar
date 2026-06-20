@@ -6601,3 +6601,170 @@ body {
     white-space: nowrap;
   }
 }
+
+/* Imperial map theater pass: keep the light theme, but let the battlefield carry the first viewport. */
+#gameCanvas {
+  filter: saturate(1.08) contrast(1.045);
+}
+
+.map-shell {
+  background:
+    radial-gradient(circle at 42% 30%, rgba(255, 255, 255, 0.88), transparent 31rem),
+    linear-gradient(135deg, rgba(255, 254, 235, 0.72), rgba(216, 249, 244, 0.68));
+}
+
+.map-lens-bar,
+.map-help,
+.map-intel,
+.map-turn-report:not([hidden]) {
+  border-color: rgba(28, 116, 129, 0.09);
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.08rem 0.30rem;
+    padding: 0.16rem 0.30rem 0.18rem;
+  }
+
+  .brand {
+    grid-column: 1;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .brand h1 {
+    max-width: 5.25rem;
+    overflow: hidden;
+    font-size: 0.82rem;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sun {
+    width: 1.35rem;
+    height: 1.35rem;
+    font-size: 0.68rem;
+  }
+
+  .turnbox {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.16rem;
+    width: 100%;
+  }
+
+  .turnbox strong {
+    min-width: 1.95rem;
+    font-size: 0.58rem;
+    line-height: 1.18;
+  }
+
+  .top-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.08rem;
+    min-width: 0;
+  }
+
+  .top-actions button,
+  .top-actions #audioTop,
+  .top-actions #settingsTop,
+  .top-actions #installTop {
+    min-height: 1.02rem;
+    padding: 0.07rem 0.10rem;
+    border-radius: 4px;
+    font-size: clamp(0.42rem, 1.8vw, 0.50rem);
+  }
+
+  .resourcebar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.07rem;
+    padding: 0.09rem 0.28rem;
+  }
+
+  .resource {
+    justify-content: center;
+    min-width: 0;
+    padding: 0.07rem 0.10rem;
+    border-radius: 5px;
+    font-size: clamp(0.48rem, 2vw, 0.56rem);
+    line-height: 1;
+  }
+
+  .layout {
+    gap: 0.26rem;
+    padding: 0.16rem;
+  }
+
+  .map-shell {
+    border-radius: 2px;
+    box-shadow:
+      0 5px 14px rgba(42, 82, 65, 0.07),
+      inset 0 0 0 1px rgba(255,255,255,0.90);
+  }
+
+  #gameCanvas {
+    filter: saturate(1.13) contrast(1.075);
+  }
+
+  .map-lens-bar {
+    top: 0.12rem;
+    left: 0.12rem;
+    right: 0.12rem;
+    width: auto;
+    gap: 0.08rem;
+    padding: 0.08rem;
+    border-radius: 4px;
+  }
+
+  .lens-buttons {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.05rem;
+    width: 100%;
+  }
+
+  .lens-buttons button {
+    min-height: 0.92rem;
+    padding: 0.06rem 0.05rem;
+    border-radius: 4px;
+    font-size: clamp(0.37rem, 1.52vw, 0.45rem);
+    line-height: 1;
+  }
+
+  .map-help {
+    left: 0.20rem;
+    right: 0.20rem;
+    bottom: 0.18rem;
+    gap: 0.10rem;
+    padding: 0.12rem 0.14rem;
+    border-radius: 5px;
+  }
+
+  .map-help span {
+    padding: 0.12rem 0.22rem;
+    font-size: 0.52rem;
+  }
+
+  .map-intel {
+    left: 0.24rem;
+    right: 0.24rem;
+    bottom: 1.72rem;
+    max-height: 2.72rem;
+    padding: 0.20rem 0.30rem;
+  }
+
+  .map-intel-head strong {
+    font-size: 0.74rem;
+  }
+
+  .map-intel-stats span {
+    padding: 0.10rem 0.18rem;
+    font-size: 0.50rem;
+  }
+}

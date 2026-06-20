@@ -3,20 +3,20 @@ import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
-  plains: '#d8ed76',
-  forest: '#2f9b56',
-  hills: '#e1bc63',
-  mountains: '#c4d0c9',
-  river: '#24bde7',
-  marsh: '#8cc979',
-  ruins: '#d9cba7',
-  blight: '#74658e'
+  plains: '#cfe66d',
+  forest: '#278f52',
+  hills: '#d9ac55',
+  mountains: '#bdc9c2',
+  river: '#1caee0',
+  marsh: '#78bf6b',
+  ruins: '#cfbe93',
+  blight: '#675b86'
 };
 
 const TERRAIN_HIGHLIGHTS = {
-  plains: '#fff9ba',
+  plains: '#fff7aa',
   forest: '#b2ff82',
-  hills: '#ffe19b',
+  hills: '#ffe09a',
   mountains: '#fbfff9',
   river: '#dcfcff',
   marsh: '#dcffad',
@@ -25,14 +25,14 @@ const TERRAIN_HIGHLIGHTS = {
 };
 
 const TERRAIN_PALETTES = {
-  plains: { shadow: '#78a846', base: '#d8ed76', light: '#fff9ba', accent: '#a7cf57', crown: '#f5e878' },
-  forest: { shadow: '#155f38', base: '#2f9b56', light: '#b2ff82', accent: '#247744', crown: '#1b613a' },
-  hills: { shadow: '#a77531', base: '#e1bc63', light: '#ffe19b', accent: '#c58c44', crown: '#f6cc72' },
-  mountains: { shadow: '#7d8984', base: '#c4d0c9', light: '#fbfff9', accent: '#90a09a', crown: '#edf5ee' },
-  river: { shadow: '#087aa8', base: '#24bde7', light: '#dcfcff', accent: '#80ecfa', crown: '#f2ffff' },
-  marsh: { shadow: '#4d8652', base: '#8cc979', light: '#dcffad', accent: '#9bd579', crown: '#e8f8b4' },
-  ruins: { shadow: '#8b7b5f', base: '#d9cba7', light: '#fff0c2', accent: '#b49a70', crown: '#ebd8aa' },
-  blight: { shadow: '#332842', base: '#74658e', light: '#c6ff93', accent: '#86f06f', crown: '#e0ffbf' }
+  plains: { shadow: '#6f9b3f', base: '#cfe66d', light: '#fff7aa', accent: '#98c64d', crown: '#f2dc62' },
+  forest: { shadow: '#0f5934', base: '#278f52', light: '#b2ff82', accent: '#1f7645', crown: '#185c35' },
+  hills: { shadow: '#9b6b2b', base: '#d9ac55', light: '#ffe09a', accent: '#ba7f3a', crown: '#f1bf61' },
+  mountains: { shadow: '#74817b', base: '#bdc9c2', light: '#fbfff9', accent: '#879993', crown: '#e8f2ea' },
+  river: { shadow: '#04739f', base: '#1caee0', light: '#dcfcff', accent: '#72e8fa', crown: '#f2ffff' },
+  marsh: { shadow: '#427d4a', base: '#78bf6b', light: '#dcffad', accent: '#8ccd72', crown: '#e8f8b4' },
+  ruins: { shadow: '#7f7155', base: '#cfbe93', light: '#fff0c2', accent: '#aa9065', crown: '#e7d19d' },
+  blight: { shadow: '#2d2440', base: '#675b86', light: '#c6ff93', accent: '#76e969', crown: '#e0ffbf' }
 };
 
 const UNIT_ACCENTS = {
@@ -59,6 +59,14 @@ const LENS_COLORS = {
 };
 const ISO_TILE_Y_RATIO = 0.66;
 const SORTED_TILE_CACHE = new WeakMap();
+
+function compactViewportWidth() {
+  return typeof window !== 'undefined' ? window.innerWidth : 1280;
+}
+
+function isPhoneBattlefieldViewport() {
+  return compactViewportWidth() <= 620;
+}
 
 export function getLayout(canvas) {
   const camera = canvas.__olundarState ? getCameraBounds(canvas.__olundarState) : {
@@ -130,8 +138,13 @@ function getCameraBounds(state) {
   const maxY = revealed.length ? Math.max(...revealed.map((tile) => tile.y)) : selected?.y || MAP_HEIGHT - 1;
   const revealedWidth = maxX - minX + 1;
   const revealedHeight = maxY - minY + 1;
-  const width = Math.min(MAP_WIDTH, Math.max(9, Math.min(14, revealedWidth + 2)));
-  const height = Math.min(MAP_HEIGHT, Math.max(7, Math.min(10, revealedHeight + 2)));
+  const phoneViewport = isPhoneBattlefieldViewport();
+  const minCameraWidth = phoneViewport ? 8 : 9;
+  const maxCameraWidth = phoneViewport ? 12 : 14;
+  const minCameraHeight = phoneViewport ? 6 : 7;
+  const maxCameraHeight = phoneViewport ? 8 : 10;
+  const width = Math.min(MAP_WIDTH, Math.max(minCameraWidth, Math.min(maxCameraWidth, revealedWidth + 2)));
+  const height = Math.min(MAP_HEIGHT, Math.max(minCameraHeight, Math.min(maxCameraHeight, revealedHeight + 2)));
   const centerX = selected ? selected.x : (minX + maxX) / 2;
   const centerY = selected ? selected.y : (minY + maxY) / 2;
   return {
@@ -169,13 +182,17 @@ function cameraSortedTiles(map, layout, margin = 2) {
 }
 
 function renderBudget(layout) {
-  const compactViewport = typeof window !== 'undefined' && window.innerWidth <= 980;
-  const compact = compactViewport || layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
+  const viewportWidth = compactViewportWidth();
+  const phoneViewport = viewportWidth <= 620;
+  const tabletViewport = viewportWidth <= 980;
+  const compact = phoneViewport
+    ? layout.tileSize < 38 || layout.mapWidth < 520
+    : tabletViewport || layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
   return {
     compact,
     cinematicRelief: layout.tileSize >= 30,
-    terrainVignettes: !compact && layout.mapWidth > 760,
-    atmosphericGradients: !compact && layout.mapWidth > 820
+    terrainVignettes: (!compact && layout.mapWidth > 760) || (phoneViewport && layout.tileSize >= 44),
+    atmosphericGradients: (!compact && layout.mapWidth > 820) || (phoneViewport && layout.tileSize >= 46)
   };
 }
 
@@ -219,6 +236,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   ctx.rect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
   ctx.clip();
   drawTiles(ctx, state, layout);
+  drawImperialColorGrade(ctx, state, layout);
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
@@ -535,6 +553,45 @@ function drawWorldLight(ctx, state, layout) {
     ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
   }
   ctx.restore();
+}
+
+function drawImperialColorGrade(ctx, state, layout) {
+  const selected = state.units.find((unit) => unit.id === state.selectedUnitId)
+    || state.buildings.find((building) => building.id === state.selectedBuildingId)
+    || state.units.find((unit) => unit.faction === 'olundar' && !unit.hasActed);
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  const depth = ctx.createLinearGradient(layout.frameX, layout.frameY, layout.frameX + layout.mapWidth, layout.frameY + layout.mapHeight);
+  depth.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  depth.addColorStop(0.48, 'rgba(77, 123, 91, 0.025)');
+  depth.addColorStop(1, 'rgba(43, 82, 72, 0.115)');
+  ctx.fillStyle = depth;
+  ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const sun = ctx.createLinearGradient(layout.frameX, layout.frameY, layout.frameX + layout.mapWidth * 0.66, layout.frameY + layout.mapHeight * 0.72);
+  sun.addColorStop(0, 'rgba(255, 255, 236, 0.18)');
+  sun.addColorStop(0.34, 'rgba(255, 237, 167, 0.055)');
+  sun.addColorStop(1, 'rgba(255, 237, 167, 0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
+  ctx.restore();
+
+  if (selected && isRevealed(state, selected.x, selected.y)) {
+    const bounds = tileBounds(layout, selected.x, selected.y);
+    const radius = layout.tileSize * (isPhoneBattlefieldViewport() ? 3.2 : 2.7);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const focus = ctx.createRadialGradient(bounds.cx, bounds.cy, layout.tileSize * 0.26, bounds.cx, bounds.cy, radius);
+    focus.addColorStop(0, 'rgba(255, 249, 207, 0.18)');
+    focus.addColorStop(0.38, 'rgba(227, 255, 197, 0.045)');
+    focus.addColorStop(1, 'rgba(227, 255, 197, 0)');
+    ctx.fillStyle = focus;
+    ctx.fillRect(bounds.cx - radius, bounds.cy - radius, radius * 2, radius * 2);
+    ctx.restore();
+  }
 }
 
 function drawElevationCastShadows(ctx, state, layout, sortedTiles) {
