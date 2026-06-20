@@ -1131,16 +1131,20 @@ function renderActions() {
   if (turnReport && !isMobileIntelDrawerMode()) actionPanel.appendChild(turnReportCard());
   const commandStrip = selectedCommandStrip(selectedUnit, selectedBuilding);
   if (commandStrip) actionPanel.appendChild(commandStrip);
+  const compactRail = isCompactCommandRailMode();
   const counselCard = tacticalCounselCard(selectedUnit, selectedBuilding);
-  if (counselCard) actionPanel.appendChild(counselCard);
   const placementCard = buildPlacementCard();
-  if (placementCard) actionPanel.appendChild(placementCard);
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
-  if (doctrineCard) actionPanel.appendChild(doctrineCard);
   const envoyCard = diplomacyOpportunityCard();
-  if (envoyCard) actionPanel.appendChild(envoyCard);
   const pactCommandCard = pactFieldCommandCard();
-  if (pactCommandCard) actionPanel.appendChild(pactCommandCard);
+  const priorityCommandCards = [placementCard, doctrineCard, envoyCard, pactCommandCard].filter(Boolean);
+  if (compactRail) {
+    for (const card of priorityCommandCards) actionPanel.appendChild(card);
+    if (counselCard) actionPanel.appendChild(counselCard);
+  } else {
+    if (counselCard) actionPanel.appendChild(counselCard);
+    for (const card of priorityCommandCards) actionPanel.appendChild(card);
+  }
 
   if (state.status !== 'playing') {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
@@ -2699,7 +2703,49 @@ function pactFieldCommandCard() {
       <small>${escapeHtml(recommendation.text)}</small>
     </div>
   `;
+  const actions = compact
+    ? compactPactFieldActions(entry, recommendation, activeOrder)
+    : fullPactFieldActions(entry, recommendation);
+  actions.appendChild(orderButton('Show ally lens', 'Shared sight and pact positions', () => focusDiplomacyOpportunity(entry.id)));
+  card.appendChild(actions);
+  if (compact) card.appendChild(pactRetaskDrawer(entry, recommendation));
+  return card;
+}
+
+function fullPactFieldActions(entry, recommendation) {
   const actions = commandActions('doctrine-actions pact-actions');
+  appendPactOrderButtons(actions, entry, recommendation);
+  return actions;
+}
+
+function compactPactFieldActions(entry, recommendation, activeOrder) {
+  const actions = commandActions('doctrine-actions pact-actions compact-pact-primary-actions');
+  const recommendationIsActive = activeOrder?.id === recommendation.id;
+  if (!recommendationIsActive) {
+    actions.appendChild(orderButton(recommendation.name, recommendation.text, () => runAction(() => executePactFieldOrder(entry, recommendation), 'diplomacy'), {
+      disabled: recommendation.disabled,
+      title: recommendation.disabledReason || recommendation.text,
+      tone: 'primary'
+    }));
+  } else {
+    const activeChip = document.createElement('span');
+    activeChip.className = 'pact-active-chip';
+    activeChip.innerHTML = `<b>${escapeHtml(activeOrder.name)}</b><small>Active pact order</small>`;
+    actions.appendChild(activeChip);
+  }
+  return actions;
+}
+
+function pactRetaskDrawer(entry, recommendation) {
+  const active = entry.fieldOrder || entry.fieldOrders.find((order) => order.active);
+  const drawer = orderDrawer('Retask pact', active?.name ? `${active.name} active` : 'Choose ally stance', 'pact-retask-drawer');
+  const actions = commandActions('pact-retask-actions');
+  appendPactOrderButtons(actions, entry, recommendation);
+  drawer.appendChild(actions);
+  return drawer;
+}
+
+function appendPactOrderButtons(actions, entry, recommendation) {
   for (const order of entry.fieldOrders) {
     const active = Boolean(order.active);
     actions.appendChild(orderButton(order.name, active ? 'Active order' : order.text, () => runAction(() => executePactFieldOrder(entry, order), 'diplomacy'), {
@@ -2708,9 +2754,6 @@ function pactFieldCommandCard() {
       tone: order.id === recommendation.id ? 'primary' : 'secondary'
     }));
   }
-  actions.appendChild(orderButton('Show ally lens', 'Shared sight and pact positions', () => focusDiplomacyOpportunity(entry.id)));
-  card.appendChild(actions);
-  return card;
 }
 
 function compactPactCommandDetail(recommendation, activeOrder) {
@@ -2718,7 +2761,7 @@ function compactPactCommandDetail(recommendation, activeOrder) {
   const next = recommendation?.name && recommendation.name !== activeOrder?.name
     ? ` Recommended: ${recommendation.name}.`
     : '';
-  return `${active}${next} Use the buttons to retask this pact without opening the ledger.`;
+  return `${active}${next} Retask stays available, but the front order remains primary.`;
 }
 
 function currentPactFieldCommand() {
