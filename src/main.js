@@ -193,13 +193,30 @@ function renderTopBar() {
   const order = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'];
   const compactChrome = isCompactChromeMode();
   resourceBar.innerHTML = [
-    `<span class="resource population"><b>Population</b> ${state.factions.olundar.population}/${state.factions.olundar.housing}</span>`,
-    ...order.map((key) => `<span class="resource"><b>${RESOURCE_NAMES[key]}</b> ${Math.floor(resources[key] || 0)}</span>`)
+    resourceChip('population', compactChrome ? 'Pop' : 'Population', `${state.factions.olundar.population}/${state.factions.olundar.housing}`, 'Population capacity'),
+    ...order.map((key) => resourceChip(key, compactResourceLabel(key, compactChrome), Math.floor(resources[key] || 0), RESOURCE_NAMES[key]))
   ].join('');
   document.querySelector('#nextUnitTop').textContent = compactChrome ? 'Next' : 'Next Unit';
   document.querySelector('#endTurnTop').textContent = compactChrome ? 'End' : 'End Turn';
   renderAudioButton();
   turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+}
+
+function compactResourceLabel(key, compact) {
+  if (!compact) return RESOURCE_NAMES[key];
+  return {
+    food: 'Food',
+    wood: 'Wood',
+    stone: 'Stone',
+    iron: 'Iron',
+    gold: 'Gold',
+    influence: 'Inf',
+    morale: 'Mor'
+  }[key] || RESOURCE_NAMES[key];
+}
+
+function resourceChip(key, label, value, title) {
+  return `<span class="resource ${key === 'population' ? 'population' : ''}" data-resource="${escapeHtml(key)}" title="${escapeHtml(title)}"><b>${escapeHtml(label)}</b> ${escapeHtml(String(value))}</span>`;
 }
 
 function isCompactChromeMode() {

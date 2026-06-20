@@ -7664,3 +7664,41 @@ body {
     flex: 0 0 3.05rem;
   }
 }
+
+/* Mobile empire ribbon: one-line economy readout so the battlefield owns the first viewport. */
+@media (max-width: 620px) {
+  .resourcebar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.10rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.075rem 0.24rem 0.10rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+
+  .resourcebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .resource {
+    flex: 0 0 auto;
+    justify-content: center;
+    min-width: 3.75rem;
+    padding: 0.085rem 0.22rem;
+    border-radius: 999px;
+    font-size: clamp(0.48rem, 2.15vw, 0.56rem);
+    line-height: 1;
+    scroll-snap-align: start;
+  }
+
+  .resource.population {
+    min-width: 4.15rem;
+  }
+
+  .resource b {
+    margin-right: 0.10rem;
+  }
+}
