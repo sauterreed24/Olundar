@@ -1999,6 +1999,14 @@ function buildTurnReport(before, previousTurn) {
     : deadPressureDelta < 0
       ? `Deadwalker pressure fell by ${Math.abs(deadPressureDelta)}.`
       : '';
+  const pressureToast = deadPressureDelta > 0
+    ? `Dead +${deadPressureDelta}`
+    : deadPressureDelta < 0
+      ? `Dead -${Math.abs(deadPressureDelta)}`
+      : 'Dead steady';
+  const readyToast = readyUnits
+    ? `${readyUnits} ready`
+    : 'no idle forces';
   const storesClause = resourceDeltas.length
     ? `Stores shifted ${resourceDeltas.slice(0, 3).map((item) => `${item.delta > 0 ? '+' : ''}${item.delta} ${item.label}`).join(', ')}.`
     : '';
@@ -2009,7 +2017,7 @@ function buildTurnReport(before, previousTurn) {
     title: `Turn ${previousTurn} -> ${state.turn}`,
     tone,
     summary,
-    toast: `Turn ${state.turn}: ${summary}`,
+    toast: `Turn ${state.turn} resolved - ${pressureToast}, ${readyToast}.`,
     metrics: [
       { label: 'Ready', value: String(readyUnits) },
       { label: 'Mapped', value: `${mapped}%${mapped !== before.mapped ? ` (${mapped > before.mapped ? '+' : ''}${mapped - before.mapped})` : ''}` },
