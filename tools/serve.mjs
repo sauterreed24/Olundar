@@ -27,6 +27,9 @@ const server = http.createServer((req, res) => {
     res.end('Forbidden');
     return;
   }
+  if (cleanPath.startsWith('node_modules/')) {
+    filePath = path.resolve(root, cleanPath);
+  }
   if (existsSync(filePath) && statSync(filePath).isDirectory()) filePath = path.join(filePath, 'index.html');
   if (!existsSync(filePath)) {
     res.writeHead(404);
