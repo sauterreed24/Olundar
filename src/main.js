@@ -1751,6 +1751,38 @@ function renderMapIntel() {
   `;
 }
 
+function turnReportNextCommandState() {
+  if (state.status !== 'playing') return null;
+  const directive = currentOpeningDirective();
+  if (!directive) return null;
+  const recommendation = openingDirectiveAction(directive.current.id);
+  const actionLabel = recommendation?.label || directive.current.label;
+  const actionMeta = recommendation?.meta || directive.current.detail || directive.guide.summary;
+  return {
+    phase: directive.guide.phase,
+    progress: `${directive.guide.completed}/${directive.guide.total}`,
+    orderLabel: directive.current.label,
+    actionLabel,
+    actionMeta,
+    canExecute: Boolean(recommendation?.canExecute)
+  };
+}
+
+function turnReportNextCommandMarkup(nextCommand, className = 'turn-report-next-command') {
+  if (!nextCommand) return '';
+  return `
+    <div class="${className}">
+      <span><b>Next command</b><em>${escapeHtml(`${nextCommand.progress} | ${nextCommand.phase}`)}</em></span>
+      <strong>${escapeHtml(nextCommand.actionLabel)}</strong>
+      <small>${escapeHtml(`${nextCommand.orderLabel} | ${nextCommand.actionMeta}`)}</small>
+    </div>
+  `;
+}
+
+function turnReportContinueLabel(nextCommand) {
+  return nextCommand ? `Continue: ${nextCommand.actionLabel}` : 'Continue orders';
+}
+
 function renderMapTurnReport() {
   if (!mapTurnReport) return;
   const shouldShow = Boolean(turnReport && window.innerWidth <= 980);
@@ -1776,6 +1808,9 @@ function renderMapTurnReport() {
       `).join('')}
     </div>
   ` : '';
+  const nextCommand = turnReportNextCommandState();
+  const nextCommandMarkup = turnReportNextCommandMarkup(nextCommand, 'map-turn-report-next-command');
+  const continueLabel = turnReportContinueLabel(nextCommand);
   mapTurnReport.className = `map-turn-report ${turnReport.tone}`;
   mapTurnReport.innerHTML = `
     <div class="map-turn-report-head">
@@ -1784,11 +1819,12 @@ function renderMapTurnReport() {
       <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
     </div>
     <p>${escapeHtml(turnReport.summary)}</p>
+    ${nextCommandMarkup}
     <div class="map-turn-report-glance">${glance}</div>
     ${deltas}
     ${notes}
     <div class="map-turn-report-actions">
-      <button type="button" data-action="continue-turn-orders">Continue orders</button>
+      <button type="button" data-action="continue-turn-orders">${escapeHtml(continueLabel)}</button>
     </div>
   `;
 }
@@ -2295,6 +2331,9 @@ function turnReportCard() {
     <span><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>
   `).join('');
   const detailsOpen = isMobileIntelDrawerMode() ? '' : ' open';
+  const nextCommand = turnReportNextCommandState();
+  const nextCommandMarkup = turnReportNextCommandMarkup(nextCommand);
+  const continueLabel = turnReportContinueLabel(nextCommand);
   card.innerHTML = `
     <div class="turn-report-head">
       <span>Campaign Report</span>
@@ -2302,8 +2341,9 @@ function turnReportCard() {
       <button type="button" data-action="clear-turn-report" aria-label="Dismiss turn report">Close</button>
     </div>
     <p>${escapeHtml(turnReport.summary)}</p>
+    ${nextCommandMarkup}
     <div class="turn-report-actions">
-      <button type="button" data-action="continue-turn-orders">Continue orders</button>
+      <button type="button" data-action="continue-turn-orders">${escapeHtml(continueLabel)}</button>
     </div>
     <div class="turn-report-glance">${glance}</div>
     <details class="turn-report-detail-drawer"${detailsOpen}>
