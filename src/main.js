@@ -276,11 +276,49 @@ function renderMapHelp() {
     ];
   const chips = [
     ...(directive ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
+    movementFieldMapHelpChip(),
     endTurnReviewMapHelpChip(),
     deadwalkerMapHelpChip(),
     ...hints
   ].filter(Boolean);
   mapHelp.innerHTML = chips.join('');
+}
+
+function movementFieldMapHelpChip() {
+  if (state.status !== 'playing' || state.mode.type !== 'select') return '';
+  const unit = state.units.find((candidate) => candidate.id === state.selectedUnitId && candidate.faction === 'olundar' && !candidate.hasActed);
+  if (!unit) return '';
+  const summary = selectedMovementFieldSummary(unit);
+  if (!summary.reachable) return '';
+  const compact = typeof window !== 'undefined' && window.innerWidth <= 620;
+  const detail = compact
+    ? `${summary.reachable} tiles | ${summary.rough} rough`
+    : `${summary.reachable} legal | ${summary.road} road | ${summary.rough} rough`;
+  return `<span class="move-field-directive"><b>Move ${escapeHtml(String(summary.move))}</b> ${escapeHtml(detail)}</span>`;
+}
+
+function selectedMovementFieldSummary(unit) {
+  const def = UNIT_TYPES[unit.type];
+  const minX = Math.max(0, unit.x - def.move);
+  const maxX = Math.min(MAP_WIDTH - 1, unit.x + def.move);
+  const minY = Math.max(0, unit.y - def.move);
+  const maxY = Math.min(MAP_HEIGHT - 1, unit.y + def.move);
+  const summary = { move: def.move, reachable: 0, road: 0, rough: 0, supplied: 0 };
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if (x === unit.x && y === unit.y) continue;
+      const path = findPath(state, unit, x, y, def.move);
+      if (!path) continue;
+      const tile = tileAt(state, x, y);
+      const road = Boolean(tile?.road || state.buildings.some((building) => building.type === 'road' && building.x === x && building.y === y));
+      const terrainMove = TERRAIN[tile?.terrain || 'plains']?.move || 1;
+      summary.reachable += 1;
+      if (road) summary.road += 1;
+      if (isTileSupplied(state, x, y)) summary.supplied += 1;
+      if (!road && terrainMove > 1) summary.rough += 1;
+    }
+  }
+  return summary;
 }
 
 function endTurnReviewMapHelpChip() {
