@@ -3325,6 +3325,14 @@ button:hover:not(:disabled) {
   margin-top: 0.52rem;
 }
 
+.build-command-drawer {
+  margin-top: 0.62rem;
+}
+
+.build-command-drawer[open] {
+  padding-bottom: 0.10rem;
+}
+
 .build-group-drawer {
   margin-top: 0.36rem;
 }
@@ -4300,12 +4308,15 @@ button:hover:not(:disabled) {
     bottom: auto;
     left: auto;
     display: -webkit-box;
-    max-width: min(19rem, calc(100vw - 0.96rem));
+    width: fit-content;
+    max-width: min(16.75rem, calc(100vw - 0.96rem));
     max-height: 2.48rem;
     overflow: hidden;
+    overflow-wrap: anywhere;
     padding: 0.32rem 0.52rem;
     font-size: 0.68rem;
     line-height: 1.15;
+    white-space: normal;
     transform: translateY(-0.42rem);
     z-index: 30;
     -webkit-box-orient: vertical;

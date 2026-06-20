@@ -197,6 +197,10 @@ function isCompactChromeMode() {
   return typeof window !== 'undefined' && window.innerWidth <= 620;
 }
 
+function isCompactCommandRailMode() {
+  return typeof window !== 'undefined' && window.innerWidth <= 1400;
+}
+
 function mappedPercent() {
   const revealed = Array.isArray(state.revealed) ? state.revealed.filter(Boolean).length : 0;
   return Math.round((revealed / (MAP_WIDTH * MAP_HEIGHT)) * 100);
@@ -1050,7 +1054,12 @@ function renderActions() {
       : 'Foreign or hostile contact under observation.';
     const isEngineer = def.tags.includes('builder') && selectedUnit.faction === 'olundar';
     if (isEngineer) {
-      const buildSection = actionSection('Construction orders', 'Place roads, economy sites, defenses, and mustering halls from this engineer.', 'build-orders');
+      const buildSection = orderDrawer(
+        'Construction orders',
+        'Doctrine, quick builds, full catalog',
+        'build-orders build-command-drawer',
+        !isCompactCommandRailMode()
+      );
       const doctrineCard = buildDoctrineCard(selectedUnit);
       if (doctrineCard) buildSection.appendChild(doctrineCard);
       const buildDrawer = orderDrawer('Full construction catalog', 'Grouped by doctrine', 'build-drawer', false);
@@ -3715,11 +3724,25 @@ function subheading(text) {
 
 function toast(text, tone = 'good') {
   clearTimeout(toastTimer);
-  toastEl.textContent = text;
+  toastEl.title = text;
+  toastEl.textContent = compactToastText(text);
   toastEl.className = `toast show ${tone}`;
   toastTimer = setTimeout(() => {
     toastEl.className = 'toast';
+    toastEl.removeAttribute('title');
   }, 2400);
+}
+
+function compactToastText(text) {
+  const value = String(text || '');
+  if (!isCompactChromeMode()) return value;
+  const move = value.match(/^Advance (.+?) to (\d+,\d+)\.$/);
+  if (move) return `${move[1].replace(/^Pathfinder /, '').split(' ')[0]} ${move[2]}`;
+  const build = value.match(/^(.+?) started at (\d+,\d+)\.$/);
+  if (build) return `${build[1].replace(/^Military /, '').split(' ')[0]} ${build[2]}`;
+  const readyWarning = value.match(/^(\d+) Olundaran units are still ready: .+ Press End Turn again to confirm\.$/);
+  if (readyWarning) return `${readyWarning[1]} units ready. End again to confirm.`;
+  return value.replace(/^Olundaran /, '').replace(/^Pathfinder /, '');
 }
 
 function escapeHtml(value) {
