@@ -958,7 +958,7 @@ export function getFirstTurnsGuide(state) {
       id: 'iron',
       label: 'Claim iron for the legions',
       done: mineStarted,
-      detail: ironEngineerSpent ? 'Engineer refreshes next turn. Hold a ready formation now, then claim iron.' : 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
+      detail: ironEngineerSpent ? 'Engineer refreshes next turn. Scout or hold safely now, then claim iron.' : 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
     },
     {
       id: 'contact',
@@ -998,7 +998,7 @@ function guidePhase(state, completed, total) {
 
 function guideSummary(state, current) {
   const ironEngineerSpent = current.id === 'iron' && openingEngineerSpent(state);
-  if (ironEngineerSpent) return 'Engineer refreshes next turn. Hold the line now, then claim iron.';
+  if (ironEngineerSpent) return 'Engineer refreshes next turn. Scout or hold safely now, then claim iron.';
   if (state.campaign?.difficultyId === 'hollowCrown') {
     return `Hollow Crown pressure starts immediately. Next best order: ${current.label}.`;
   }
