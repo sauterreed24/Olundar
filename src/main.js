@@ -1135,12 +1135,13 @@ function renderActions() {
   const counselCard = tacticalCounselCard(selectedUnit, selectedBuilding);
   const placementCard = buildPlacementCard();
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
+  const tacticalMoveCard = tacticalMoveOrdersCard(selectedUnit);
   const readyForcesCard = activeReadyForcesCard(selectedUnit);
   const musterCard = musterReadyCard(selectedBuilding);
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, tacticalMoveCard, doctrineCard, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -1367,6 +1368,138 @@ function readyForceButton(unit, selectedUnitId) {
     <span class="ready-force-meta">${escapeHtml(`${unit.x},${unit.y}`)}</span>
   `;
   return el;
+}
+
+function tacticalMoveOrdersCard(selectedUnit) {
+  if (state.status !== 'playing' || state.mode.type !== 'select' || !selectedUnit || selectedUnit.faction !== 'olundar' || selectedUnit.hasActed) return null;
+  const orders = tacticalMoveOrders(selectedUnit).slice(0, isCompactCommandRailMode() ? 3 : 4);
+  if (!orders.length) return null;
+  const card = actionSection('Tactical Moves', `${UNIT_TYPES[selectedUnit.type].name} has ${orders.length} ranked destination${orders.length === 1 ? '' : 's'} from terrain, roads, supply, and sight.`, 'tactical-move-card');
+  const list = commandActions('tactical-move-grid');
+  for (const order of orders) list.appendChild(tacticalMoveButton(selectedUnit, order));
+  card.appendChild(list);
+  return card;
+}
+
+function tacticalMoveOrders(unit) {
+  const def = UNIT_TYPES[unit.type];
+  const tags = def.tags || [];
+  const candidates = [];
+  const minX = Math.max(0, unit.x - def.move);
+  const maxX = Math.min(MAP_WIDTH - 1, unit.x + def.move);
+  const minY = Math.max(0, unit.y - def.move);
+  const maxY = Math.min(MAP_HEIGHT - 1, unit.y + def.move);
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if (x === unit.x && y === unit.y) continue;
+      const path = findPath(state, unit, x, y, def.move);
+      if (!path) continue;
+      const tile = tileAt(state, x, y);
+      if (!tile) continue;
+      const terrain = TERRAIN[tile.terrain] || TERRAIN.plains;
+      const road = Boolean(tile.road || state.buildings.some((building) => building.type === 'road' && building.x === x && building.y === y));
+      const supplied = isTileSupplied(state, x, y);
+      const revealGain = forecastRevealGain(unit, x, y);
+      const threats = visibleHostilePressure(x, y);
+      const nearestThreat = threats[0]?.distance ?? 9;
+      const attackTargets = visibleHostileTargets({ ...unit, x, y }, def.range);
+      const terrainValue = (terrain.defense || 0) * 2.2 + (terrain.sight || 0) * 1.2;
+      let score = terrainValue + (road ? 5.2 : 0) + (supplied ? 3.4 : 0) + revealGain * (tags.includes('recon') ? 0.95 : 0.28) + attackTargets.length * (tags.includes('ranged') ? 8 : 4);
+      if (tags.includes('builder') && (road || supplied)) score += 3;
+      if (tags.includes('mounted') && tile.terrain === 'plains') score += 2.6;
+      if (tags.includes('ranged') && tile.terrain === 'hills') score += 4.8;
+      if (tags.includes('line') && nearestThreat <= 2) score += 2.4;
+      if (tile.terrain === 'blight') score -= 9;
+      if (nearestThreat <= 2 && !tags.includes('line') && !tags.includes('shield') && !tags.includes('spear')) score -= 4.5;
+      score -= path.cost * 0.68;
+      candidates.push({
+        x,
+        y,
+        cost: path.cost,
+        remaining: Math.max(0, def.move - path.cost),
+        terrain: tile.terrain,
+        terrainName: terrain.name,
+        road,
+        supplied,
+        revealGain,
+        attackTargets: attackTargets.length,
+        threatDistance: nearestThreat,
+        score,
+        tone: attackTargets.length ? 'attack' : road ? 'road' : supplied ? 'supply' : revealGain >= 8 ? 'scout' : 'field'
+      });
+    }
+  }
+
+  return candidates
+    .sort((a, b) => b.score - a.score || b.revealGain - a.revealGain || a.cost - b.cost || a.y - b.y || a.x - b.x)
+    .slice(0, 5)
+    .map((order) => ({
+      ...order,
+      label: tacticalMoveLabel(unit, order),
+      meta: tacticalMoveMeta(unit, order),
+      success: tacticalMoveSuccess(order)
+    }));
+}
+
+function tacticalMoveLabel(unit, order) {
+  const tags = UNIT_TYPES[unit.type].tags || [];
+  if (order.attackTargets) return `Pressure ${order.terrainName}`;
+  if (tags.includes('recon') && order.revealGain >= 8) return `Scout ${order.x},${order.y}`;
+  if (order.road) return `Road march ${order.x},${order.y}`;
+  if (order.supplied) return `Secure ${order.terrainName}`;
+  if (order.terrain === 'hills') return `Take high ground`;
+  if (order.terrain === 'forest') return `Enter forest`;
+  return `Move ${order.x},${order.y}`;
+}
+
+function tacticalMoveMeta(unit, order) {
+  const def = UNIT_TYPES[unit.type];
+  const signals = [`${order.cost}/${def.move} move`];
+  if (order.revealGain) signals.push(`+${order.revealGain} sight`);
+  if (order.attackTargets) signals.push(`${order.attackTargets} target${order.attackTargets === 1 ? '' : 's'}`);
+  if (order.road) signals.push('road');
+  else if (order.supplied) signals.push('supply');
+  else signals.push(order.terrainName);
+  return signals.slice(0, 3).join(' | ');
+}
+
+function tacticalMoveSuccess(order) {
+  if (order.attackTargets) return `takes a pressure lane on ${order.terrainName}.`;
+  if (order.revealGain >= 8) return `opens ${order.revealGain} fresh sight lines.`;
+  if (order.road) return 'marches along the road network.';
+  if (order.supplied) return 'secures supplied ground.';
+  return `repositions on ${order.terrainName}.`;
+}
+
+function tacticalMoveButton(unit, order) {
+  const el = button(order.label, () => executeTacticalMove(unit.id, order), false, `${order.label}: ${order.meta}`);
+  el.className = `tactical-move-button ${order.tone}`;
+  el.innerHTML = `
+    <span class="tactical-move-coordinate">${escapeHtml(`${order.x},${order.y}`)}</span>
+    <span class="tactical-move-main">
+      <b>${escapeHtml(order.label)}</b>
+      <small>${escapeHtml(order.meta)}</small>
+    </span>
+    <span class="tactical-move-route">${escapeHtml(order.remaining ? `+${order.remaining}` : 'edge')}</span>
+  `;
+  return el;
+}
+
+function executeTacticalMove(unitId, order) {
+  const unit = state.units.find((item) => item.id === unitId && item.faction === 'olundar');
+  if (!unit) {
+    toast('That unit is no longer available.', 'bad');
+    playAudioCue('warning');
+    return;
+  }
+  const result = moveUnit(state, unit.id, order.x, order.y);
+  if (result.ok) result.reason = `${unit.name} ${order.success}`;
+  handleResult(result, 'move');
+  lastTile = { x: order.x, y: order.y };
+  hoverTile = lastTile;
+  render();
+  if (window.innerWidth <= 980) scrollBattlefieldIntoView();
 }
 
 function musterReadyCard(selectedBuilding) {
@@ -4603,7 +4736,15 @@ function inMap(x, y) {
 
 function canvasCursorForTile(tile) {
   if (!tile || !inMap(tile.x, tile.y)) return '';
-  return openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile) ? 'pointer' : '';
+  if (openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile)) return 'pointer';
+  const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar' && !unit.hasActed);
+  if (!selectedUnit || state.mode.type !== 'select') return '';
+  const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
+  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) return 'pointer';
+  const visibleBuilding = isVisible(state, tile.x, tile.y) ? buildingAt(state, tile.x, tile.y) : null;
+  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) return 'pointer';
+  const def = UNIT_TYPES[selectedUnit.type];
+  return findPath(state, selectedUnit, tile.x, tile.y, def.move) ? 'pointer' : '';
 }
 
 canvas.addEventListener('click', canvasClicked);

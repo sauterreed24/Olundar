@@ -3463,6 +3463,122 @@ button:hover:not(:disabled) {
   font-weight: 900;
 }
 
+.tactical-move-card {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.48rem;
+  padding: 0.56rem;
+  border: 1px solid rgba(36, 116, 142, 0.22);
+  border-left: 4px solid rgba(36, 116, 142, 0.74);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(246, 255, 252, 0.98), rgba(221, 242, 238, 0.84)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.88), transparent 7.5rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 8px 18px rgba(50, 88, 93, 0.10);
+}
+
+.tactical-move-card .order-section-head h3 {
+  color: #7d2719;
+}
+
+.tactical-move-card .order-section-head p {
+  color: #435f5e;
+  font-size: 0.70rem;
+}
+
+.tactical-move-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
+  margin-top: 0;
+}
+
+.tactical-move-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  min-height: 2.86rem;
+  padding: 0.34rem 0.40rem;
+  border: 1px solid rgba(36, 116, 142, 0.18);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255,255,253,0.98), rgba(224, 244, 242, 0.90)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.80), transparent 6rem);
+  color: #173d45;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 4px 10px rgba(51, 84, 88, 0.07);
+}
+
+.tactical-move-button.attack {
+  border-color: rgba(143, 36, 24, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 236, 0.98), rgba(235, 211, 181, 0.88)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.80), transparent 6rem);
+}
+
+.tactical-move-button.road {
+  border-color: rgba(183, 133, 50, 0.30);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 242, 0.98), rgba(242, 231, 195, 0.90)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.82), transparent 6rem);
+}
+
+.tactical-move-button.supply {
+  border-color: rgba(55, 128, 84, 0.24);
+  background:
+    linear-gradient(180deg, rgba(251, 255, 244, 0.98), rgba(226, 244, 219, 0.90)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.80), transparent 6rem);
+}
+
+.tactical-move-coordinate,
+.tactical-move-route {
+  display: grid;
+  place-items: center;
+  min-width: 2.22rem;
+  align-self: stretch;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #14404a;
+  font-size: 0.62rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.tactical-move-route {
+  min-width: 1.92rem;
+  color: #55704d;
+}
+
+.tactical-move-main {
+  display: grid;
+  min-width: 0;
+  gap: 0.06rem;
+}
+
+.tactical-move-main b,
+.tactical-move-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tactical-move-main b {
+  color: #8d3024;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+.tactical-move-main small {
+  color: #4c625c;
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: 1.05;
+}
+
 .muster-ready-card {
   display: grid;
   gap: 0.42rem;
@@ -3639,6 +3755,11 @@ button:hover:not(:disabled) {
     padding: 0.46rem;
   }
 
+  .tactical-move-card {
+    gap: 0.34rem;
+    padding: 0.46rem;
+  }
+
   .end-turn-review-card {
     gap: 0.34rem;
     padding: 0.46rem;
@@ -3649,6 +3770,11 @@ button:hover:not(:disabled) {
   }
 
   .muster-ready-grid {
+    gap: 0.22rem;
+  }
+
+  .tactical-move-grid {
+    grid-template-columns: 1fr;
     gap: 0.22rem;
   }
 
@@ -3665,6 +3791,12 @@ button:hover:not(:disabled) {
   }
 
   .muster-ready-button {
+    gap: 0.26rem;
+    min-height: 2.62rem;
+    padding: 0.28rem 0.30rem;
+  }
+
+  .tactical-move-button {
     gap: 0.26rem;
     min-height: 2.62rem;
     padding: 0.28rem 0.30rem;
@@ -3689,6 +3821,16 @@ button:hover:not(:disabled) {
   }
 
   .ready-force-main small {
+    font-size: 0.52rem;
+  }
+
+  .tactical-move-main b {
+    font-size: 0.66rem;
+  }
+
+  .tactical-move-main small,
+  .tactical-move-coordinate,
+  .tactical-move-route {
     font-size: 0.52rem;
   }
 
