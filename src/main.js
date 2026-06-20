@@ -1135,9 +1135,10 @@ function renderActions() {
   const counselCard = tacticalCounselCard(selectedUnit, selectedBuilding);
   const placementCard = buildPlacementCard();
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
+  const readyForcesCard = activeReadyForcesCard(selectedUnit);
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, doctrineCard, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -1308,6 +1309,62 @@ function unitCommandRole(unit) {
   if (tags.includes('siege')) return 'Siege';
   if (tags.includes('undead')) return 'Undead';
   return 'Line';
+}
+
+function activeReadyForcesCard(selectedUnit) {
+  if (state.status !== 'playing' || state.mode.type === 'build') return null;
+  const readyUnits = getReadyOlundarUnits(state);
+  if (!readyUnits.length) return null;
+  if (readyUnits.length === 1 && selectedUnit?.id === readyUnits[0].id) return null;
+  const ordered = readyForceRoster(readyUnits, selectedUnit?.id);
+  const visible = ordered.slice(0, isCompactCommandRailMode() ? 4 : 5);
+  const card = actionSection('Ready Forces', `${readyUnits.length} unused Olundaran command${readyUnits.length === 1 ? '' : 's'} can still act.`, 'ready-forces-card');
+  const list = commandActions('ready-force-grid');
+  for (const unit of visible) list.appendChild(readyForceButton(unit, selectedUnit?.id));
+  if (ordered.length > visible.length) {
+    list.appendChild(orderButton('More ready', `${ordered.length - visible.length} more in the queue`, () => selectNextReadyUnit(), { tone: 'secondary' }));
+  }
+  card.appendChild(list);
+  return card;
+}
+
+function readyForceRoster(readyUnits, selectedUnitId) {
+  const directive = currentOpeningDirective();
+  const openingAction = directive ? openingDirectiveAction(directive.current.id) : null;
+  const openingUnitId = openingAction?.unitId || null;
+  return readyUnits.slice().sort((a, b) => readyForceSortScore(a, selectedUnitId, openingUnitId) - readyForceSortScore(b, selectedUnitId, openingUnitId));
+}
+
+function readyForceSortScore(unit, selectedUnitId, openingUnitId) {
+  if (unit.id === selectedUnitId) return -30;
+  if (unit.id === openingUnitId) return -20;
+  const tags = UNIT_TYPES[unit.type].tags || [];
+  if (tags.includes('builder')) return 10;
+  if (tags.includes('recon')) return 20;
+  if (tags.includes('ranged')) return 30;
+  if (tags.includes('mounted')) return 40;
+  if (tags.includes('siege')) return 50;
+  return 60;
+}
+
+function readyForceButton(unit, selectedUnitId) {
+  const def = UNIT_TYPES[unit.type];
+  const tile = tileAt(state, unit.x, unit.y);
+  const role = unitCommandRole(unit);
+  const active = unit.id === selectedUnitId;
+  const terrain = tile ? TERRAIN[tile.terrain]?.name || tile.terrain : 'Field';
+  const label = active ? `${def.name} selected` : `Select ${def.name}`;
+  const el = button(label, () => focusReadyForce(unit.id), active, active ? 'This force is already selected' : `Jump to ${def.name}`);
+  el.className = `ready-force-button ${active ? 'active' : ''}`.trim();
+  el.innerHTML = `
+    ${selectionPortraitMarkup({ unit })}
+    <span class="ready-force-main">
+      <b>${escapeHtml(def.name)}</b>
+      <small>${escapeHtml(role)} · ${escapeHtml(terrain)}</small>
+    </span>
+    <span class="ready-force-meta">${escapeHtml(`${unit.x},${unit.y}`)}</span>
+  `;
+  return el;
 }
 
 function tacticalCounselCard(selectedUnit, selectedBuilding) {
@@ -3556,6 +3613,22 @@ function selectNextReadyUnit() {
   toast(`${unit.name} is ready.`);
   playAudioCue('select');
   render();
+}
+
+function focusReadyForce(unitId) {
+  const unit = state.units.find((item) => item.id === unitId && item.faction === 'olundar' && !item.hasActed);
+  if (!unit) {
+    toast('That force has no fresh orders left.', 'bad');
+    playAudioCue('warning');
+    return;
+  }
+  selectUnit(unit.id);
+  lastTile = { x: unit.x, y: unit.y };
+  hoverTile = null;
+  toast(`${unit.name} is ready.`);
+  playAudioCue('select');
+  render();
+  if (window.innerWidth <= 980) scrollBattlefieldIntoView();
 }
 
 function focusFirstReadyUnit() {

@@ -3361,6 +3361,143 @@ button:hover:not(:disabled) {
   margin-top: 0.12rem;
 }
 
+.ready-forces-card {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.48rem;
+  padding: 0.56rem;
+  border: 1px solid rgba(51, 113, 88, 0.22);
+  border-left: 4px solid rgba(55, 128, 84, 0.72);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(250, 255, 241, 0.97), rgba(228, 244, 214, 0.84)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.88), transparent 7.5rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 8px 18px rgba(63, 88, 55, 0.10);
+}
+
+.ready-forces-card .order-section-head h3 {
+  color: #7d2719;
+}
+
+.ready-forces-card .order-section-head p {
+  color: #4f6042;
+  font-size: 0.70rem;
+}
+
+.ready-force-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
+  margin-top: 0;
+}
+
+.ready-force-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  min-height: 2.72rem;
+  padding: 0.34rem 0.40rem;
+  border: 1px solid rgba(55, 128, 84, 0.18);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255,255,253,0.98), rgba(233, 246, 224, 0.88)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.78), transparent 6rem);
+  color: #24492d;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 4px 10px rgba(54, 82, 57, 0.07);
+}
+
+.ready-force-button.active {
+  border-color: rgba(33, 112, 138, 0.32);
+  background:
+    linear-gradient(180deg, rgba(238, 252, 255, 0.98), rgba(196, 232, 235, 0.86)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.82), transparent 6rem);
+  color: #153a49;
+}
+
+.ready-force-button .selection-portrait {
+  width: 1.78rem;
+  height: 1.78rem;
+}
+
+.ready-force-main {
+  display: grid;
+  min-width: 0;
+  gap: 0.06rem;
+}
+
+.ready-force-main b,
+.ready-force-main small,
+.ready-force-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ready-force-main b {
+  color: #8d3024;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+.ready-force-main small {
+  color: #596d50;
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: 1.05;
+}
+
+.ready-force-meta {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-width: 2.30rem;
+  padding: 0 0.26rem;
+  border-left: 1px solid rgba(65, 105, 75, 0.12);
+  color: #214c38;
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+@media (max-width: 620px) {
+  .ready-forces-card {
+    gap: 0.34rem;
+    padding: 0.46rem;
+  }
+
+  .ready-force-grid {
+    gap: 0.22rem;
+  }
+
+  .ready-force-button {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.26rem;
+    min-height: 2.52rem;
+    padding: 0.28rem 0.30rem;
+  }
+
+  .ready-force-button .selection-portrait {
+    width: 1.54rem;
+    height: 1.54rem;
+  }
+
+  .ready-force-main b {
+    font-size: 0.66rem;
+  }
+
+  .ready-force-main small {
+    font-size: 0.52rem;
+  }
+
+  .ready-force-meta {
+    display: none;
+  }
+}
+
 .build-placement-card {
   display: grid;
   gap: 0.42rem;
