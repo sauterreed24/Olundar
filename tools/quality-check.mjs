@@ -3,7 +3,18 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
+import { dataFilesExist, loadContentSync } from '../src/engine/content-loader.js';
+import { validateContentSchema } from '../src/engine/entity-factory.js';
+import {
+  Command,
+  CommandHistory,
+  attackCommand,
+  buildCommand,
+  getCommandHistory,
+  moveCommand,
+  trainCommand
+} from '../src/engine/commands.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -1434,6 +1445,89 @@ check('source has no TODO/FIXME leftovers', () => {
     const text = readFileSync(file, 'utf8');
     assert(!/TODO|FIXME/.test(text), `${path.relative(root, file)} contains TODO/FIXME.`);
   }
+});
+
+check('No Canvas 2D calls outside PixiJS abstraction', () => {
+  const allowed = new Set([
+    path.join(root, 'src/render.js'),
+    path.join(root, 'src/engine/pixi-renderer.js')
+  ]);
+  for (const file of listFiles(path.join(root, 'src'))) {
+    if (allowed.has(file)) continue;
+    const text = readFileSync(file, 'utf8');
+    assert(!/getContext\(\s*['"]2d['"]\s*\)/.test(text), `${path.relative(root, file)} must not call Canvas 2D directly.`);
+  }
+  assert(existsSync(path.join(root, 'src/engine/pixi-renderer.js')), 'Pixi renderer backbone missing.');
+});
+
+check('All state mutations route through Command.execute()', () => {
+  const commandsSource = readProjectFile('src/engine/commands.js');
+  const mainSource = readProjectFile('src/main.js');
+  assert(commandsSource.includes('static execute(type, state, payload)'), 'Command.execute must centralize mutations.');
+  assert(commandsSource.includes("case 'move'") && commandsSource.includes("case 'attack'") && commandsSource.includes("case 'build'"), 'Command.execute must cover move, attack, and build.');
+  assert(commandsSource.includes("case 'train'") && commandsSource.includes("case 'upgrade'") && commandsSource.includes("case 'diplomacy'"), 'Command.execute must cover train, upgrade, and diplomacy.');
+  assert(commandsSource.includes("case 'crisis'") && commandsSource.includes("case 'fieldOrder'"), 'Command.execute must cover crisis and field orders.');
+  assert(mainSource.includes('executePlayerCommand') && mainSource.includes('runCommand('), 'Main loop must route player commands through the command history.');
+  assert(mainSource.includes('getCommandHistory().undo') && mainSource.includes('getCommandHistory().redo'), 'Undo/redo must bind to command history.');
+});
+
+check('JSON content validates against schema', () => {
+  assert(dataFilesExist(), 'data/ JSON content files are missing.');
+  const bundle = loadContentSync();
+  validateContentSchema(bundle);
+  assert(bundle.UNIT_TYPES.scout && bundle.BUILDING_TYPES.farm, 'JSON bundle must include core units and buildings.');
+  assert(getContentBundle().MAP_WIDTH === MAP_WIDTH, 'Content bundle must stay aligned with exported constants.');
+});
+
+check('Undo stack reverses any player action without desync', () => {
+  const state = createGame('quality-undo');
+  const history = new CommandHistory();
+  const scout = state.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
+  const startX = scout.x;
+  const startY = scout.y;
+  const path = findPath(state, scout, startX + 1, startY, UNIT_TYPES.scout.move);
+  assert(path, 'Undo test needs a legal scout move.');
+  const moveResult = history.execute(moveCommand(scout.id, startX + 1, startY), state);
+  assert(moveResult.ok, moveResult.reason || 'Move command failed.');
+  assert(scout.x === startX + 1, 'Move did not apply.');
+  const undoResult = history.undo(state);
+  assert(undoResult.ok, undoResult.reason || 'Undo failed.');
+  const scoutAfterUndo = state.units.find((u) => u.id === scout.id);
+  assert(scoutAfterUndo.x === startX && scoutAfterUndo.y === startY, 'Undo did not restore scout position.');
+  const city = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const beforeFood = state.factions.olundar.resources.food;
+  const trainResult = history.execute(trainCommand(city.id, 'scout'), state);
+  assert(trainResult.ok, trainResult.reason || 'Train command failed.');
+  assert(state.factions.olundar.resources.food < beforeFood, 'Train did not spend food.');
+  history.undo(state);
+  assert(state.factions.olundar.resources.food === beforeFood, 'Undo did not restore resources after train.');
+  const engineer = state.units.find((u) => u.type === 'engineer');
+  const buildResult = history.execute(buildCommand(engineer.id, 'road', engineer.x, engineer.y), state);
+  assert(buildResult.ok, buildResult.reason || 'Build command failed.');
+  history.undo(state);
+  assert(!state.buildings.some((b) => b.type === 'road' && b.x === engineer.x && b.y === engineer.y && b.turnsLeft >= 0), 'Undo did not remove road build.');
+});
+
+check('PixiJS engine foundation is present', () => {
+  const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert(pkg.dependencies?.['pixi.js'], 'pixi.js dependency missing from package.json.');
+  const renderer = readProjectFile('src/engine/pixi-renderer.js');
+  const camera = readProjectFile('src/engine/camera.js');
+  const particles = readProjectFile('src/engine/particles.js');
+  assert(renderer.includes('IMPERIAL_PALETTE') && renderer.includes('drawVignette'), 'Pixi renderer must include imperial lighting.');
+  assert(camera.includes('handleWheel') && camera.includes('edgePanMargin'), 'Camera must support wheel zoom and edge panning.');
+  assert(particles.includes('dustTrail') && particles.includes('combatBurst'), 'Particle system must support movement and combat juice.');
+  assert(readProjectFile('src/render.js').includes('drawGameCore') && readProjectFile('src/render.js').includes('isPixiReady'), 'Render bridge must delegate to Pixi when ready.');
+});
+
+check('audio mixer exposes per-bus volume controls', () => {
+  const audio = readProjectFile('src/engine/audio.js');
+  const settings = readProjectFile('src/settings.js');
+  const main = readProjectFile('src/main.js');
+  assert(audio.includes("buses.sfx") && audio.includes("buses.ambient") && audio.includes("buses.music") && audio.includes("buses.ui"), 'Audio mixer must define SFX, Ambient, Music, and UI buses.');
+  assert(audio.includes('updateDynamicMusic') && audio.includes('crossfadeMusicLayers'), 'Audio must support dynamic music layers.');
+  assert(settings.includes('sfxVolume') && settings.includes('uiVolume'), 'Settings must persist per-bus volumes.');
+  assert(main.includes('setBusVolume') && main.includes('name="sfxVolume"'), 'Settings panel must expose bus sliders.');
 });
 
 for (const { name, fn } of checks) {
