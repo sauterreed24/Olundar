@@ -289,5 +289,28 @@
         "text": "Destroy the Bone Portal after surviving the early march."
       }
     ]
+  },
+  "proceduralFrontier": {
+    "id": "proceduralFrontier",
+    "name": "Procedural Frontier",
+    "seed": "Procedural-Frontier",
+    "difficultyId": "standard",
+    "procedural": true,
+    "text": "A seeded campaign generator that reshuffles living factions, resource scarcity, the Deadwalker front, and victory pressure while keeping the Olundar story coherent.",
+    "victoryConditions": [
+      {
+        "id": "proceduralPreviewPacts",
+        "type": "holdPacts",
+        "target": 1,
+        "label": "Bind a generated pact",
+        "text": "Generated campaigns choose their own pact target from the seed."
+      },
+      {
+        "id": "proceduralPreviewPortal",
+        "type": "portal",
+        "label": "End the generated war",
+        "text": "Destroy the Bone Portal in the generated frontier."
+      }
+    ]
   }
 }

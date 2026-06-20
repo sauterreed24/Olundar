@@ -18,7 +18,7 @@ import {
   UNIT_TYPES,
   WAR_AIMS
 } from './content.js';
-import { generateWorld, idx, inBounds, manhattan, neighbors4, xy } from './map.js';
+import { generateWorld, idx, inBounds, makeRng, manhattan, neighbors4, xy } from './map.js';
 
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
 const DIPLOMACY_MEMORY_MAX = 12;
@@ -59,7 +59,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       victoryConditions: scenarioVictoryConditions(campaign.scenario),
       difficultyId: campaign.difficulty.id,
       difficultyName: campaign.difficulty.name,
-      difficultyText: campaign.difficulty.text
+      difficultyText: campaign.difficulty.text,
+      deadwalkerMarch: campaign.scenario.deadwalkerMarch || null
     },
     turn: 1,
     status: 'playing',
@@ -84,7 +85,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       factionPromises: {},
       promiseDemands: {}
     },
-    deadwalker: createDeadwalkerCampaignState(campaign.difficulty),
+    deadwalker: createDeadwalkerCampaignState(campaign.difficulty, campaign.scenario.deadwalkerMarch),
     diplomacyLog: [],
     diplomacyMemory: createDiplomacyMemoryState(),
     crises: {
@@ -106,14 +107,252 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
 
 function normalizeCampaignConfig(seedOrConfig, options = {}) {
   const raw = typeof seedOrConfig === 'object' && seedOrConfig !== null ? { ...seedOrConfig } : { seed: seedOrConfig, ...options };
-  const scenario = SCENARIOS[raw.scenarioId] || SCENARIOS.founding;
-  const difficulty = DIFFICULTY_PRESETS[raw.difficultyId || scenario.difficultyId] || DIFFICULTY_PRESETS.standard;
+  const baseScenario = SCENARIOS[raw.scenarioId] || SCENARIOS.founding;
+  const difficulty = DIFFICULTY_PRESETS[raw.difficultyId || baseScenario.difficultyId] || DIFFICULTY_PRESETS.standard;
+  const seed = raw.seed || baseScenario.seed || `Olundar-${new Date().getFullYear()}`;
+  const scenario = baseScenario.procedural ? createProceduralScenario(seed, baseScenario, difficulty) : baseScenario;
   return {
-    seed: raw.seed || scenario.seed || `Olundar-${new Date().getFullYear()}`,
+    seed,
     scenario,
     difficulty
   };
 }
+
+function createProceduralScenario(seed, baseScenario, difficulty) {
+  const rng = makeRng(`${seed}-procedural-frontier`);
+  const scarcity = pickSeeded(PROCEDURAL_SCARCITY_PROFILES, rng);
+  const layout = pickSeeded(PROCEDURAL_LAYOUTS, rng);
+  const deadFront = pickSeeded(PROCEDURAL_DEAD_FRONTS, rng);
+  const boon = pickSeeded(PROCEDURAL_STARTING_BOONS, rng);
+  const marchBase = marchConfigFromDifficulty(difficulty);
+  const deadwalkerMarch = {
+    firstTurn: clampInt(marchBase.firstTurn + deadFront.march.firstTurn, 6, 16),
+    interval: clampInt(marchBase.interval + deadFront.march.interval, 5, 12),
+    size: clampInt(marchBase.size + deadFront.march.size, 2, 7),
+    growth: clampInt(marchBase.growth + deadFront.march.growth, 1, 3),
+    cap: clampInt(marchBase.cap + deadFront.march.cap, 5, 11)
+  };
+  const relocations = [...layout.relocations, deadFront.relocation].map((item) => ({ ...item }));
+  const terrainPatches = [
+    ...layout.relocations.flatMap((item) => proceduralRoutePatches(7, 16, item.x, item.y)),
+    ...layout.relocations.flatMap((item) => proceduralSettlementPatches(item)),
+    ...proceduralDeadFrontPatches(deadFront.relocation),
+    ...proceduralScarcityPatches(scarcity, rng)
+  ];
+  const victoryConditions = [
+    {
+      id: 'proceduralPacts',
+      type: 'holdPacts',
+      target: layout.pactTarget,
+      label: `Bind ${layout.pactTarget} frontier pact${layout.pactTarget === 1 ? '' : 's'}`,
+      text: `The ${layout.label.toLowerCase()} layout rewards coalition work before the portal siege.`
+    },
+    {
+      id: 'proceduralDeadworks',
+      type: 'destroyDeadworks',
+      target: deadFront.deadworkTarget,
+      label: `Crack ${deadFront.deadworkTarget} ${deadFront.label.toLowerCase()} deadwork${deadFront.deadworkTarget === 1 ? '' : 's'}`,
+      text: 'Break enough Deadwalker infrastructure to make the final push distinct from the last campaign.'
+    },
+    {
+      id: 'proceduralPortal',
+      type: 'portal',
+      label: 'End the seeded frontier war',
+      text: 'Kill Vorgath and destroy the Bone Portal in this generated campaign.'
+    }
+  ];
+
+  return {
+    ...baseScenario,
+    id: baseScenario.id,
+    name: `${baseScenario.name}: ${scarcity.label}`,
+    seed,
+    difficultyId: baseScenario.difficultyId,
+    text: `${scarcity.text} ${layout.text} ${deadFront.text}`,
+    procedural: true,
+    generated: {
+      scarcity: scarcity.id,
+      layout: layout.id,
+      deadFront: deadFront.id,
+      boon: boon.id
+    },
+    resourceDelta: { ...scarcity.resourceDelta },
+    terrainPatches,
+    relocations,
+    buildings: (boon.buildings || []).map((item) => ({ ...item })),
+    units: (boon.units || []).map((item) => ({ ...item })),
+    deadwalkerMarch,
+    victoryConditions
+  };
+}
+
+function pickSeeded(items, rng) {
+  return items[Math.min(items.length - 1, Math.floor(rng() * items.length))];
+}
+
+function proceduralSettlementPatches(relocation) {
+  const patches = [];
+  for (let y = relocation.y - 2; y <= relocation.y + 2; y += 1) {
+    for (let x = relocation.x - 2; x <= relocation.x + 2; x += 1) {
+      if (!inBounds(x, y) || manhattan(x, y, relocation.x, relocation.y) > 2) continue;
+      patches.push({ x, y, terrain: relocation.terrain, baseTerrain: relocation.terrain, road: manhattan(x, y, relocation.x, relocation.y) <= 1 });
+    }
+  }
+  return patches;
+}
+
+function proceduralRoutePatches(x0, y0, x1, y1) {
+  const patches = [];
+  let x = x0;
+  let y = y0;
+  while (x !== x1 || y !== y1) {
+    patches.push({ x, y, terrain: 'plains', baseTerrain: 'plains', road: true });
+    if (x !== x1) x += Math.sign(x1 - x);
+    if (y !== y1 && (Math.abs(y1 - y) > Math.abs(x1 - x) || x === x1)) y += Math.sign(y1 - y);
+  }
+  patches.push({ x: x1, y: y1, terrain: 'plains', baseTerrain: 'plains', road: true });
+  return patches;
+}
+
+function proceduralDeadFrontPatches(relocation) {
+  const patches = [];
+  for (let y = relocation.y - 4; y <= relocation.y + 4; y += 1) {
+    for (let x = relocation.x - 4; x <= relocation.x + 4; x += 1) {
+      if (!inBounds(x, y)) continue;
+      const distance = manhattan(x, y, relocation.x, relocation.y);
+      if (distance > 4) continue;
+      patches.push({
+        x,
+        y,
+        terrain: distance <= 2 ? 'blight' : 'ruins',
+        baseTerrain: 'plains',
+        blight: Math.max(2, 6 - distance)
+      });
+    }
+  }
+  return patches;
+}
+
+function proceduralScarcityPatches(scarcity, rng) {
+  if (!scarcity.patchTerrain) return [];
+  const patches = [];
+  const count = scarcity.patchCount || 4;
+  for (let i = 0; i < count; i += 1) {
+    const x = clampInt(9 + Math.floor(rng() * 10), 3, MAP_WIDTH - 4);
+    const y = clampInt(12 + Math.floor(rng() * 10), 3, MAP_HEIGHT - 4);
+    patches.push({ x, y, terrain: scarcity.patchTerrain, baseTerrain: scarcity.patchTerrain });
+  }
+  return patches;
+}
+
+function clampInt(value, min, max) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+const PROCEDURAL_SCARCITY_PROFILES = [
+  {
+    id: 'iron-starved',
+    label: 'Iron-Starved Road War',
+    text: 'Iron is scarce, so roads, pacts, and careful infantry preservation matter before siege weapons arrive.',
+    resourceDelta: { iron: -12, wood: 12, influence: 1 },
+    patchTerrain: 'hills',
+    patchCount: 3
+  },
+  {
+    id: 'hungry-frontier',
+    label: 'Hungry Frontier',
+    text: 'Food starts tight but nearby marshland can stabilize the first ten turns if scouts secure it.',
+    resourceDelta: { food: -18, wood: 8, gold: 8 },
+    patchTerrain: 'marsh',
+    patchCount: 5
+  },
+  {
+    id: 'gold-poor-legion',
+    label: 'Gold-Poor Legion',
+    text: 'Gold is scarce, but extra iron and stone push the campaign toward a disciplined military opening.',
+    resourceDelta: { gold: -18, iron: 12, stone: 10 },
+    patchTerrain: 'ruins',
+    patchCount: 4
+  },
+  {
+    id: 'woodline-pact',
+    label: 'Woodline Pact Race',
+    text: 'Wood and influence are strong, inviting fast towers, roads, and early diplomacy before the dead cadence accelerates.',
+    resourceDelta: { wood: 18, influence: 2, food: -8, iron: -6 },
+    patchTerrain: 'forest',
+    patchCount: 5
+  }
+];
+
+const PROCEDURAL_LAYOUTS = [
+  {
+    id: 'northwest-bulwark',
+    label: 'Northwest Bulwark',
+    text: 'Dawnward stands closer to Olundar while Mireclan drifts deeper into the southern marsh.',
+    pactTarget: 2,
+    relocations: [
+      { faction: 'dawn', x: 12, y: 7, terrain: 'hills' },
+      { faction: 'veyr', x: 27, y: 18, terrain: 'plains' },
+      { faction: 'mire', x: 34, y: 25, terrain: 'marsh' }
+    ]
+  },
+  {
+    id: 'split-market-road',
+    label: 'Split Market Road',
+    text: 'Veyr controls the central route, making trade tempting but politically exposed.',
+    pactTarget: 1,
+    relocations: [
+      { faction: 'dawn', x: 17, y: 6, terrain: 'hills' },
+      { faction: 'veyr', x: 23, y: 17, terrain: 'plains' },
+      { faction: 'mire', x: 35, y: 22, terrain: 'marsh' }
+    ]
+  },
+  {
+    id: 'marsh-ring',
+    label: 'Marsh Ring',
+    text: 'The living factions spread into a damp southern arc, making scouts and roads unusually valuable.',
+    pactTarget: 2,
+    relocations: [
+      { faction: 'dawn', x: 15, y: 8, terrain: 'hills' },
+      { faction: 'veyr', x: 29, y: 23, terrain: 'plains' },
+      { faction: 'mire', x: 31, y: 20, terrain: 'marsh' }
+    ]
+  }
+];
+
+const PROCEDURAL_DEAD_FRONTS = [
+  {
+    id: 'far-hollow',
+    label: 'Far Hollow',
+    text: 'The Bone Portal is distant but sends heavier columns once the first march forms.',
+    relocation: { faction: 'dead', x: 38, y: 8, terrain: 'blight' },
+    march: { firstTurn: 2, interval: 1, size: 1, growth: 1, cap: 1 },
+    deadworkTarget: 2
+  },
+  {
+    id: 'close-bone-road',
+    label: 'Close Bone Road',
+    text: 'The Deadwalker front starts closer, with a faster but smaller opening cadence.',
+    relocation: { faction: 'dead', x: 32, y: 12, terrain: 'blight' },
+    march: { firstTurn: -2, interval: -1, size: 0, growth: 0, cap: 0 },
+    deadworkTarget: 3
+  },
+  {
+    id: 'southern-gravefront',
+    label: 'Southern Gravefront',
+    text: 'The portal pressure bends south, changing which roads and allies matter most.',
+    relocation: { faction: 'dead', x: 34, y: 18, terrain: 'blight' },
+    march: { firstTurn: 0, interval: -1, size: 1, growth: 0, cap: 1 },
+    deadworkTarget: 2
+  }
+];
+
+const PROCEDURAL_STARTING_BOONS = [
+  { id: 'extra-scout', units: [{ type: 'scout', faction: 'olundar', x: 6, y: 16, name: 'Seeded Frontier Scout' }] },
+  { id: 'rally-cache', buildings: [{ type: 'rallyBanner', faction: 'olundar', x: 10, y: 16, name: 'Seeded Rally Banner', complete: true }] },
+  { id: 'road-engineers', buildings: [{ type: 'road', faction: 'olundar', x: 9, y: 16, name: 'Seeded Road Spur', complete: true }] },
+  { id: 'siege-note', units: [{ type: 'engineer', faction: 'olundar', x: 9, y: 18, name: 'Seeded Survey Engineer' }] }
+];
 
 function normalizeCampaignState(state) {
   if (!Array.isArray(state.diplomacyLog)) state.diplomacyLog = [];
@@ -133,8 +372,12 @@ function normalizeCampaignState(state) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
   if (state.campaign?.scenarioId && state.campaign?.difficultyId) {
-    const scenario = SCENARIOS[state.campaign.scenarioId] || SCENARIOS.founding;
+    const baseScenario = SCENARIOS[state.campaign.scenarioId] || SCENARIOS.founding;
+    const difficulty = DIFFICULTY_PRESETS[state.campaign.difficultyId] || DIFFICULTY_PRESETS.standard;
+    const scenario = baseScenario.procedural ? createProceduralScenario(state.campaign.seed || state.seed || baseScenario.seed, baseScenario, difficulty) : baseScenario;
+    state.campaign.scenarioName = scenario.name;
     state.campaign.victoryConditions = scenarioVictoryConditions(scenario);
+    state.campaign.deadwalkerMarch = scenario.deadwalkerMarch || null;
     state.objectives = campaignObjectives(scenario);
     normalizeDeadwalkerCampaign(state);
     return;
@@ -147,7 +390,8 @@ function normalizeCampaignState(state) {
     victoryConditions: scenarioVictoryConditions(fallback.scenario),
     difficultyId: fallback.difficulty.id,
     difficultyName: fallback.difficulty.name,
-    difficultyText: fallback.difficulty.text
+    difficultyText: fallback.difficulty.text,
+    deadwalkerMarch: fallback.scenario.deadwalkerMarch || null
   };
   state.objectives = campaignObjectives(fallback.scenario);
   normalizeDeadwalkerCampaign(state);
@@ -170,8 +414,8 @@ function marchConfigFromDifficulty(difficulty) {
   return { ...DEFAULT_MARCH, ...(difficulty?.march || {}) };
 }
 
-function createDeadwalkerCampaignState(difficulty) {
-  const march = marchConfigFromDifficulty(difficulty);
+function createDeadwalkerCampaignState(difficulty, scenarioMarch = null) {
+  const march = { ...marchConfigFromDifficulty(difficulty), ...(scenarioMarch || {}) };
   return {
     menace: 0,
     marchesSent: 0,
@@ -182,7 +426,7 @@ function createDeadwalkerCampaignState(difficulty) {
 }
 
 function marchConfigFor(state) {
-  return marchConfigFromDifficulty(DIFFICULTY_PRESETS[state.campaign?.difficultyId]);
+  return { ...marchConfigFromDifficulty(DIFFICULTY_PRESETS[state.campaign?.difficultyId]), ...(state.campaign?.deadwalkerMarch || {}) };
 }
 
 function normalizeDeadwalkerCampaign(state) {
@@ -217,6 +461,7 @@ function applyCampaignSetup(state, campaign) {
     state.factions.olundar.resources[key] = Math.max(0, state.factions.olundar.resources[key] || 0);
   }
   state.factions.olundar.resources.morale = Math.max(1, Math.min(12, state.factions.olundar.resources.morale || 1));
+  applyScenarioRelocations(state, campaign.scenario.relocations || []);
   for (const patch of campaign.scenario.terrainPatches || []) applyScenarioTerrainPatch(state, patch);
   for (const building of campaign.scenario.buildings || []) {
     addBuilding(state, building.type, building.faction || 'olundar', building.x, building.y, {
@@ -228,6 +473,26 @@ function applyCampaignSetup(state, campaign) {
     });
   }
   for (const unit of campaign.scenario.units || []) addUnit(state, unit.type, unit.faction || 'olundar', unit.x, unit.y, { name: unit.name });
+}
+
+function applyScenarioRelocations(state, relocations) {
+  for (const relocation of relocations) {
+    if (!relocation?.faction || !inBounds(relocation.x, relocation.y)) continue;
+    const anchor = state.buildings.find((building) => building.faction === relocation.faction && building.type === 'city')
+      || state.buildings.find((building) => building.faction === relocation.faction)
+      || state.units.find((unit) => unit.faction === relocation.faction);
+    if (!anchor) continue;
+    const dx = relocation.x - anchor.x;
+    const dy = relocation.y - anchor.y;
+    for (const entity of [...state.buildings, ...state.units].filter((item) => item.faction === relocation.faction)) {
+      const nextX = clampInt(entity.x + dx, 1, MAP_WIDTH - 2);
+      const nextY = clampInt(entity.y + dy, 1, MAP_HEIGHT - 2);
+      if (entity.type === 'road') state.map.tiles[idx(entity.x, entity.y)].road = false;
+      entity.x = nextX;
+      entity.y = nextY;
+      if (entity.type === 'road') state.map.tiles[idx(entity.x, entity.y)].road = true;
+    }
+  }
 }
 
 function applyScenarioTerrainPatch(state, patch) {

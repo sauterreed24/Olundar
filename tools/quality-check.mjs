@@ -23,6 +23,7 @@ import {
   attackUnit,
   canAfford,
   createGame,
+  deserializeState,
   endTurn,
   findPath,
   forecastBuildingAttack,
@@ -139,6 +140,16 @@ check('content tables are internally consistent', () => {
     for (const patch of scenario.terrainPatches || []) {
       assert(Number.isInteger(patch.x) && Number.isInteger(patch.y) && patch.x >= 0 && patch.y >= 0 && patch.x < MAP_WIDTH && patch.y < MAP_HEIGHT, `Scenario ${id} has invalid terrain patch coordinates.`);
       assert(TERRAIN[patch.terrain], `Scenario ${id} references missing terrain ${patch.terrain}.`);
+    }
+    for (const relocation of scenario.relocations || []) {
+      assert(['dawn', 'veyr', 'mire', 'dead'].includes(relocation.faction), `Scenario ${id} has invalid relocation faction.`);
+      assert(Number.isInteger(relocation.x) && Number.isInteger(relocation.y) && relocation.x >= 0 && relocation.y >= 0 && relocation.x < MAP_WIDTH && relocation.y < MAP_HEIGHT, `Scenario ${id} has invalid relocation coordinates.`);
+      assert(TERRAIN[relocation.terrain], `Scenario ${id} relocation references missing terrain ${relocation.terrain}.`);
+    }
+    if (scenario.deadwalkerMarch) {
+      for (const key of ['firstTurn', 'interval', 'size', 'growth', 'cap']) {
+        assert(Number.isInteger(scenario.deadwalkerMarch[key]) && scenario.deadwalkerMarch[key] > 0, `Scenario ${id} has invalid march ${key}.`);
+      }
     }
     assert(Array.isArray(scenario.victoryConditions) && scenario.victoryConditions.length > 0, `Scenario ${id} needs victory conditions.`);
     for (const condition of scenario.victoryConditions) {
@@ -1264,10 +1275,13 @@ check('scenario and difficulty presets change campaign shape', () => {
   const ironVanguard = createGame({ scenarioId: 'ironVanguard', difficultyId: 'legion', seed: 'quality-scenario' });
   const mireVeil = createGame({ scenarioId: 'mireVeil', difficultyId: 'standard', seed: 'quality-scenario' });
   const hollowEclipse = createGame({ scenarioId: 'hollowEclipse', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
+  const procedural = createGame({ scenarioId: 'proceduralFrontier', difficultyId: 'standard', seed: 'quality-procedural-a' });
+  const proceduralVariants = ['quality-procedural-a', 'quality-procedural-b', 'quality-procedural-c', 'quality-procedural-d']
+    .map((seed) => createGame({ scenarioId: 'proceduralFrontier', difficultyId: 'standard', seed }));
   const chronicle = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-scenario' });
   const hollow = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
 
-  assert(Object.keys(SCENARIOS).length >= 7, 'Campaign setup should include the three replayability scenarios.');
+  assert(Object.keys(SCENARIOS).length >= 8, 'Campaign setup should include the three replayability scenarios and procedural frontier.');
   assert(dawnroad.campaign.scenarioName === SCENARIOS.dawnroad.name, 'Scenario name is not preserved in campaign metadata.');
   assert(dawnroad.units.some((u) => u.name === 'Road Oath-Spear'), 'Dawnward Road scenario should add its sworn spear.');
   assert(dawnroad.factions.olundar.resources.influence > founding.factions.olundar.resources.influence, 'Scenario resource changes did not apply.');
@@ -1278,6 +1292,21 @@ check('scenario and difficulty presets change campaign shape', () => {
   assert(tileAt(hollowEclipse, 20, 15).terrain === 'blight' && tileAt(hollowEclipse, 20, 15).blight >= 5, 'Hollow Eclipse should push blight closer to the front.');
   assert(getWarCouncil(ironVanguard).campaign.victoryConditions.some((condition) => condition.id === 'ironDeadworks'), 'War council should expose scenario victory conditions.');
   assert(ironVanguard.objectives.includes('Crack three deadworks') && getObjectiveProgress(ironVanguard).length === ironVanguard.objectives.length, 'Scenario victory conditions should become live objective progress.');
+  assert(procedural.campaign.scenarioId === 'proceduralFrontier' && procedural.campaign.scenarioName.startsWith('Procedural Frontier:'), 'Procedural campaigns should preserve generated scenario metadata.');
+  assert(procedural.campaign.deadwalkerMarch && procedural.deadwalker.nextMarchTurn === procedural.campaign.deadwalkerMarch.firstTurn, 'Procedural campaigns should randomize Deadwalker march cadence.');
+  assert(procedural.objectives.includes('End the seeded frontier war') && getWarCouncil(procedural).campaign.victoryConditions.some((condition) => condition.id === 'proceduralDeadworks'), 'Procedural victory conditions should become live campaign goals.');
+  const proceduralDawn = procedural.buildings.find((building) => building.faction === 'dawn' && building.type === 'city');
+  const proceduralDeadPortal = procedural.buildings.find((building) => building.faction === 'dead' && building.type === 'portal');
+  assert(proceduralDawn && (proceduralDawn.x !== 14 || proceduralDawn.y !== 5) && tileAt(procedural, proceduralDawn.x, proceduralDawn.y).road, 'Procedural campaign should relocate living faction placement onto reachable seeded roads.');
+  assert(proceduralDeadPortal && (proceduralDeadPortal.x !== 38 || proceduralDeadPortal.y !== 7) && tileAt(procedural, proceduralDeadPortal.x, proceduralDeadPortal.y).terrain === 'blight', 'Procedural campaign should relocate the Deadwalker front into seeded blight.');
+  const proceduralSignatures = new Set(proceduralVariants.map((game) => {
+    const dawn = game.buildings.find((building) => building.faction === 'dawn' && building.type === 'city');
+    const portal = game.buildings.find((building) => building.faction === 'dead' && building.type === 'portal');
+    return `${game.campaign.scenarioName}|${dawn?.x},${dawn?.y}|${portal?.x},${portal?.y}|${game.campaign.deadwalkerMarch?.firstTurn}|${game.factions.olundar.resources.food},${game.factions.olundar.resources.iron},${game.factions.olundar.resources.gold}`;
+  }));
+  assert(proceduralSignatures.size >= 2, 'Procedural campaign seeds should produce distinct faction placement, scarcity, or cadence signatures.');
+  const proceduralLoaded = deserializeState(serializeState(procedural));
+  assert(proceduralLoaded.campaign.scenarioName === procedural.campaign.scenarioName && proceduralLoaded.campaign.deadwalkerMarch.firstTurn === procedural.campaign.deadwalkerMarch.firstTurn && proceduralLoaded.objectives.includes('End the seeded frontier war'), 'Procedural campaign metadata should survive save/load normalization.');
   assert(chronicle.factions.olundar.resources.food > founding.factions.olundar.resources.food, 'Chronicle should give more opening resources.');
   assert(hollow.factions.olundar.resources.morale < founding.factions.olundar.resources.morale, 'Hollow Crown should start with lower morale.');
 
