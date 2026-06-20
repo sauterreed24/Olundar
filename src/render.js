@@ -3401,7 +3401,7 @@ function drawMoveReachTile(ctx, bounds, layout, item, maxMove, hoverMove = null)
   drawMovementTileCommandRim(ctx, bounds, layout, item, { hovered, maxMove });
   if (shouldAnnotateMove(item, maxMove, hoverMove, compact)) {
     strokeTileDiamond(ctx, bounds, hovered ? 'rgba(255, 238, 170, 0.92)' : stroke, Math.max(1, layout.tileSize * (hovered ? 0.038 : 0.016)), hovered ? 2 : 5);
-    drawTacticalMoveMarker(ctx, bounds, layout, item, { hovered, maxMove });
+    drawTacticalMoveMarker(ctx, bounds, layout, item, { hovered, maxMove, hoverMove, compact });
   } else {
     drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove);
   }
@@ -3610,11 +3610,11 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
   const frontier = item.frontier || item.cost >= maxMove;
-  const rugged = item.terrainCost > 1 || item.terrainPressure > 2.8 || item.relief > 0.45;
-  const closeAnchor = item.cost <= 1 && tileNoise(item, 1405) > (compact ? 0.54 : 0.42);
-  const roadAnchor = item.road && (item.cost <= 2 || frontier || tileNoise(item, 1643) > (compact ? 0.74 : 0.64));
-  const suppliedAnchor = item.supplied && (item.cost <= 1 || frontier) && tileNoise(item, 1229) > (compact ? 0.66 : 0.56);
-  const frontierSurvey = frontier && tileNoise(item, 940) > (compact ? 0.72 : 0.62);
+  const rugged = (item.terrainCost > 1 || item.terrainPressure > 2.8 || item.relief > 0.45) && tileNoise(item, 887) > (compact ? 0.46 : 0.34);
+  const closeAnchor = item.cost <= 1 && tileNoise(item, 1405) > (compact ? 0.78 : 0.66);
+  const roadAnchor = item.road && (item.cost <= 1 || (frontier && tileNoise(item, 1643) > (compact ? 0.72 : 0.58)));
+  const suppliedAnchor = item.supplied && item.cost <= 1 && tileNoise(item, 1229) > (compact ? 0.74 : 0.62);
+  const frontierSurvey = frontier && tileNoise(item, 940) > (compact ? 0.86 : 0.78);
   return rugged || closeAnchor || roadAnchor || suppliedAnchor || frontierSurvey;
 }
 
@@ -3662,7 +3662,8 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
   const hovered = Boolean(options.hovered);
   const overlayScale = movementOverlayScale(layout);
   const compactField = overlayScale > 1.05;
-  const prominent = hovered || item.road || item.cost <= 2 || (compactField && (item.supplied || item.frontier || item.terrainCost > 1));
+  const showCost = shouldShowMoveCostCartouche(item, options.maxMove, options.hoverMove, options.compact || compactField);
+  const prominent = hovered || showCost || item.road || item.terrainCost > 1;
   const markerY = bounds.cy + layout.halfTileHeight * 0.35;
   const poleHeight = layout.tileSize * (hovered ? 0.34 : item.road ? 0.30 : 0.24) * overlayScale;
   const poleX = bounds.cx - layout.tileSize * 0.09;
@@ -3690,10 +3691,71 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
     ctx.fill();
     ctx.stroke();
   }
-  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 * overlayScale : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item, hovered || compactField);
+  const markerX = prominent ? bounds.cx + layout.tileSize * 0.10 * overlayScale : bounds.cx;
+  const markerTopY = prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08;
+  if (showCost) drawMoveCostCartouche(ctx, markerX, markerTopY, layout, item, hovered || compactField);
+  else drawMoveIntentSigil(ctx, markerX, markerTopY, layout, item, hovered || prominent);
   if (item.road) drawRoadChevron(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout);
   else if (item.supplied) drawSupplyLaurel(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   else drawFootstepPair(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
+  ctx.restore();
+}
+
+function shouldShowMoveCostCartouche(item, maxMove, hoverMove = null, compact = false) {
+  if (sameTile(item, hoverMove)) return true;
+  const frontier = item.frontier || item.cost >= maxMove;
+  const punishingTerrain = item.terrainCost > 1 && item.terrainPressure > 2.45;
+  const roadFork = item.road && item.cost <= 1 && tileNoise(item, 1649) > (compact ? 0.64 : 0.52);
+  const hardFrontier = frontier && (punishingTerrain || tileNoise(item, 1741) > (compact ? 0.88 : 0.80));
+  return roadFork || hardFrontier;
+}
+
+function drawMoveIntentSigil(ctx, x, y, layout, item, prominent = false) {
+  const overlayScale = movementOverlayScale(layout);
+  const r = Math.max(4, layout.tileSize * (prominent ? 0.085 : 0.066) * overlayScale);
+  const fill = item.road
+    ? 'rgba(227, 251, 255, 0.88)'
+    : item.supplied
+      ? 'rgba(247, 255, 219, 0.84)'
+      : item.terrainCost > 1
+        ? 'rgba(255, 230, 164, 0.82)'
+        : 'rgba(255, 247, 209, 0.76)';
+  const stroke = item.road
+    ? 'rgba(42, 118, 147, 0.62)'
+    : item.supplied
+      ? 'rgba(77, 132, 56, 0.58)'
+      : 'rgba(139, 91, 31, 0.54)';
+  ctx.save();
+  ctx.globalAlpha = prominent ? 0.92 : 0.72;
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012 * overlayScale);
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = item.road ? '#1b6681' : item.supplied ? '#417a35' : '#87501f';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018 * overlayScale);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (item.road) {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.48, y + r * 0.10);
+    ctx.lineTo(x - r * 0.10, y - r * 0.34);
+    ctx.lineTo(x + r * 0.50, y + r * 0.16);
+    ctx.stroke();
+  } else if (item.supplied) {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.46, y + r * 0.22);
+    ctx.quadraticCurveTo(x, y - r * 0.56, x + r * 0.46, y + r * 0.22);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.42, y + r * 0.10);
+    ctx.lineTo(x, y - r * 0.30);
+    ctx.lineTo(x + r * 0.42, y + r * 0.10);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -5575,6 +5637,10 @@ function drawSelection(ctx, state, layout, hoverTile) {
 
 function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   const compactInset = layout.mapWidth < 720 || (typeof window !== 'undefined' && window.innerWidth <= 620);
+  if (compactInset && layout.mapWidth < 560) {
+    drawMiniMapSurveyChip(ctx, state, layout, lensId);
+    return;
+  }
   const scale = compactInset
     ? Math.max(1.1, Math.min(1.45, layout.tileSize * 0.052))
     : Math.max(2, Math.min(5, Math.floor(layout.tileSize * 0.15)));
@@ -5670,6 +5736,50 @@ function drawMiniMap(ctx, state, layout, lensId = 'normal') {
   ctx.restore();
 }
 
+function drawMiniMapSurveyChip(ctx, state, layout, lensId = 'normal') {
+  const revealed = state.revealed.filter(Boolean).length;
+  const mapped = Math.round((revealed / (MAP_WIDTH * MAP_HEIGHT)) * 100);
+  const lens = getStrategicMapLens(state, lensId);
+  const pad = Math.max(5, layout.tileSize * 0.10);
+  const w = Math.max(76, layout.tileSize * 1.70);
+  const h = Math.max(28, layout.tileSize * 0.62);
+  const x = layout.frameX + layout.mapWidth - w - pad;
+  const y = layout.frameY + Math.max(6, layout.tileSize * 0.22);
+  ctx.save();
+  ctx.shadowColor = 'rgba(39, 92, 81, 0.10)';
+  ctx.shadowBlur = Math.max(3, layout.tileSize * 0.045);
+  roundRectPath(ctx, x, y, w, h, Math.max(7, h * 0.26));
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, 'rgba(255, 255, 249, 0.88)');
+  fill.addColorStop(1, 'rgba(218, 246, 240, 0.68)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(33, 119, 129, 0.18)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.stroke();
+
+  const cx = x + h * 0.48;
+  const cy = y + h * 0.50;
+  const r = h * 0.26;
+  ctx.fillStyle = lens.id === 'normal' ? 'rgba(215, 235, 174, 0.90)' : lensColor(lens.id);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(143, 36, 24, 0.42)';
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.stroke();
+  ctx.fillStyle = '#2e5c48';
+  ctx.font = `900 ${Math.max(8, h * 0.34)}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${mapped}%`, x + h * 0.90, y + h * 0.42, w - h * 1.05);
+  ctx.fillStyle = '#60745c';
+  ctx.font = `800 ${Math.max(6, h * 0.20)}px system-ui, sans-serif`;
+  ctx.fillText('MAPPED', x + h * 0.90, y + h * 0.70, w - h * 1.05);
+  ctx.restore();
+}
+
 function drawMiniMapCompass(ctx, cx, cy, r) {
   ctx.save();
   ctx.fillStyle = 'rgba(255, 249, 224, 0.82)';
@@ -5726,6 +5836,11 @@ function drawHollowCrownCompass(ctx, state, layout) {
       ? 'PORTAL LOCATED'
       : 'EASTERN OMEN';
 
+  if (compact && layout.mapWidth < 560) {
+    drawHollowCrownMicroCompass(ctx, layout, direction, status, pressure, distance, located);
+    return;
+  }
+
   ctx.save();
   ctx.shadowColor = 'rgba(31, 44, 26, 0.22)';
   ctx.shadowBlur = Math.max(5, layout.tileSize * 0.08);
@@ -5746,6 +5861,39 @@ function drawHollowCrownCompass(ctx, state, layout) {
   const cy = y + h * 0.50;
   drawHollowCrownDial(ctx, cx, cy, h * 0.36, direction, located);
   drawHollowCrownCompassText(ctx, x + h * 0.92, y, w - h * 1.02, h, status, pressure, distance, located, compact);
+  ctx.restore();
+}
+
+function drawHollowCrownMicroCompass(ctx, layout, direction, status, pressure, distance, located) {
+  const pad = Math.max(5, layout.tileSize * 0.10);
+  const w = Math.max(92, layout.tileSize * 2.12);
+  const h = Math.max(30, layout.tileSize * 0.68);
+  const x = layout.frameX + layout.mapWidth - w - pad;
+  const y = layout.frameY + Math.max(38, layout.tileSize * 0.94);
+  ctx.save();
+  ctx.shadowColor = 'rgba(48, 74, 45, 0.12)';
+  ctx.shadowBlur = Math.max(3, layout.tileSize * 0.045);
+  roundRectPath(ctx, x, y, w, h, Math.max(7, h * 0.25));
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, 'rgba(255, 254, 244, 0.88)');
+  fill.addColorStop(1, located ? 'rgba(213, 255, 184, 0.68)' : 'rgba(231, 240, 215, 0.66)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = located ? 'rgba(66, 118, 50, 0.32)' : 'rgba(92, 105, 76, 0.24)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.stroke();
+  const cx = x + h * 0.48;
+  const cy = y + h * 0.50;
+  drawHollowCrownDial(ctx, cx, cy, h * 0.27, direction, located);
+  ctx.fillStyle = located ? '#1f4f28' : '#7d2d22';
+  ctx.font = `900 ${Math.max(7, h * 0.24)}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(status.replace('EASTERN ', '').replace('PORTAL ', ''), x + h * 0.86, y + h * 0.38, w - h);
+  ctx.fillStyle = '#52604a';
+  ctx.font = `800 ${Math.max(6, h * 0.19)}px system-ui, sans-serif`;
+  ctx.fillText(`${pressure} pressure | ${distance}`, x + h * 0.86, y + h * 0.68, w - h);
   ctx.restore();
 }
 
