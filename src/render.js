@@ -3609,9 +3609,13 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
-  if (compact) return item.road || item.frontier || item.terrainCost > 1 || (item.supplied && item.cost <= 2) || (item.cost <= 2 && tileNoise(item, 1405) > 0.58);
-  if (item.road || item.supplied || item.cost <= 2 || item.terrainCost > 1) return true;
-  return item.cost >= maxMove && tileNoise(item, 940) > 0.62;
+  const frontier = item.frontier || item.cost >= maxMove;
+  const rugged = item.terrainCost > 1 || item.terrainPressure > 2.8 || item.relief > 0.45;
+  const closeAnchor = item.cost <= 1 && tileNoise(item, 1405) > (compact ? 0.54 : 0.42);
+  const roadAnchor = item.road && (item.cost <= 2 || frontier || tileNoise(item, 1643) > (compact ? 0.74 : 0.64));
+  const suppliedAnchor = item.supplied && (item.cost <= 1 || frontier) && tileNoise(item, 1229) > (compact ? 0.66 : 0.56);
+  const frontierSurvey = frontier && tileNoise(item, 940) > (compact ? 0.72 : 0.62);
+  return rugged || closeAnchor || roadAnchor || suppliedAnchor || frontierSurvey;
 }
 
 function isCommandFrontierTile(item, reachableSet, maxMove) {
