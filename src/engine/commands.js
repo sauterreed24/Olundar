@@ -20,43 +20,52 @@ import {
 import { serializeState, deserializeState } from '../rules.js';
 
 const MAX_HISTORY = 64;
+const MAX_STACK_BYTES = 8 * 1024 * 1024;
 
 export class CommandHistory {
   constructor() {
     this.undoStack = [];
     this.redoStack = [];
+    this.undoBytes = 0;
+    this.redoBytes = 0;
   }
 
   clear() {
     this.undoStack = [];
     this.redoStack = [];
+    this.undoBytes = 0;
+    this.redoBytes = 0;
   }
 
   execute(command, state) {
     const snapshot = serializeState(state);
     const result = command.run(state);
     if (result?.ok !== false) {
-      this.undoStack.push({ command, snapshot });
-      if (this.undoStack.length > MAX_HISTORY) this.undoStack.shift();
-      this.redoStack = [];
+      this.pushUndo(historyEntry(command, snapshot));
+      this.clearRedo();
     }
     return result;
   }
 
   undo(state) {
-    const entry = this.undoStack.pop();
+    const entry = this.popUndo();
     if (!entry) return { ok: false, reason: 'Nothing to undo.' };
-    this.redoStack.push({ command: entry.command, snapshot: serializeState(state) });
+    this.pushRedo(historyEntry(entry.command, serializeState(state)));
     applyState(state, deserializeState(entry.snapshot));
     return { ok: true, reason: entry.command.undoLabel || 'Undid last action.' };
   }
 
   redo(state) {
-    const entry = this.redoStack.pop();
+    const entry = this.popRedo();
     if (!entry) return { ok: false, reason: 'Nothing to redo.' };
-    this.undoStack.push({ command: entry.command, snapshot: serializeState(state) });
+    const snapshot = serializeState(state);
     const result = entry.command.run(state);
-    return result?.ok === false ? result : { ok: true, reason: entry.command.label || 'Redid action.' };
+    if (result?.ok === false) {
+      this.pushRedo(entry);
+      return result;
+    }
+    this.pushUndo(historyEntry(entry.command, snapshot));
+    return { ok: true, reason: entry.command.label || 'Redid action.' };
   }
 
   canUndo() {
@@ -65,6 +74,46 @@ export class CommandHistory {
 
   canRedo() {
     return this.redoStack.length > 0;
+  }
+
+  stats() {
+    return {
+      undoDepth: this.undoStack.length,
+      redoDepth: this.redoStack.length,
+      undoBytes: this.undoBytes,
+      redoBytes: this.redoBytes,
+      maxHistory: MAX_HISTORY,
+      maxStackBytes: MAX_STACK_BYTES
+    };
+  }
+
+  pushUndo(entry) {
+    this.undoStack.push(entry);
+    this.undoBytes += entry.snapshotBytes;
+    this.undoBytes = pruneHistoryStack(this.undoStack, this.undoBytes);
+  }
+
+  pushRedo(entry) {
+    this.redoStack.push(entry);
+    this.redoBytes += entry.snapshotBytes;
+    this.redoBytes = pruneHistoryStack(this.redoStack, this.redoBytes);
+  }
+
+  popUndo() {
+    const entry = this.undoStack.pop();
+    if (entry) this.undoBytes -= entry.snapshotBytes;
+    return entry;
+  }
+
+  popRedo() {
+    const entry = this.redoStack.pop();
+    if (entry) this.redoBytes -= entry.snapshotBytes;
+    return entry;
+  }
+
+  clearRedo() {
+    this.redoStack = [];
+    this.redoBytes = 0;
   }
 }
 
@@ -166,6 +215,19 @@ export function getCommandHistory() {
 
 export function executePlayerCommand(state, command) {
   return getCommandHistory().execute(command, state);
+}
+
+function historyEntry(command, snapshot) {
+  return { command, snapshot, snapshotBytes: snapshot.length };
+}
+
+function pruneHistoryStack(stack, bytes) {
+  let retainedBytes = bytes;
+  while (stack.length > 1 && (stack.length > MAX_HISTORY || retainedBytes > MAX_STACK_BYTES)) {
+    const removed = stack.shift();
+    retainedBytes -= removed.snapshotBytes;
+  }
+  return retainedBytes;
 }
 
 function applyState(target, source) {

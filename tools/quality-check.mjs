@@ -1508,6 +1508,29 @@ check('Undo stack reverses any player action without desync', () => {
   assert(buildResult.ok, buildResult.reason || 'Build command failed.');
   history.undo(state);
   assert(!state.buildings.some((b) => b.type === 'road' && b.x === engineer.x && b.y === engineer.y && b.turnsLeft >= 0), 'Undo did not remove road build.');
+
+  const longState = createGame('quality-undo-memory');
+  const longHistory = new CommandHistory();
+  for (let i = 0; i < 80; i += 1) {
+    const activeScout = longState.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
+    activeScout.hasActed = false;
+    const destination = [
+      { x: activeScout.x + 1, y: activeScout.y },
+      { x: activeScout.x - 1, y: activeScout.y },
+      { x: activeScout.x, y: activeScout.y + 1 },
+      { x: activeScout.x, y: activeScout.y - 1 }
+    ].find((tile) => tile.x >= 0 && tile.y >= 0 && tile.x < MAP_WIDTH && tile.y < MAP_HEIGHT && findPath(longState, activeScout, tile.x, tile.y, UNIT_TYPES.scout.move));
+    assert(destination, 'Undo memory test needs a legal scout step.');
+    const result = longHistory.execute(moveCommand(activeScout.id, destination.x, destination.y), longState);
+    assert(result.ok, result.reason || 'Long-history move command failed.');
+  }
+  const stats = longHistory.stats();
+  assert(stats.undoDepth <= stats.maxHistory, 'Undo history exceeded its count cap.');
+  assert(stats.undoBytes <= stats.maxStackBytes || stats.undoDepth === 1, 'Undo history exceeded its byte cap.');
+  while (longHistory.canUndo()) longHistory.undo(longState);
+  const redoStats = longHistory.stats();
+  assert(redoStats.redoDepth <= redoStats.maxHistory, 'Redo history exceeded its count cap.');
+  assert(redoStats.redoBytes <= redoStats.maxStackBytes || redoStats.redoDepth === 1, 'Redo history exceeded its byte cap.');
 });
 
 check('PixiJS engine foundation is present', () => {
