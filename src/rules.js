@@ -933,6 +933,7 @@ export function getFirstTurnsGuide(state) {
     || state.messages.some((message) => message.text.includes('training begun') || message.text.includes('musters at'));
   const constructionStarted = state.messages.some((message) => message.text.includes('construction started') || message.text.includes('completed'));
   const mineStarted = state.buildings.some((building) => building.faction === 'olundar' && building.type === 'mine');
+  const ironEngineerSpent = !mineStarted && openingEngineerSpent(state);
   const knownDead = knownDeadwalkerThreat(state);
   const steps = [
     {
@@ -957,7 +958,7 @@ export function getFirstTurnsGuide(state) {
       id: 'iron',
       label: 'Claim iron for the legions',
       done: mineStarted,
-      detail: 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
+      detail: ironEngineerSpent ? 'Engineer refreshes next turn. Hold a ready formation now, then claim iron.' : 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
     },
     {
       id: 'contact',
@@ -996,6 +997,8 @@ function guidePhase(state, completed, total) {
 }
 
 function guideSummary(state, current) {
+  const ironEngineerSpent = current.id === 'iron' && openingEngineerSpent(state);
+  if (ironEngineerSpent) return 'Engineer refreshes next turn. Hold the line now, then claim iron.';
   if (state.campaign?.difficultyId === 'hollowCrown') {
     return `Hollow Crown pressure starts immediately. Next best order: ${current.label}.`;
   }
@@ -1003,6 +1006,13 @@ function guideSummary(state, current) {
     return `Chronicle gives room to learn the map. Next best order: ${current.label}.`;
   }
   return `Keep every early action tied to survival. Next best order: ${current.label}.`;
+}
+
+function openingEngineerSpent(state) {
+  return state.units.some((unit) => {
+    const def = UNIT_TYPES[unit.type];
+    return unit.faction === 'olundar' && unit.hasActed && def?.tags?.includes('builder');
+  });
 }
 
 export function getSiegeOperations(state) {
