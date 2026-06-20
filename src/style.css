@@ -6604,7 +6604,7 @@ body {
 
 /* Imperial map theater pass: keep the light theme, but let the battlefield carry the first viewport. */
 #gameCanvas {
-  filter: saturate(1.08) contrast(1.045);
+  filter: saturate(1.16) contrast(1.09);
 }
 
 .map-shell {
@@ -6709,7 +6709,7 @@ body {
   }
 
   #gameCanvas {
-    filter: saturate(1.13) contrast(1.075);
+    filter: saturate(1.20) contrast(1.12);
   }
 
   .map-lens-bar {
