@@ -254,6 +254,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawUnits(ctx, state, layout);
   drawUnitIdentityStandards(ctx, state, layout);
   drawFieldCommandBanners(ctx, state, layout);
+  drawBuildingQueueStandards(ctx, state, layout);
   drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawOpeningOrderForeground(ctx, state, layout, openingOrderOverlay);
@@ -4534,6 +4535,203 @@ function drawBuildings(ctx, state, layout) {
     const { x, y, s } = tileBounds(layout, building.x, building.y);
     drawBuildingSprite(ctx, building, x, y, s);
   }
+}
+
+function drawBuildingQueueStandards(ctx, state, layout) {
+  const compact = layout.mapWidth < 620 || layout.tileSize < 44;
+  const window = cameraTileWindow(layout, 1);
+  const entries = state.buildings
+    .filter((building) => building.faction === 'olundar' && building.turnsLeft <= 0 && building.queue?.length && isVisible(state, building.x, building.y) && isInTileWindow(building, window))
+    .map((building) => buildingQueueStandardEntry(state, building, compact))
+    .filter(Boolean)
+    .sort((a, b) => Number(b.selected) - Number(a.selected) || a.turns - b.turns || (a.building.x + a.building.y) - (b.building.x + b.building.y));
+  const limit = compact ? 4 : 8;
+  const placed = [];
+  ctx.save();
+  for (const entry of entries) {
+    if (placed.length >= limit) break;
+    const rect = drawBuildingQueueStandard(ctx, entry, layout, compact, placed);
+    if (rect) placed.push(rect);
+  }
+  ctx.restore();
+}
+
+function buildingQueueStandardEntry(state, building, compact) {
+  const item = building.queue?.[0];
+  const unitDef = UNIT_TYPES[item?.unitType];
+  const buildingDef = BUILDING_TYPES[building.type];
+  if (!item || !unitDef || !buildingDef) return null;
+  const turns = Math.max(1, Number(item.turnsLeft) || 1);
+  const selected = state.selectedBuildingId === building.id;
+  return {
+    building,
+    item,
+    unitDef,
+    buildingDef,
+    selected,
+    turns,
+    label: buildingQueueUnitCode(item.unitType, compact),
+    queueCount: building.queue.length,
+    color: FACTION_COLORS[building.faction] || '#f0c866'
+  };
+}
+
+function buildingQueueUnitCode(unitType, compact) {
+  const labels = {
+    scout: compact ? 'SCOUT' : 'SCOUT',
+    engineer: compact ? 'ENG' : 'ENGINEER',
+    legionary: compact ? 'LEG' : 'LEGION',
+    spearGuard: compact ? 'SPEAR' : 'SPEAR',
+    archer: compact ? 'BOW' : 'ARCHER',
+    cavalry: compact ? 'CAV' : 'CAVALRY',
+    onager: compact ? 'SIEGE' : 'ONAGER'
+  };
+  if (labels[unitType]) return labels[unitType];
+  const def = UNIT_TYPES[unitType];
+  return (def?.role || def?.name || unitType || 'UNIT').toUpperCase().slice(0, compact ? 6 : 9);
+}
+
+function drawBuildingQueueStandard(ctx, entry, layout, compact, placed) {
+  const bounds = tileBounds(layout, entry.building.x, entry.building.y);
+  const s = layout.tileSize;
+  const label = compact ? `${entry.label} ${entry.turns}T` : `TRAIN ${entry.label} ${entry.turns}T`;
+  const more = entry.queueCount > 1 ? `+${entry.queueCount - 1}` : '';
+  const h = Math.max(compact ? 17 : 20, s * (compact ? 0.32 : 0.34));
+  const w = Math.max(compact ? 64 : 84, Math.min(s * (compact ? 1.75 : 2.18), label.length * s * (compact ? 0.105 : 0.096) + (more ? h * 1.06 : h * 0.62)));
+  const anchor = buildingQueueStandardAnchor(bounds, w, h, layout, compact, placed);
+  if (!anchor) return null;
+  const x = anchor.x;
+  const y = anchor.y;
+  const rect = { x, y, w, h };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawBuildingQueueTether(ctx, bounds, rect, layout, entry);
+  ctx.shadowColor = 'rgba(60, 82, 46, 0.20)';
+  ctx.shadowBlur = Math.max(4, s * 0.08);
+  roundRectPath(ctx, x, y, w, h, h * 0.38);
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, entry.selected ? 'rgba(255, 252, 226, 0.98)' : 'rgba(255, 255, 244, 0.94)');
+  fill.addColorStop(0.54, 'rgba(238, 249, 218, 0.88)');
+  fill.addColorStop(1, colorMix(entry.color, '#ffffff', 0.72));
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = entry.selected ? colorMix(entry.color, '#7d2d22', 0.38) : 'rgba(73, 126, 75, 0.42)';
+  ctx.lineWidth = Math.max(1, s * (entry.selected ? 0.020 : 0.014));
+  ctx.stroke();
+  drawBuildingQueueSigil(ctx, x + h * 0.52, y + h * 0.50, h * 0.30, entry);
+  ctx.fillStyle = '#203a2a';
+  ctx.font = `900 ${Math.max(8, h * (compact ? 0.42 : 0.40))}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + h * 0.96, y + h * 0.53, w - h * (more ? 1.58 : 1.10));
+  if (more) {
+    ctx.fillStyle = '#8d3024';
+    ctx.font = `900 ${Math.max(8, h * 0.38)}px system-ui, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(more, x + w - h * 0.24, y + h * 0.53, h);
+  }
+  drawBuildingQueueProgressPips(ctx, x, y, w, h, entry);
+  ctx.restore();
+  return rect;
+}
+
+function buildingQueueStandardAnchor(bounds, w, h, layout, compact, placed) {
+  const s = layout.tileSize;
+  const candidates = compact
+    ? [
+      { x: bounds.cx + s * 0.26, y: bounds.cy - s * 0.48 },
+      { x: bounds.cx - w - s * 0.18, y: bounds.cy - s * 0.44 },
+      { x: bounds.cx - w * 0.5, y: bounds.cy + s * 0.28 },
+      { x: bounds.cx - w * 0.5, y: bounds.cy - s * 0.98 }
+    ]
+    : [
+      { x: bounds.cx - w * 0.5, y: bounds.cy - s * 1.02 },
+      { x: bounds.cx + s * 0.16, y: bounds.cy - s * 0.62 },
+      { x: bounds.cx - w - s * 0.16, y: bounds.cy - s * 0.62 },
+      { x: bounds.cx - w * 0.5, y: bounds.cy + s * 0.22 }
+    ];
+  for (const candidate of candidates) {
+    const x = clamp(candidate.x, layout.frameX + 4, layout.frameX + layout.mapWidth - w - 4);
+    const y = clamp(candidate.y, layout.frameY + 4, layout.frameY + layout.mapHeight - h - 4);
+    const rect = { x, y, w, h };
+    if (!placed.some((other) => rectsOverlap(rect, other, compact ? 3 : 5))) return rect;
+  }
+  return null;
+}
+
+function drawBuildingQueueTether(ctx, bounds, rect, layout, entry) {
+  const targetX = rect.x + rect.w * 0.50;
+  const targetY = rect.y + rect.h * 0.74;
+  ctx.save();
+  ctx.globalAlpha = entry.selected ? 0.66 : 0.42;
+  ctx.strokeStyle = colorMix(entry.color, '#ffffff', 0.40);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.beginPath();
+  ctx.moveTo(bounds.cx, bounds.cy - bounds.halfH * 0.06);
+  ctx.quadraticCurveTo(bounds.cx, targetY, targetX, targetY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBuildingQueueSigil(ctx, cx, cy, r, entry) {
+  ctx.save();
+  ctx.fillStyle = colorMix(entry.color, '#fff0a8', 0.42);
+  ctx.strokeStyle = 'rgba(80, 60, 26, 0.50)';
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#6b311f';
+  ctx.lineWidth = Math.max(1, r * 0.20);
+  if (entry.item.unitType === 'archer') {
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.10, cy, r * 0.48, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+  } else if (entry.item.unitType === 'engineer' || entry.item.unitType === 'onager') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.42, cy + r * 0.34);
+    ctx.lineTo(cx + r * 0.38, cy - r * 0.38);
+    ctx.moveTo(cx - r * 0.04, cy - r * 0.40);
+    ctx.lineTo(cx + r * 0.42, cy + r * 0.05);
+    ctx.stroke();
+  } else if (entry.item.unitType === 'cavalry') {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.08, r * 0.56, r * 0.27, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (entry.item.unitType === 'scout') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r * 0.55);
+    ctx.lineTo(cx + r * 0.50, cy + r * 0.34);
+    ctx.lineTo(cx, cy + r * 0.12);
+    ctx.lineTo(cx - r * 0.50, cy + r * 0.34);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    drawLegionShield(ctx, cx, cy + r * 0.04, r * 1.42, '#f3ead1', entry.color);
+  }
+  ctx.restore();
+}
+
+function drawBuildingQueueProgressPips(ctx, x, y, w, h, entry) {
+  const count = Math.min(4, Math.max(1, entry.turns));
+  const r = Math.max(1.5, h * 0.065);
+  const startX = x + w - h * 0.34 - (count - 1) * r * 2.45;
+  const cy = y + h * 0.84;
+  ctx.save();
+  for (let i = 0; i < count; i += 1) {
+    ctx.fillStyle = i === 0 ? '#8d3024' : 'rgba(65, 104, 60, 0.42)';
+    ctx.beginPath();
+    ctx.arc(startX + i * r * 2.45, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function rectsOverlap(a, b, pad = 0) {
+  return a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 }
 
 function drawUnits(ctx, state, layout) {
