@@ -2201,6 +2201,7 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   drawMovementRadiusStrategicPlate(ctx, layout, reachable, maxMove, hoverMove);
+  drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hoverMove);
   drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove);
   for (const item of reachable) {
     drawMovementReachWash(ctx, tileBounds(layout, item.x, item.y), layout, item, maxMove, sameTile(item, hoverMove));
@@ -2224,6 +2225,43 @@ function drawMovementRadiusStrategicPlate(ctx, layout, reachable, maxMove, hover
     glow.addColorStop(1, 'rgba(255, 213, 104, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(bounds.cx - layout.tileSize, bounds.cy - layout.tileSize, layout.tileSize * 2, layout.tileSize * 2);
+  }
+  ctx.restore();
+}
+
+function drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hoverMove = null) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  for (const item of reachable) {
+    const bounds = tileBounds(layout, item.x, item.y);
+    const hovered = sameTile(item, hoverMove);
+    const progress = Math.max(0, Math.min(1, item.cost / Math.max(1, maxMove)));
+    const frontier = item.cost >= maxMove;
+    const rugged = item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
+    const alpha = hovered ? 0.46 : frontier ? 0.34 : rugged ? 0.30 : 0.24;
+    const ground = item.road
+      ? `rgba(116, 213, 238, ${alpha})`
+      : item.supplied
+        ? `rgba(196, 235, 124, ${alpha})`
+        : rugged
+          ? `rgba(228, 161, 70, ${alpha * 0.92})`
+          : `rgba(255, 214, 103, ${Math.max(0.18, alpha - progress * 0.04)})`;
+    const light = item.road
+      ? `rgba(235, 253, 255, ${alpha * 0.84})`
+      : item.supplied
+        ? `rgba(247, 255, 216, ${alpha * 0.80})`
+        : `rgba(255, 250, 199, ${alpha * 0.70})`;
+    const shade = item.road
+      ? `rgba(26, 115, 145, ${alpha * 0.46})`
+      : item.supplied
+        ? `rgba(72, 130, 50, ${alpha * 0.42})`
+        : `rgba(118, 72, 23, ${alpha * 0.44})`;
+    const gradient = ctx.createLinearGradient(bounds.cx, bounds.cy - bounds.halfH, bounds.cx, bounds.cy + bounds.halfH);
+    gradient.addColorStop(0, light);
+    gradient.addColorStop(0.42, ground);
+    gradient.addColorStop(1, shade);
+    fillTileDiamond(ctx, bounds, gradient, hovered ? 0.4 : 2.8);
+    strokeTileDiamond(ctx, bounds, item.road ? 'rgba(217, 250, 255, 0.40)' : 'rgba(255, 245, 188, 0.36)', Math.max(1, layout.tileSize * (hovered ? 0.028 : 0.014)), hovered ? 2.2 : 5.2);
   }
   ctx.restore();
 }
@@ -2587,29 +2625,52 @@ function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
     ? 'rgba(255, 236, 146, 1)'
     : 'rgba(255, 248, 190, 0.98)';
   ctx.strokeStyle = 'rgba(20, 74, 90, 0.78)';
-  ctx.lineWidth = Math.max(4, layout.tileSize * 0.118);
+  ctx.lineWidth = Math.max(5, layout.tileSize * 0.136);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
   ctx.strokeStyle = 'rgba(255, 255, 244, 0.74)';
-  ctx.lineWidth = Math.max(2, layout.tileSize * 0.082);
+  ctx.lineWidth = Math.max(3, layout.tileSize * 0.090);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.012);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.012);
   ctx.stroke();
   ctx.strokeStyle = commandGold;
-  ctx.lineWidth = Math.max(2, layout.tileSize * 0.052);
+  ctx.lineWidth = Math.max(2.5, layout.tileSize * 0.062);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.018);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.018);
   ctx.stroke();
   ctx.strokeStyle = typeColor;
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.022);
+  ctx.lineWidth = Math.max(1.2, layout.tileSize * 0.028);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.036);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.036);
   ctx.stroke();
+  drawMovementBoundaryStud(ctx, start, end, layout, typeColor, item.cost >= maxMove);
+}
+
+function drawMovementBoundaryStud(ctx, start, end, layout, color, frontier = false) {
+  const mx = (start.x + end.x) * 0.5;
+  const my = (start.y + end.y) * 0.5 - layout.tileSize * 0.032;
+  const r = Math.max(2.3, layout.tileSize * (frontier ? 0.045 : 0.034));
+  ctx.save();
+  ctx.shadowColor = 'rgba(255, 224, 128, 0.28)';
+  ctx.shadowBlur = layout.tileSize * 0.08;
+  ctx.fillStyle = 'rgba(74, 45, 18, 0.74)';
+  ctx.beginPath();
+  ctx.arc(mx, my, r * 1.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(mx, my, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 224, 0.82)';
+  ctx.beginPath();
+  ctx.arc(mx - r * 0.28, my - r * 0.28, r * 0.30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawMovementBlockedApproaches(ctx, state, layout, reachable) {
