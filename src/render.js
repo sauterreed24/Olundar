@@ -5544,6 +5544,7 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   ctx.shadowOffsetY = s * 0.04;
   drawUnitPlinth(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, !unit.hasActed);
   drawUnitRim(ctx, unit, cx, y + s * 0.78, s, enemy ? '#9cf38a' : color);
+  drawUnitRoleCrest(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, enemy);
   drawUnitFormationSilhouette(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, enemy);
   if (def.tags.includes('undead')) {
     drawUndead(ctx, unit, x, y, s);
@@ -5559,6 +5560,7 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
     drawFormationStandard(ctx, unit, x, y, s, color);
   }
   drawUnitRoleDevice(ctx, unit, x, y, s, enemy ? '#9cf38a' : color);
+  drawUnitBattlefieldReadabilityInk(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, enemy);
   if (unit.hasActed && unit.faction === 'olundar') {
     drawActedUnitVeil(ctx, x, y, s);
   }
@@ -5682,6 +5684,323 @@ function drawUnitFormationSilhouette(ctx, unit, x, y, s, color, enemy) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawUnitRoleCrest(ctx, unit, x, y, s, color, enemy) {
+  const def = UNIT_TYPES[unit.type];
+  const undead = def.tags.includes('undead');
+  const cx = x + s * 0.50;
+  const cy = y + s * 0.55;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.56 : 0.84;
+  const halo = ctx.createRadialGradient(cx, cy, s * 0.05, cx, cy, s * 0.44);
+  halo.addColorStop(0, undead ? 'rgba(169, 255, 145, 0.22)' : 'rgba(255, 245, 187, 0.26)');
+  halo.addColorStop(0.68, undead ? 'rgba(87, 139, 76, 0.10)' : colorMix(color, '#fff2b5', 0.15));
+  halo.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + s * 0.05, s * 0.43, s * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha *= 0.92;
+  ctx.strokeStyle = undead ? 'rgba(151, 246, 137, 0.62)' : colorMix(color, '#fff0a5', enemy ? 0.36 : 0.24);
+  ctx.fillStyle = undead ? 'rgba(18, 37, 23, 0.44)' : colorMix(color, '#e8d38a', 0.18);
+  ctx.lineWidth = Math.max(1, s * 0.028);
+
+  if (unit.type === 'scout') {
+    drawScoutCrest(ctx, x, y, s, color);
+  } else if (unit.type === 'archer' || unit.type === 'corpseArcher') {
+    drawArcherCrest(ctx, x, y, s, undead);
+  } else if (unit.type === 'engineer') {
+    drawEngineerCrest(ctx, x, y, s, color);
+  } else if (unit.type === 'cavalry') {
+    drawCavalryCrest(ctx, x, y, s, color);
+  } else if (unit.type === 'onager') {
+    drawOnagerCrest(ctx, x, y, s, color);
+  } else if (undead) {
+    drawUndeadCrest(ctx, unit, x, y, s);
+  } else {
+    drawShieldWallCrest(ctx, unit, x, y, s, color);
+  }
+  ctx.restore();
+}
+
+function drawScoutCrest(ctx, x, y, s, color) {
+  const sail = ctx.createLinearGradient(x + s * 0.26, y + s * 0.24, x + s * 0.75, y + s * 0.74);
+  sail.addColorStop(0, 'rgba(247, 245, 196, 0.68)');
+  sail.addColorStop(0.55, colorMix(color, '#2f5d3c', 0.34));
+  sail.addColorStop(1, 'rgba(32, 55, 41, 0.20)');
+  ctx.fillStyle = sail;
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.50, y + s * 0.16);
+  ctx.bezierCurveTo(x + s * 0.29, y + s * 0.39, x + s * 0.24, y + s * 0.62, x + s * 0.35, y + s * 0.79);
+  ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.71, x + s * 0.66, y + s * 0.79);
+  ctx.bezierCurveTo(x + s * 0.76, y + s * 0.61, x + s * 0.71, y + s * 0.38, x + s * 0.50, y + s * 0.16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(39, 65, 42, 0.58)';
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 246, 183, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  for (const offset of [-0.13, 0, 0.13]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.50, y + s * 0.23);
+    ctx.quadraticCurveTo(x + s * (0.43 + offset), y + s * 0.48, x + s * (0.43 + offset), y + s * 0.70);
+    ctx.stroke();
+  }
+}
+
+function drawArcherCrest(ctx, x, y, s, undead) {
+  const bowX = x + s * 0.62;
+  const bowY = y + s * 0.53;
+  ctx.strokeStyle = undead ? 'rgba(157, 249, 137, 0.72)' : 'rgba(92, 55, 28, 0.70)';
+  ctx.lineWidth = Math.max(1, s * 0.046);
+  ctx.beginPath();
+  ctx.arc(bowX, bowY, s * 0.26, -Math.PI * 0.64, Math.PI * 0.64);
+  ctx.stroke();
+  ctx.strokeStyle = undead ? 'rgba(218, 255, 205, 0.76)' : 'rgba(255, 241, 190, 0.88)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.beginPath();
+  ctx.moveTo(bowX + s * 0.06, bowY - s * 0.22);
+  ctx.lineTo(bowX + s * 0.06, bowY + s * 0.22);
+  ctx.stroke();
+  ctx.strokeStyle = undead ? 'rgba(183, 255, 159, 0.64)' : 'rgba(176, 91, 48, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.020);
+  for (const dy of [-0.09, 0.01, 0.11]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.31, bowY + s * dy);
+    ctx.lineTo(x + s * 0.72, bowY + s * (dy - 0.08));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.72, bowY + s * (dy - 0.08));
+    ctx.lineTo(x + s * 0.66, bowY + s * (dy - 0.12));
+    ctx.moveTo(x + s * 0.72, bowY + s * (dy - 0.08));
+    ctx.lineTo(x + s * 0.66, bowY + s * (dy - 0.04));
+    ctx.stroke();
+  }
+}
+
+function drawEngineerCrest(ctx, x, y, s, color) {
+  ctx.strokeStyle = colorMix(color, '#4b2e19', 0.34);
+  ctx.lineWidth = Math.max(1, s * 0.042);
+  for (const [x1, y1, x2, y2] of [[0.28, 0.74, 0.75, 0.29], [0.32, 0.32, 0.76, 0.74], [0.25, 0.59, 0.80, 0.59]]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * x1, y + s * y1);
+    ctx.lineTo(x + s * x2, y + s * y2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(230, 216, 176, 0.72)';
+  for (const [px, py] of [[0.31, 0.71], [0.74, 0.31], [0.35, 0.34], [0.75, 0.72]]) {
+    ctx.beginPath();
+    ctx.arc(x + s * px, y + s * py, s * 0.035, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawCavalryCrest(ctx, x, y, s, color) {
+  ctx.fillStyle = colorMix(color, '#5b3a24', 0.24);
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.50, y + s * 0.62, s * 0.38, s * 0.16, -0.04, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(43, 29, 18, 0.58)';
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 237, 175, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.020);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.47, y + s * 0.32);
+  ctx.lineTo(x + s * 0.82, y + s * 0.20);
+  ctx.stroke();
+  drawBannerPennon(ctx, x + s * 0.78, y + s * 0.18, s * 0.20, color);
+}
+
+function drawOnagerCrest(ctx, x, y, s, color) {
+  ctx.strokeStyle = colorMix(color, '#4a321f', 0.24);
+  ctx.lineWidth = Math.max(1, s * 0.038);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.28, y + s * 0.70);
+  ctx.lineTo(x + s * 0.72, y + s * 0.48);
+  ctx.moveTo(x + s * 0.72, y + s * 0.70);
+  ctx.lineTo(x + s * 0.28, y + s * 0.48);
+  ctx.moveTo(x + s * 0.35, y + s * 0.52);
+  ctx.quadraticCurveTo(x + s * 0.60, y + s * 0.24, x + s * 0.78, y + s * 0.30);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(102, 91, 71, 0.66)';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.79, y + s * 0.30, s * 0.055, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawUndeadCrest(ctx, unit, x, y, s) {
+  const elite = unit.type === 'graveKnight' || unit.type === 'lichBoss';
+  ctx.strokeStyle = elite ? 'rgba(180, 255, 145, 0.72)' : 'rgba(136, 232, 126, 0.58)';
+  ctx.lineWidth = Math.max(1, s * (elite ? 0.038 : 0.028));
+  for (const px of elite ? [0.38, 0.50, 0.62] : [0.42, 0.52, 0.62]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * px, y + s * 0.27);
+    ctx.quadraticCurveTo(x + s * (px - 0.08), y + s * 0.47, x + s * (px - 0.02), y + s * 0.76);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(15, 28, 18, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.020);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.29, y + s * 0.73);
+  ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.85, x + s * 0.72, y + s * 0.71);
+  ctx.stroke();
+}
+
+function drawShieldWallCrest(ctx, unit, x, y, s, color) {
+  const spear = unit.type === 'spearGuard';
+  ctx.strokeStyle = spear ? 'rgba(91, 70, 30, 0.70)' : 'rgba(53, 47, 39, 0.62)';
+  ctx.lineWidth = Math.max(1, s * (spear ? 0.033 : 0.026));
+  for (const px of spear ? [0.34, 0.49, 0.64, 0.77] : [0.36, 0.50, 0.64]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * px, y + s * 0.22);
+    ctx.lineTo(x + s * (px + 0.02), y + s * 0.80);
+    ctx.stroke();
+    if (spear) {
+      ctx.fillStyle = '#e6e0c2';
+      ctx.beginPath();
+      ctx.moveTo(x + s * px, y + s * 0.17);
+      ctx.lineTo(x + s * (px + 0.045), y + s * 0.26);
+      ctx.lineTo(x + s * (px - 0.035), y + s * 0.26);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  for (const [px, py, scale] of [[0.34, 0.61, 0.40], [0.50, 0.58, 0.48], [0.66, 0.61, 0.40]]) {
+    drawLegionShield(ctx, x + s * px, y + s * py, s * scale, spear ? '#e4d170' : '#d5dde2', color);
+  }
+}
+
+function drawUnitBattlefieldReadabilityInk(ctx, unit, x, y, s, color, enemy) {
+  const def = UNIT_TYPES[unit.type];
+  const undead = def.tags.includes('undead');
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.54 : 0.92;
+  ctx.strokeStyle = undead ? 'rgba(204, 255, 185, 0.82)' : 'rgba(255, 246, 196, 0.84)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.32, y + s * 0.76);
+  ctx.quadraticCurveTo(x + s * 0.50, y + s * 0.86, x + s * 0.70, y + s * 0.75);
+  ctx.stroke();
+
+  ctx.strokeStyle = undead ? 'rgba(25, 56, 31, 0.74)' : 'rgba(45, 31, 20, 0.66)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  if (unit.type === 'scout') {
+    drawRoleInkChevron(ctx, x + s * 0.50, y + s * 0.18, s * 0.18, color);
+  } else if (unit.type === 'archer' || unit.type === 'corpseArcher') {
+    for (const px of [0.38, 0.49, 0.60]) drawRoleInkArrow(ctx, x + s * px, y + s * 0.26, s * 0.16, undead);
+  } else if (unit.type === 'engineer' || unit.type === 'onager') {
+    drawRoleInkHammer(ctx, x + s * 0.60, y + s * 0.27, s * 0.18);
+  } else if (unit.type === 'cavalry') {
+    drawRoleInkLance(ctx, x + s * 0.64, y + s * 0.22, s * 0.26);
+  } else if (undead) {
+    drawRoleInkSkullMark(ctx, x + s * 0.50, y + s * 0.23, s * (unit.type === 'lichBoss' ? 0.18 : 0.14));
+  } else {
+    drawRoleInkAquila(ctx, x + s * 0.50, y + s * 0.22, s * 0.16, color, unit.type === 'spearGuard');
+  }
+
+  if (enemy) {
+    ctx.strokeStyle = 'rgba(135, 239, 124, 0.46)';
+    ctx.lineWidth = Math.max(1, s * 0.022);
+    ctx.beginPath();
+    ctx.arc(x + s * 0.50, y + s * 0.52, s * 0.33, Math.PI * 0.16, Math.PI * 0.84);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRoleInkChevron(ctx, cx, cy, size, color) {
+  ctx.fillStyle = colorMix(color, '#fff0a8', 0.32);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + size * 0.58, cy + size * 0.64);
+  ctx.lineTo(cx + size * 0.14, cy + size * 0.55);
+  ctx.lineTo(cx, cy + size);
+  ctx.lineTo(cx - size * 0.14, cy + size * 0.55);
+  ctx.lineTo(cx - size * 0.58, cy + size * 0.64);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawRoleInkArrow(ctx, x, y, size, undead) {
+  ctx.strokeStyle = undead ? 'rgba(207, 255, 194, 0.88)' : 'rgba(255, 236, 169, 0.88)';
+  ctx.beginPath();
+  ctx.moveTo(x, y + size);
+  ctx.lineTo(x + size * 0.70, y);
+  ctx.stroke();
+  ctx.fillStyle = undead ? '#baff9e' : '#f0c866';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.70, y);
+  ctx.lineTo(x + size * 0.56, y + size * 0.30);
+  ctx.lineTo(x + size * 0.42, y + size * 0.08);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRoleInkHammer(ctx, cx, cy, size) {
+  ctx.strokeStyle = 'rgba(46, 32, 21, 0.76)';
+  ctx.lineWidth = Math.max(1, size * 0.22);
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.44, cy + size * 0.44);
+  ctx.lineTo(cx + size * 0.36, cy - size * 0.36);
+  ctx.stroke();
+  ctx.fillStyle = '#c8c1ae';
+  roundRectPath(ctx, cx + size * 0.18, cy - size * 0.60, size * 0.52, size * 0.22, size * 0.06);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawRoleInkLance(ctx, x, y, size) {
+  ctx.strokeStyle = 'rgba(255, 236, 169, 0.84)';
+  ctx.lineWidth = Math.max(1, size * 0.13);
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.50, y + size * 0.72);
+  ctx.lineTo(x + size * 0.62, y - size * 0.16);
+  ctx.stroke();
+  ctx.fillStyle = '#f0c866';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.62, y - size * 0.16);
+  ctx.lineTo(x + size * 0.52, y + size * 0.14);
+  ctx.lineTo(x + size * 0.34, y - size * 0.07);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRoleInkSkullMark(ctx, cx, cy, size) {
+  ctx.fillStyle = 'rgba(210, 255, 192, 0.82)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(21, 37, 24, 0.90)';
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.18, cy - size * 0.04, size * 0.10, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.18, cy - size * 0.04, size * 0.10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(cx - size * 0.18, cy + size * 0.24, size * 0.36, size * 0.08);
+}
+
+function drawRoleInkAquila(ctx, cx, cy, size, color, spear) {
+  ctx.fillStyle = spear ? '#dfcf71' : colorMix(color, '#f6e4a6', 0.24);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * 0.45);
+  ctx.lineTo(cx + size * 0.18, cy - size * 0.08);
+  ctx.lineTo(cx + size * 0.58, cy - size * 0.24);
+  ctx.lineTo(cx + size * 0.30, cy + size * 0.12);
+  ctx.lineTo(cx + size * 0.15, cy + size * 0.48);
+  ctx.lineTo(cx, cy + size * 0.20);
+  ctx.lineTo(cx - size * 0.15, cy + size * 0.48);
+  ctx.lineTo(cx - size * 0.30, cy + size * 0.12);
+  ctx.lineTo(cx - size * 0.58, cy - size * 0.24);
+  ctx.lineTo(cx - size * 0.18, cy - size * 0.08);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawUnitLightingRim(ctx, unit, x, y, s, color) {
