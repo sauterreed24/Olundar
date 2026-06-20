@@ -24,7 +24,7 @@ export async function loadContentBundle(baseUrl = './data/') {
     return response.json();
   };
 
-  const [meta, difficulty, scenarios, factions, terrain, units, buildings, resources, diplomacy, warAims, crisis, mapLenses, objectives] = await Promise.all([
+  const [meta, difficulty, scenarios, factions, terrain, units, buildings, resources, diplomacy, warAims, crisis, mapLenses, objectives, cosmetics] = await Promise.all([
     load('meta.json'),
     load('difficulty.json'),
     load('scenarios.json'),
@@ -37,7 +37,8 @@ export async function loadContentBundle(baseUrl = './data/') {
     load('war-aims.json'),
     load('crisis.json'),
     load('map-lenses.json'),
-    load('objectives.json')
+    load('objectives.json'),
+    load('cosmetics.json')
   ]);
 
   contentBundle = {
@@ -57,7 +58,8 @@ export async function loadContentBundle(baseUrl = './data/') {
     CRISIS_EVENTS: crisis.CRISIS_EVENTS,
     CRISIS_AFTERMATH_EVENTS: crisis.CRISIS_AFTERMATH_EVENTS,
     MAP_LENSES: mapLenses,
-    OBJECTIVES: objectives
+    OBJECTIVES: objectives,
+    COSMETICS: cosmetics
   };
 
   applyModOverrides();
@@ -149,6 +151,7 @@ export function validateContentSchema(bundle) {
   if (!bundle.FACTIONS || typeof bundle.FACTIONS !== 'object') errors.push('Missing FACTIONS');
   if (!bundle.TERRAIN || typeof bundle.TERRAIN !== 'object') errors.push('Missing TERRAIN');
   if (!bundle.CRISIS_EVENTS || typeof bundle.CRISIS_EVENTS !== 'object') errors.push('Missing CRISIS_EVENTS');
+  if (!bundle.COSMETICS?.bannerColors || !bundle.COSMETICS?.unitVariants) errors.push('Missing COSMETICS');
 
   for (const [id, unit] of Object.entries(bundle.UNIT_TYPES || {})) {
     if (unit.id !== id) errors.push(`Unit ${id} id mismatch`);
@@ -158,6 +161,16 @@ export function validateContentSchema(bundle) {
   for (const [id, building] of Object.entries(bundle.BUILDING_TYPES || {})) {
     if (building.id !== id) errors.push(`Building ${id} id mismatch`);
     if (!Number.isFinite(building.hp) || building.hp <= 0) errors.push(`Building ${id} invalid hp`);
+  }
+
+  for (const [id, color] of Object.entries(bundle.COSMETICS?.bannerColors || {})) {
+    if (color.id !== id) errors.push(`Banner color ${id} id mismatch`);
+    if (!color.name || !color.color || !color.accent) errors.push(`Banner color ${id} incomplete`);
+  }
+
+  for (const [id, variant] of Object.entries(bundle.COSMETICS?.unitVariants || {})) {
+    if (variant.id !== id) errors.push(`Unit variant ${id} id mismatch`);
+    if (!variant.name || !variant.trim || !variant.emblem || !variant.pattern) errors.push(`Unit variant ${id} incomplete`);
   }
 
   if (errors.length) throw new Error(errors.join('; '));

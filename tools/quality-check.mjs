@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AMBIENT_TILE_FADE_SECONDS, AUDIO_CUES, MUSIC_CROSSFADE_SECONDS, ambientTileTargetsForContext, musicLayerTargetsForMode, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
+import { BUILDING_TYPES, COSMETICS, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
 import { dataFilesExist, loadContentSync } from '../src/engine/content-loader.js';
 import { validateContentSchema } from '../src/engine/entity-factory.js';
 import {
@@ -16,6 +16,7 @@ import {
   trainCommand
 } from '../src/engine/commands.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
+import { DEFAULT_COSMETIC_PROFILE, cosmeticStyleForUnit, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState, validateCosmeticsConfig } from '../src/cosmetics.js';
 import {
   addBuilding,
   addUnit,
@@ -99,6 +100,21 @@ function parseServiceWorkerAssets(text) {
   const match = text.match(/const APP_SHELL_ASSETS = (\[[\s\S]*?\]);/);
   if (!match) throw new Error('Service worker asset list missing.');
   return JSON.parse(match[1]);
+}
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem(key) {
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      values.set(key, String(value));
+    },
+    removeItem(key) {
+      values.delete(key);
+    }
+  };
 }
 
 check('source files parse under Node', () => {
@@ -1076,6 +1092,34 @@ check('player settings are valid and persistable', () => {
   }
 });
 
+check('unit cosmetics unlock and persist across campaigns', () => {
+  const summary = validateCosmeticsConfig();
+  const storage = memoryStorage();
+  const baseProfile = readCosmeticProfile(storage);
+  const corrupt = normalizeCosmeticProfile({ selectedBannerColorId: 'void', unlockedBannerColorIds: ['void'], selectedUnitVariantId: 'missing' });
+
+  assert(summary.bannerColorIds.includes('sun-gold') && summary.unitVariantIds.includes('classic'), 'Cosmetics need default Olundaran banner and variant ids.');
+  assert(Object.keys(COSMETICS.bannerColors).length >= 5, 'Cosmetics should include multiple unlockable banner colors.');
+  assert(Object.keys(COSMETICS.unitVariants).length >= 4, 'Cosmetics should include multiple unlockable unit variants.');
+  assert(baseProfile.selectedBannerColorId === DEFAULT_COSMETIC_PROFILE.selectedBannerColorId, 'Empty cosmetic storage should load the default banner.');
+  assert(corrupt.selectedBannerColorId === DEFAULT_COSMETIC_PROFILE.selectedBannerColorId && !corrupt.unlockedBannerColorIds.includes('void'), 'Cosmetic normalization should recover corrupt profile ids.');
+
+  const state = createGame({ scenarioId: 'weeklyChallenge' });
+  const result = updateCosmeticProfileFromState(baseProfile, state);
+  assert(result.unlocked.some((item) => item.id === 'challenge-white'), 'Weekly Challenge should unlock the challenge banner color.');
+  assert(result.profile.unlockedUnitVariantIds.includes('challenge-laurel'), 'Weekly Challenge should unlock the challenge unit variant.');
+
+  const selected = setSelectedCosmetics(result.profile, { bannerColorId: 'challenge-white', unitVariantId: 'challenge-laurel' });
+  const saved = saveCosmeticProfile(selected, storage);
+  const reloaded = readCosmeticProfile(storage);
+  assert(saved.selectedBannerColorId === 'challenge-white' && reloaded.selectedUnitVariantId === 'challenge-laurel', 'Cosmetic selections should persist through storage.');
+
+  const style = cosmeticStyleForUnit(reloaded, { faction: 'olundar', type: 'scout' }, '#f0c866');
+  const enemyStyle = cosmeticStyleForUnit(reloaded, { faction: 'dead', type: 'boneThrall' }, '#91e88b');
+  assert(style.bannerColor === COSMETICS.bannerColors['challenge-white'].color && style.emblem === 'laurel', 'Olundaran unit style should use selected cosmetics.');
+  assert(enemyStyle.bannerColor === '#91e88b' && !enemyStyle.custom, 'Non-player units should not inherit player cosmetics.');
+});
+
 check('pwa install shell references real app assets', () => {
   const index = readProjectFile('index.html');
   const manifest = JSON.parse(readProjectFile('manifest.webmanifest'));
@@ -1106,7 +1150,9 @@ check('pwa install shell references real app assets', () => {
     './index.html',
     './manifest.webmanifest',
     './assets/icons/olundar-icon.svg',
+    './data/cosmetics.json',
     './src/main.js',
+    './src/cosmetics.js',
     './src/pwa.js',
     './src/rules.js',
     './src/saveTransfer.js',
@@ -1219,8 +1265,9 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(renderSource.includes('function drawFormationStandard') && renderSource.includes('function drawTroopDepth') && renderSource.includes('function drawUnitFormationSilhouette') && renderSource.includes("unit.type === 'scout'") && renderSource.includes("unit.type === 'archer'"), 'Living units should render as readable formations, not isolated token figures.');
   assert(renderSource.includes('function drawUnitRoleCrest') && renderSource.includes('function drawUnitBattlefieldReadabilityInk') && renderSource.includes('function drawScoutCrest') && renderSource.includes('function drawArcherCrest') && renderSource.includes('function drawEngineerCrest') && renderSource.includes('function drawShieldWallCrest') && renderSource.includes('function drawUndeadCrest') && renderSource.includes('drawUnitRoleCrest(ctx, unit, x, y, s') && renderSource.includes('drawUnitBattlefieldReadabilityInk(ctx, unit, x, y, s'), 'Battlefield units should carry role-specific silhouette crests and high-contrast weapon ink so armies read as authored formations without relying on text labels.');
   assert(renderSource.includes('function drawUnitPlinth') && renderSource.includes('function drawUnitRoleDevice') && renderSource.includes('function drawUnitLightingRim') && renderSource.includes('function drawActedUnitVeil'), 'Battlefield units should have premium bases, lighting, role devices, and readable action-state treatment.');
-  assert(renderSource.includes('function drawSelectedUnitCommandPresence') && renderSource.includes('function drawSelectedCommandAquila') && renderSource.includes('function drawSelectedCommandPlaque') && renderSource.includes('function drawSelectedCommandCompactTag') && renderSource.includes('function unitMapLabel') && renderSource.includes('layout.canvasWidth < 640') && renderSource.includes("if (unit.type === 'scout') return 'SCOUT';") && renderSource.includes('drawSelectedUnitCommandPresence(ctx, state, layout)'), 'Selected troops should gain a premium command standard, spotlight, and compact in-world identity tag so the active piece is unmistakable.');
-  assert(renderSource.includes('function drawUnitIdentityStandards') && renderSource.includes('function unitIdentityStandardEntry') && renderSource.includes('function unitIdentityCode') && renderSource.includes('function drawUnitIdentityEmblem') && renderSource.includes('function drawUnitIdentityNeedle') && renderSource.includes('drawUnitIdentityStandards(ctx, state, layout)') && renderSource.includes("engineer: compact ? 'ENG' : 'ENGINEER'") && renderSource.includes("archer: compact ? 'BOW' : 'ARCHER'"), 'Visible non-selected troops should carry compact in-world identity standards so unit roles are readable directly from the map on phone and desktop.');
+  assert(renderSource.includes('function drawSelectedUnitCommandPresence') && renderSource.includes('function drawSelectedCommandAquila') && renderSource.includes('function drawSelectedCommandPlaque') && renderSource.includes('function drawSelectedCommandCompactTag') && renderSource.includes('function unitMapLabel') && renderSource.includes('layout.canvasWidth < 640') && renderSource.includes("if (unit.type === 'scout') return 'SCOUT';") && renderSource.includes('drawSelectedUnitCommandPresence(ctx, state, layout, cosmeticProfile)'), 'Selected troops should gain a premium command standard, spotlight, and compact in-world identity tag so the active piece is unmistakable.');
+  assert(renderSource.includes('function drawUnitIdentityStandards') && renderSource.includes('function unitIdentityStandardEntry') && renderSource.includes('function unitIdentityCode') && renderSource.includes('function drawUnitIdentityEmblem') && renderSource.includes('function drawUnitIdentityNeedle') && renderSource.includes('drawUnitIdentityStandards(ctx, state, layout, cosmeticProfile)') && renderSource.includes("engineer: compact ? 'ENG' : 'ENGINEER'") && renderSource.includes("archer: compact ? 'BOW' : 'ARCHER'"), 'Visible non-selected troops should carry compact in-world identity standards so unit roles are readable directly from the map on phone and desktop.');
+  assert(renderSource.includes("import { cosmeticStyleForUnit } from './cosmetics.js';") && renderSource.includes('function drawBannerCosmeticMark') && renderSource.includes('drawFormationStandard(ctx, unit, x, y, s, color, cosmetic)') && renderSource.includes('drawSelectedCommandAquila(ctx, bounds, layout, color, active, cosmetic)') && mainSource.includes('readCosmeticProfile') && mainSource.includes('syncCosmeticUnlocksFromState') && mainSource.includes('function cosmeticChoiceCard') && styleSource.includes('.choice-card.cosmetic-choice'), 'Unlockable unit banner cosmetics should persist in player profile storage, surface in settings, and render on Olundaran field standards.');
   assert(renderSource.includes('function drawFieldCommandBanners') && renderSource.includes('function fieldCommandBannerEntries') && renderSource.includes('function drawFieldCommandBanner') && renderSource.includes('function fieldBannerOverlaps') && renderSource.includes('drawFieldCommandBanners(ctx, state, layout)'), 'Visible armies and holdings should get collision-aware in-world faction command banners so discovered civilizations read from the map, not only side panels.');
   assert(renderSource.includes('function drawStructurePlinth') && renderSource.includes('function drawConstructionProgress') && renderSource.includes('function drawFactionSeal'), 'Buildings should sit on faction-aware plinths with construction progress presented as in-world scaffolding.');
   assert(renderSource.includes('function drawBuildingQueueStandards') && renderSource.includes('function buildingQueueStandardEntry') && renderSource.includes('function drawBuildingQueueStandard') && renderSource.includes('function drawBuildingQueueProgressPips') && renderSource.includes('drawBuildingQueueStandards(ctx, state, layout);') && renderSource.includes("building.faction === 'olundar' && building.turnsLeft <= 0 && building.queue?.length"), 'Operational training buildings should project compact in-world muster queue standards with unit code, turns remaining, and queue depth instead of hiding production only in panels.');
@@ -1649,6 +1696,7 @@ check('JSON content validates against schema', () => {
   const bundle = loadContentSync();
   validateContentSchema(bundle);
   assert(bundle.UNIT_TYPES.scout && bundle.BUILDING_TYPES.farm, 'JSON bundle must include core units and buildings.');
+  assert(bundle.COSMETICS.bannerColors['sun-gold'] && bundle.COSMETICS.unitVariants.classic, 'JSON bundle must include player cosmetics.');
   assert(getContentBundle().MAP_WIDTH === MAP_WIDTH, 'Content bundle must stay aligned with exported constants.');
   assert(!readProjectFile('src/main.js').includes('./engine/content-loader.js'), 'Browser entrypoint must not import the Node-only content loader.');
 });

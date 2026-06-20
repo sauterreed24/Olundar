@@ -3,6 +3,7 @@ import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 import { getCamera } from './engine/camera.js';
 import { isPixiReady, renderPixiFrame } from './engine/pixi-renderer.js';
+import { cosmeticStyleForUnit } from './cosmetics.js';
 
 const TERRAIN_COLORS = {
   plains: '#cfe66d',
@@ -232,15 +233,17 @@ export function pointToTile(canvas, clientX, clientY) {
   return candidates[0] ? { x: candidates[0].x, y: candidates[0].y } : { x: -1, y: -1 };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null, cosmeticProfile = null) {
   if (isPixiReady()) {
-    renderPixiFrame(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay, drawGameCore);
+    renderPixiFrame(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay, (targetCanvas, targetState, targetHover, targetLens, targetRoute, targetMissionFocus, targetBattleImpact, targetOpeningOrder, targetDiplomacy) => {
+      drawGameCore(targetCanvas, targetState, targetHover, targetLens, targetRoute, targetMissionFocus, targetBattleImpact, targetOpeningOrder, targetDiplomacy, cosmeticProfile);
+    });
     return;
   }
-  drawGameCore(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay);
+  drawGameCore(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay, cosmeticProfile);
 }
 
-export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null, cosmeticProfile = null) {
   canvas.__olundarState = state;
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
@@ -266,11 +269,11 @@ export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal',
   drawBuildSites(ctx, state, layout, hoverTile);
   drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
-  drawUnits(ctx, state, layout);
-  drawUnitIdentityStandards(ctx, state, layout);
+  drawUnits(ctx, state, layout, cosmeticProfile);
+  drawUnitIdentityStandards(ctx, state, layout, cosmeticProfile);
   drawFieldCommandBanners(ctx, state, layout);
   drawBuildingQueueStandards(ctx, state, layout);
-  drawSelectedUnitCommandPresence(ctx, state, layout);
+  drawSelectedUnitCommandPresence(ctx, state, layout, cosmeticProfile);
   drawSelection(ctx, state, layout, hoverTile);
   drawOpeningOrderForeground(ctx, state, layout, openingOrderOverlay);
   drawDiplomacyOpportunityForeground(ctx, state, layout, diplomacyOverlay);
@@ -4749,22 +4752,22 @@ function rectsOverlap(a, b, pad = 0) {
   return a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 }
 
-function drawUnits(ctx, state, layout) {
+function drawUnits(ctx, state, layout, cosmeticProfile = null) {
   const sorted = state.units.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
   for (const unit of sorted) {
     if (!isVisible(state, unit.x, unit.y)) continue;
     const { x, y, s } = tileBounds(layout, unit.x, unit.y);
-    drawUnitSprite(ctx, unit, x, y, s, state);
+    drawUnitSprite(ctx, unit, x, y, s, state, cosmeticProfile);
   }
 }
 
-function drawUnitIdentityStandards(ctx, state, layout) {
+function drawUnitIdentityStandards(ctx, state, layout, cosmeticProfile = null) {
   const budget = renderBudget(layout);
   const compact = budget.compact || layout.mapWidth < 620 || layout.tileSize < 44;
   const window = cameraTileWindow(layout, 1);
   const entries = state.units
     .filter((unit) => unit.id !== state.selectedUnitId && isVisible(state, unit.x, unit.y) && isInTileWindow(unit, window))
-    .map((unit) => unitIdentityStandardEntry(state, unit, compact))
+    .map((unit) => unitIdentityStandardEntry(state, unit, compact, cosmeticProfile))
     .filter(Boolean)
     .sort((a, b) => b.priority - a.priority || (a.unit.x + a.unit.y) - (b.unit.x + b.unit.y));
   const limit = compact ? 5 : 9;
@@ -4778,7 +4781,7 @@ function drawUnitIdentityStandards(ctx, state, layout) {
   ctx.restore();
 }
 
-function unitIdentityStandardEntry(state, unit, compact) {
+function unitIdentityStandardEntry(state, unit, compact, cosmeticProfile = null) {
   const def = UNIT_TYPES[unit.type];
   if (!def) return null;
   const hostile = unit.faction !== 'olundar' && isEnemy(state, 'olundar', unit.faction);
@@ -4786,12 +4789,15 @@ function unitIdentityStandardEntry(state, unit, compact) {
   const ready = unit.faction === 'olundar' && !unit.hasActed;
   const label = unitIdentityCode(unit, compact);
   const faction = FACTIONS[unit.faction];
-  const color = FACTION_COLORS[unit.faction] || '#f0c866';
+  const baseColor = FACTION_COLORS[unit.faction] || '#f0c866';
+  const cosmetic = cosmeticStyleForUnit(cosmeticProfile, unit, baseColor);
+  const color = cosmetic.bannerColor;
   return {
     unit,
     def,
     label,
     color,
+    cosmetic,
     tone: hostile ? 'threat' : ally ? 'ally' : ready ? 'ready' : unit.faction === 'olundar' ? 'spent' : 'neutral',
     kicker: hostile ? 'HOSTILE' : ally ? 'ALLY' : ready ? 'READY' : faction?.adjective?.toUpperCase() || 'UNIT',
     priority: hostile ? 96 : ready ? 82 : ally ? 76 : unit.faction === 'olundar' ? 66 : 58
@@ -4905,6 +4911,7 @@ function drawUnitIdentityEmblem(ctx, entry, cx, cy, r, threat, spent) {
   } else {
     drawLegionShield(ctx, cx, cy + r * 0.06, r * 1.55, '#fff3c9', entry.color);
   }
+  drawBannerCosmeticMark(ctx, cx - r * 0.42, cy - r * 0.28, r * 0.84, r * 0.56, entry.cosmetic);
   ctx.restore();
 }
 
@@ -5090,15 +5097,17 @@ function fieldBannerOverlaps(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-function drawSelectedUnitCommandPresence(ctx, state, layout) {
+function drawSelectedUnitCommandPresence(ctx, state, layout, cosmeticProfile = null) {
   const unit = state.units.find((candidate) => candidate.id === state.selectedUnitId && isVisible(state, candidate.x, candidate.y));
   if (!unit || state.mode.type !== 'select') return;
   const bounds = tileBounds(layout, unit.x, unit.y);
-  const color = FACTION_COLORS[unit.faction] || '#f0c866';
+  const baseColor = FACTION_COLORS[unit.faction] || '#f0c866';
+  const cosmetic = cosmeticStyleForUnit(cosmeticProfile, unit, baseColor);
+  const color = cosmetic.bannerColor;
   const active = unit.faction === 'olundar' && !unit.hasActed;
   ctx.save();
   drawSelectedCommandSpotlight(ctx, bounds, layout, color, active);
-  drawSelectedCommandAquila(ctx, bounds, layout, color, active);
+  drawSelectedCommandAquila(ctx, bounds, layout, color, active, cosmetic);
   drawSelectedCommandPlaque(ctx, bounds, layout, unit, color, active);
   ctx.restore();
 }
@@ -5128,7 +5137,7 @@ function drawSelectedCommandSpotlight(ctx, bounds, layout, color, active) {
   ctx.restore();
 }
 
-function drawSelectedCommandAquila(ctx, bounds, layout, color, active) {
+function drawSelectedCommandAquila(ctx, bounds, layout, color, active, cosmetic = null) {
   const compact = layout.tileSize < 42 || layout.mapWidth < 560;
   const poleX = bounds.cx + layout.tileSize * (compact ? 0.34 : 0.42);
   const baseY = bounds.cy + layout.halfTileHeight * 0.42;
@@ -5158,9 +5167,10 @@ function drawSelectedCommandAquila(ctx, bounds, layout, color, active) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  drawBannerCosmeticMark(ctx, poleX + bannerW * 0.08, topY + s * 0.24, bannerW * 0.72, bannerH * 0.64, cosmetic);
 
   const eagleY = topY + s * 0.075;
-  ctx.fillStyle = active ? '#ffe8a2' : '#d8bd7a';
+  ctx.fillStyle = active ? (cosmetic?.trimColor || '#ffe8a2') : '#d8bd7a';
   ctx.strokeStyle = 'rgba(54, 32, 16, 0.78)';
   ctx.lineWidth = Math.max(1, s * 0.012);
   ctx.beginPath();
@@ -5741,13 +5751,15 @@ function drawBannerPennon(ctx, x, y, h, color) {
   ctx.fill();
 }
 
-function drawUnitSprite(ctx, unit, x, y, s, state) {
+function drawUnitSprite(ctx, unit, x, y, s, state, cosmeticProfile = null) {
   const def = UNIT_TYPES[unit.type];
   const grow = s * 0.12;
   x -= grow;
   y -= grow;
   s += grow * 2;
-  const color = FACTION_COLORS[unit.faction] || '#eee';
+  const baseColor = FACTION_COLORS[unit.faction] || '#eee';
+  const cosmetic = cosmeticStyleForUnit(cosmeticProfile, unit, baseColor);
+  const color = cosmetic.bannerColor;
   const enemy = unit.faction !== 'olundar' && isEnemy(state, 'olundar', unit.faction);
   const cx = x + s * 0.5;
   const cy = y + s * 0.54;
@@ -5770,7 +5782,7 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   }
   drawUnitLightingRim(ctx, unit, x, y, s, enemy ? '#9cf38a' : color);
   if (!def.tags.includes('undead') && unit.type !== 'onager') {
-    drawFormationStandard(ctx, unit, x, y, s, color);
+    drawFormationStandard(ctx, unit, x, y, s, color, cosmetic);
   }
   drawUnitRoleDevice(ctx, unit, x, y, s, enemy ? '#9cf38a' : color);
   drawUnitBattlefieldReadabilityInk(ctx, unit, x, y, s, enemy ? '#9cf38a' : color, enemy);
@@ -6369,7 +6381,7 @@ function drawUnitRim(ctx, unit, cx, cy, s, color) {
   ctx.restore();
 }
 
-function drawFormationStandard(ctx, unit, x, y, s, color) {
+function drawFormationStandard(ctx, unit, x, y, s, color, cosmetic = null) {
   const tall = unit.type === 'cavalry' || unit.type === 'spearGuard';
   const poleX = x + s * (unit.type === 'archer' ? 0.30 : 0.76);
   const topY = y + s * (tall ? 0.13 : 0.19);
@@ -6388,10 +6400,70 @@ function drawFormationStandard(ctx, unit, x, y, s, color) {
   ctx.lineTo(poleX, topY + s * 0.15);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#f6e4a6';
+  drawBannerCosmeticMark(ctx, poleX + s * 0.028, topY + s * 0.045, s * 0.14, s * 0.105, cosmetic);
+  ctx.fillStyle = cosmetic?.trimColor || '#f6e4a6';
   ctx.beginPath();
   ctx.arc(poleX + s * 0.035, topY + s * 0.085, s * 0.025, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+function drawBannerCosmeticMark(ctx, x, y, w, h, cosmetic = null) {
+  if (!cosmetic?.custom) return;
+  const trim = cosmetic.trimColor || '#f6e4a6';
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.strokeStyle = trim;
+  ctx.fillStyle = trim;
+  ctx.lineWidth = Math.max(1, h * 0.12);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (cosmetic.pattern === 'stripe') {
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.08, y + h * 0.28);
+    ctx.lineTo(x + w * 0.92, y + h * 0.72);
+    ctx.stroke();
+  } else if (cosmetic.pattern === 'split') {
+    ctx.fillStyle = colorMix(cosmetic.accentColor || trim, '#ffffff', 0.20);
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.02, y + h * 0.06);
+    ctx.lineTo(x + w * 0.52, y + h * 0.18);
+    ctx.lineTo(x + w * 0.42, y + h * 0.92);
+    ctx.lineTo(x + w * 0.02, y + h * 0.76);
+    ctx.closePath();
+    ctx.fill();
+  } else if (cosmetic.pattern === 'laurel') {
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(x + w * (side < 0 ? 0.40 : 0.60), y + h * 0.54, w * 0.20, side < 0 ? -1.95 : -1.20, side < 0 ? 1.20 : 1.95);
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    ctx.arc(x + w * 0.46, y + h * 0.52, Math.max(1.2, Math.min(w, h) * 0.24), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (cosmetic.emblem === 'chevron') {
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.22, y + h * 0.64);
+    ctx.lineTo(x + w * 0.50, y + h * 0.35);
+    ctx.lineTo(x + w * 0.78, y + h * 0.64);
+    ctx.stroke();
+  } else if (cosmetic.emblem === 'leaf') {
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.52, y + h * 0.50, w * 0.24, h * 0.18, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = colorMix(trim, '#315025', 0.28);
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.36, y + h * 0.63);
+    ctx.lineTo(x + w * 0.66, y + h * 0.36);
+    ctx.stroke();
+  } else if (cosmetic.emblem === 'laurel') {
+    ctx.beginPath();
+    ctx.arc(x + w * 0.50, y + h * 0.52, Math.min(w, h) * 0.22, 0.12, Math.PI * 1.88);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

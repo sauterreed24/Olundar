@@ -15,6 +15,7 @@ import warAims from '../data/war-aims.json' with { type: 'json' };
 import crisis from '../data/crisis.json' with { type: 'json' };
 import mapLenses from '../data/map-lenses.json' with { type: 'json' };
 import objectives from '../data/objectives.json' with { type: 'json' };
+import cosmetics from '../data/cosmetics.json' with { type: 'json' };
 
 export const MAP_WIDTH = meta.MAP_WIDTH;
 export const MAP_HEIGHT = meta.MAP_HEIGHT;
@@ -35,6 +36,7 @@ export const CRISIS_EVENTS = crisis.CRISIS_EVENTS;
 export const CRISIS_AFTERMATH_EVENTS = crisis.CRISIS_AFTERMATH_EVENTS;
 export const MAP_LENSES = mapLenses;
 export const OBJECTIVES = objectives;
+export const COSMETICS = cosmetics;
 
 const bundle = {
   MAP_WIDTH,
@@ -55,7 +57,8 @@ const bundle = {
   CRISIS_EVENTS,
   CRISIS_AFTERMATH_EVENTS,
   MAP_LENSES,
-  OBJECTIVES
+  OBJECTIVES,
+  COSMETICS
 };
 
 export function getContentBundle() {

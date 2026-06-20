@@ -1,0 +1,75 @@
+{
+  "bannerColors": {
+    "sun-gold": {
+      "id": "sun-gold",
+      "name": "Sun Gold",
+      "color": "#f0c866",
+      "accent": "#fff4ba",
+      "text": "Original Olundaran campaign standard.",
+      "default": true
+    },
+    "road-azure": {
+      "id": "road-azure",
+      "name": "Road Azure",
+      "color": "#4fb6d8",
+      "accent": "#d7f8ff",
+      "text": "Unlocked by road coalitions, pacts, or trade routes."
+    },
+    "mire-green": {
+      "id": "mire-green",
+      "name": "Mire Green",
+      "color": "#72c66e",
+      "accent": "#dcffad",
+      "text": "Unlocked by Mireclan contact or marsh-route campaigns."
+    },
+    "eclipse-crimson": {
+      "id": "eclipse-crimson",
+      "name": "Eclipse Crimson",
+      "color": "#b84a3a",
+      "accent": "#ffe08a",
+      "text": "Unlocked by breaking deadworks, winning, or facing Hollow Eclipse."
+    },
+    "challenge-white": {
+      "id": "challenge-white",
+      "name": "Challenge White",
+      "color": "#f4f0df",
+      "accent": "#d0a84c",
+      "text": "Unlocked by starting a Weekly Challenge."
+    }
+  },
+  "unitVariants": {
+    "classic": {
+      "id": "classic",
+      "name": "Classic Standards",
+      "trim": "#f6e4a6",
+      "emblem": "sun",
+      "pattern": "disc",
+      "text": "The default imperial field standard.",
+      "default": true
+    },
+    "vanguard-brass": {
+      "id": "vanguard-brass",
+      "name": "Vanguard Brass",
+      "trim": "#d5a44f",
+      "emblem": "chevron",
+      "pattern": "stripe",
+      "text": "Unlocked by fielding siege craft or workshops."
+    },
+    "marsh-cloak": {
+      "id": "marsh-cloak",
+      "name": "Marsh Cloaks",
+      "trim": "#c8f0a4",
+      "emblem": "leaf",
+      "pattern": "split",
+      "text": "Unlocked by Mireclan contact or marsh-route campaigns."
+    },
+    "challenge-laurel": {
+      "id": "challenge-laurel",
+      "name": "Challenge Laurels",
+      "trim": "#f8f1cf",
+      "emblem": "laurel",
+      "pattern": "laurel",
+      "text": "Unlocked by starting a Weekly Challenge."
+    }
+  }
+}

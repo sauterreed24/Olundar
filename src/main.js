@@ -50,6 +50,7 @@ import { applyContentBundle, getContentBundle } from './content.js';
 import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAudioVolume, setBusVolume, toggleAudio, updateAmbientTileSound, updateDynamicMusic, notifyCombatEngaged } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
+import { cosmeticCatalog, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState } from './cosmetics.js';
 import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
 import { getCamera } from './engine/camera.js';
 import {
@@ -145,6 +146,7 @@ let idleHelpTimer = null;
 let idleHelpVisible = false;
 let lastIdleActivityAt = 0;
 let playerSettings = readSettings();
+let cosmeticProfile = readCosmeticProfile();
 let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
 let focusedMissionId = null;
@@ -173,6 +175,7 @@ function getCanvas() {
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
+syncCosmeticUnlocksFromState(false);
 registerPwa();
 focusFirstReadyUnit();
 
@@ -206,7 +209,7 @@ function mapCanvasDprCap(width, height, compactViewport) {
 
 function render() {
   const activeCanvas = getCanvas();
-  drawGame(activeCanvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
+  drawGame(activeCanvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay(), cosmeticProfile);
   syncDynamicAudio();
   renderTacticalPause();
   renderTopBar();
@@ -3119,6 +3122,7 @@ function selectBuilding(id) {
 function runAction(action, successCue = 'ui', command = null) {
   const result = command ? executePlayerCommand(state, command) : action();
   const ok = handleResult(result, successCue);
+  if (ok) syncCosmeticUnlocksFromState(true);
   render();
   if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
   return ok;
@@ -4368,6 +4372,7 @@ function requestEndTurn(force = false) {
   const previousTurn = state.turn;
   battleImpact = null;
   endTurn(state);
+  syncCosmeticUnlocksFromState(true);
   turnReport = buildTurnReport(before, previousTurn);
   focusOpeningFollowThrough(previousStepId);
   toast(turnReport.toast, turnReport.tone === 'bad' ? 'bad' : 'info');
@@ -4475,6 +4480,7 @@ function loadSerializedGame(raw, slot = null) {
     battleImpact = null;
     turnReport = null;
     focusCampaign();
+    syncCosmeticUnlocksFromState(false);
     localStorage.setItem(SAVE_KEY, raw);
     toast(slot ? `Loaded ${slot.name}.` : 'Campaign loaded.');
     playAudioCue('load');
@@ -4519,6 +4525,7 @@ function importSaveFile(raw, fileName = '') {
     writeSaveSlots(upsertSaveSlot(readSaveSlots(), imported.slot));
     localStorage.setItem(SAVE_KEY, imported.serialized);
     focusCampaign();
+    syncCosmeticUnlocksFromState(false);
     closeSaveManager();
     const outcomeKey = campaignOutcomeKey();
     if (outcomeKey) lastAutoRecapKey = outcomeKey;
@@ -4642,6 +4649,8 @@ function renderRecapPanel(context = 'current') {
 
 function renderSettingsPanel() {
   const settings = normalizeSettings(playerSettings);
+  const profile = normalizeCosmeticProfile(cosmeticProfile);
+  const catalog = cosmeticCatalog();
   const buses = getBusVolumes();
   settingsPanel.innerHTML = `
     <div class="setup-head">
@@ -4680,6 +4689,14 @@ function renderSettingsPanel() {
     <div class="card-grid settings-grid">
       ${Object.values(MAP_SCALE_PRESETS).map((item) => choiceCard('mapScale', item.id, item.label, item.text, item.id === settings.mapScale)).join('')}
     </div>
+    <h3>Unit Cosmetics</h3>
+    <p class="cosmetic-summary">${profile.unlockedBannerColorIds.length}/${catalog.bannerColors.length} banner colors and ${profile.unlockedUnitVariantIds.length}/${catalog.unitVariants.length} field variants unlocked across campaigns.</p>
+    <div class="card-grid settings-grid cosmetic-grid">
+      ${catalog.bannerColors.map((item) => cosmeticChoiceCard('bannerColorId', item, item.id === profile.selectedBannerColorId, profile.unlockedBannerColorIds.includes(item.id), item.color, item.accent)).join('')}
+    </div>
+    <div class="card-grid settings-grid cosmetic-grid">
+      ${catalog.unitVariants.map((item) => cosmeticChoiceCard('unitVariantId', item, item.id === profile.selectedUnitVariantId, profile.unlockedUnitVariantIds.includes(item.id), item.trim, item.trim)).join('')}
+    </div>
     <div class="setup-actions">
       <button type="submit">Apply Settings</button>
       <button type="button" data-action="reset-settings">Reset</button>
@@ -4700,6 +4717,23 @@ function applyPlayerSettings(settings) {
 
 function persistPlayerSettings(settings) {
   applyPlayerSettings(saveSettings(settings));
+}
+
+function persistCosmeticSelection(selection, announce = true) {
+  cosmeticProfile = saveCosmeticProfile(setSelectedCosmetics(cosmeticProfile, selection));
+  if (announce) toast('Unit cosmetics updated.');
+}
+
+function syncCosmeticUnlocksFromState(announce = false) {
+  const result = updateCosmeticProfileFromState(cosmeticProfile, state);
+  cosmeticProfile = result.changed ? saveCosmeticProfile(result.profile) : result.profile;
+  if (result.changed && !settingsOverlay.hidden) renderSettingsPanel();
+  if (announce && result.unlocked.length) {
+    const [first] = result.unlocked;
+    const more = result.unlocked.length > 1 ? ` +${result.unlocked.length - 1} more` : '';
+    toast(`Cosmetic unlocked: ${first.name}${more}.`, 'good');
+  }
+  return result;
 }
 
 function renderSaveManager(mode = 'save') {
@@ -4837,6 +4871,20 @@ function choiceCard(name, value, title, text, checked, className = '') {
   `;
 }
 
+function cosmeticChoiceCard(name, item, checked, unlocked, swatchColor, accentColor) {
+  const locked = unlocked ? '' : ' locked';
+  const disabled = unlocked ? '' : 'disabled aria-disabled="true"';
+  const lockText = unlocked ? item.text : `Locked. ${item.text}`;
+  return `
+    <label class="choice-card cosmetic-choice${locked} ${checked ? 'selected' : ''}">
+      <input type="radio" name="${name}" value="${escapeHtml(item.id)}" ${checked ? 'checked' : ''} ${disabled} />
+      <span class="cosmetic-swatch" style="--swatch: ${escapeHtml(swatchColor)}; --swatch-accent: ${escapeHtml(accentColor || swatchColor)}"></span>
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(lockText)}</span>
+    </label>
+  `;
+}
+
 function startConfiguredCampaign(form) {
   const data = new FormData(form);
   const scenarioId = data.get('scenarioId') || 'founding';
@@ -4864,6 +4912,7 @@ function startConfiguredCampaign(form) {
   getCommandHistory().clear();
   getCamera().reset();
   focusFirstReadyUnit();
+  syncCosmeticUnlocksFromState(false);
   closeCampaignRecap();
   closeCampaignSetup();
   playCinematicIntro(() => {
@@ -5380,7 +5429,7 @@ function scheduleHoverRender() {
     pendingHoverFrame = null;
     renderTilePanel();
     renderMapIntel();
-    drawGame(getCanvas(), state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
+    drawGame(getCanvas(), state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay(), cosmeticProfile);
   });
 }
 
@@ -5744,7 +5793,7 @@ settingsPanel.addEventListener('input', (event) => {
 });
 
 settingsPanel.addEventListener('change', (event) => {
-  if (!(event.target instanceof HTMLInputElement) || !['motion', 'mapScale'].includes(event.target.name)) return;
+  if (!(event.target instanceof HTMLInputElement) || !['motion', 'mapScale', 'bannerColorId', 'unitVariantId'].includes(event.target.name)) return;
   for (const input of settingsPanel.querySelectorAll(`input[name="${event.target.name}"]`)) {
     input.closest('.choice-card')?.classList.toggle('selected', input.checked);
   }
@@ -5762,6 +5811,10 @@ settingsPanel.addEventListener('submit', (event) => {
     motion: data.get('motion'),
     mapScale: data.get('mapScale')
   });
+  persistCosmeticSelection({
+    bannerColorId: data.get('bannerColorId'),
+    unitVariantId: data.get('unitVariantId')
+  }, false);
   closeSettings();
   resizeCanvas();
   toast('Settings applied.');

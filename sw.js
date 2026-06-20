@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v137';
+const CACHE_NAME = 'olundar-pwa-v138';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -11,8 +11,10 @@ const APP_SHELL_ASSETS = [
   "./data/factions.json",
   "./data/terrain.json",
   "./data/crisis.json",
+  "./data/cosmetics.json",
   "./src/audio.js",
   "./src/content.js",
+  "./src/cosmetics.js",
   "./src/engine/audio.js",
   "./src/engine/camera.js",
   "./src/engine/commands.js",

@@ -38,7 +38,8 @@ function loadNodeBundle() {
     CRISIS_EVENTS: crisis.CRISIS_EVENTS,
     CRISIS_AFTERMATH_EVENTS: crisis.CRISIS_AFTERMATH_EVENTS,
     MAP_LENSES: readJson('map-lenses.json'),
-    OBJECTIVES: readJson('objectives.json')
+    OBJECTIVES: readJson('objectives.json'),
+    COSMETICS: readJson('cosmetics.json')
   };
 }
 
@@ -59,7 +60,7 @@ export async function loadContentAsync() {
       return response.json();
     };
 
-    const [meta, difficulty, scenarios, factions, terrain, units, buildings, resources, diplomacy, warAims, crisis, mapLenses, objectives] = await Promise.all([
+    const [meta, difficulty, scenarios, factions, terrain, units, buildings, resources, diplomacy, warAims, crisis, mapLenses, objectives, cosmetics] = await Promise.all([
       load('meta.json'),
       load('difficulty.json'),
       load('scenarios.json'),
@@ -72,7 +73,8 @@ export async function loadContentAsync() {
       load('war-aims.json'),
       load('crisis.json'),
       load('map-lenses.json'),
-      load('objectives.json')
+      load('objectives.json'),
+      load('cosmetics.json')
     ]);
 
     return {
@@ -94,13 +96,14 @@ export async function loadContentAsync() {
       CRISIS_EVENTS: crisis.CRISIS_EVENTS,
       CRISIS_AFTERMATH_EVENTS: crisis.CRISIS_AFTERMATH_EVENTS,
       MAP_LENSES: mapLenses,
-      OBJECTIVES: objectives
+      OBJECTIVES: objectives,
+      COSMETICS: cosmetics
     };
   })();
   return browserBundlePromise;
 }
 
 export function dataFilesExist() {
-  const required = ['meta.json', 'units.json', 'buildings.json', 'factions.json', 'terrain.json', 'crisis.json'];
+  const required = ['meta.json', 'units.json', 'buildings.json', 'factions.json', 'terrain.json', 'crisis.json', 'cosmetics.json'];
   return required.every((file) => existsSync(path.join(dataDir, file)));
 }
