@@ -147,7 +147,7 @@ function resizeCanvas() {
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
-  const idealHeight = width * (compactViewport ? 0.92 : 0.8);
+  const idealHeight = width * (compactViewport ? 1.02 : 0.8);
   const maxHeight = Math.max(mapScale.maxHeightFloor, window.innerHeight - mapScale.maxHeightOffset);
   const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
   canvas.width = Math.floor(width * dpr);
@@ -182,12 +182,19 @@ function render() {
 function renderTopBar() {
   const resources = state.factions.olundar.resources;
   const order = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'];
+  const compactChrome = isCompactChromeMode();
   resourceBar.innerHTML = [
     `<span class="resource population"><b>Population</b> ${state.factions.olundar.population}/${state.factions.olundar.housing}</span>`,
     ...order.map((key) => `<span class="resource"><b>${RESOURCE_NAMES[key]}</b> ${Math.floor(resources[key] || 0)}</span>`)
   ].join('');
+  document.querySelector('#nextUnitTop').textContent = compactChrome ? 'Next' : 'Next Unit';
+  document.querySelector('#endTurnTop').textContent = compactChrome ? 'End' : 'End Turn';
   renderAudioButton();
   turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+}
+
+function isCompactChromeMode() {
+  return typeof window !== 'undefined' && window.innerWidth <= 620;
 }
 
 function mappedPercent() {
@@ -197,7 +204,7 @@ function mappedPercent() {
 
 function renderAudioButton() {
   const isEnabled = audioIsEnabled();
-  audioTop.textContent = isEnabled ? 'Audio On' : 'Audio Off';
+  audioTop.textContent = isCompactChromeMode() ? 'Audio' : isEnabled ? 'Audio On' : 'Audio Off';
   audioTop.setAttribute('aria-pressed', String(isEnabled));
   audioTop.title = isEnabled ? 'Disable audio cues and ambient music' : 'Enable audio cues and ambient music';
 }

@@ -3,36 +3,36 @@ import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 
 const TERRAIN_COLORS = {
-  plains: '#d9ed8b',
-  forest: '#2f9556',
-  hills: '#e3bd70',
-  mountains: '#b9c5c2',
-  river: '#35b5df',
-  marsh: '#85ba73',
-  ruins: '#d5c8a8',
-  blight: '#77708c'
+  plains: '#d2e978',
+  forest: '#23854b',
+  hills: '#dca75b',
+  mountains: '#b6c4bd',
+  river: '#20aedd',
+  marsh: '#7fb56a',
+  ruins: '#d0bd91',
+  blight: '#706685'
 };
 
 const TERRAIN_HIGHLIGHTS = {
-  plains: '#fff7bd',
-  forest: '#a2ef84',
-  hills: '#ffe0a0',
-  mountains: '#f8fff9',
-  river: '#dcfbff',
-  marsh: '#d4f4a8',
-  ruins: '#fff0bf',
-  blight: '#bfff92'
+  plains: '#fff6ad',
+  forest: '#9bef73',
+  hills: '#ffd48a',
+  mountains: '#f5fff9',
+  river: '#d7fbff',
+  marsh: '#d0f49a',
+  ruins: '#ffe9ad',
+  blight: '#b7ff8d'
 };
 
 const TERRAIN_PALETTES = {
-  plains: { shadow: '#76a747', base: '#d9ed8b', light: '#fff7bd', accent: '#9fca55', crown: '#efe783' },
-  forest: { shadow: '#145430', base: '#2f9556', light: '#a2ef84', accent: '#24713f', crown: '#1b6238' },
-  hills: { shadow: '#9a6f34', base: '#e3bd70', light: '#ffe0a0', accent: '#c58a42', crown: '#f5cb79' },
-  mountains: { shadow: '#76817f', base: '#b9c5c2', light: '#f8fff9', accent: '#8c9895', crown: '#e3ebe6' },
-  river: { shadow: '#0d6f9a', base: '#35b5df', light: '#dcfbff', accent: '#8de6f5', crown: '#f0ffff' },
-  marsh: { shadow: '#497c4a', base: '#85ba73', light: '#d4f4a8', accent: '#99ca79', crown: '#e8f6b2' },
-  ruins: { shadow: '#8a7c62', base: '#d5c8a8', light: '#fff0bf', accent: '#aa9878', crown: '#e8d8ad' },
-  blight: { shadow: '#342d45', base: '#77708c', light: '#bfff92', accent: '#85ee78', crown: '#e0ffc1' }
+  plains: { shadow: '#6f9f3b', base: '#d2e978', light: '#fff6ad', accent: '#99c44e', crown: '#efe070' },
+  forest: { shadow: '#0f4d2c', base: '#23854b', light: '#9bef73', accent: '#1e6b3b', crown: '#155532' },
+  hills: { shadow: '#965e28', base: '#dca75b', light: '#ffd48a', accent: '#bb7838', crown: '#f2bd67' },
+  mountains: { shadow: '#6f7c78', base: '#b6c4bd', light: '#f5fff9', accent: '#84948d', crown: '#e5eee7' },
+  river: { shadow: '#086d9a', base: '#20aedd', light: '#d7fbff', accent: '#79e5f6', crown: '#efffff' },
+  marsh: { shadow: '#437647', base: '#7fb56a', light: '#d0f49a', accent: '#91c36f', crown: '#e4f3aa' },
+  ruins: { shadow: '#7d6c52', base: '#d0bd91', light: '#ffe9ad', accent: '#a58b68', crown: '#e6d0a1' },
+  blight: { shadow: '#302840', base: '#706685', light: '#b7ff8d', accent: '#7ced6b', crown: '#daffc0' }
 };
 
 const UNIT_ACCENTS = {
@@ -167,6 +167,7 @@ function renderBudget(layout) {
   const compact = compactViewport || layout.tileSize < 42 || layout.mapWidth < 640 || layout.camera.width <= 10;
   return {
     compact,
+    cinematicRelief: layout.tileSize >= 30,
     terrainVignettes: !compact && layout.mapWidth > 760,
     atmosphericGradients: !compact && layout.mapWidth > 820
   };
@@ -354,6 +355,7 @@ function drawTiles(ctx, state, layout) {
   drawImperialTerritoryVeneer(ctx, state, layout, sortedTiles);
   drawGeographyOverlays(ctx, state, layout, sortedTiles);
   drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles);
+  if (budget.cinematicRelief) drawCinematicTerrainRelief(ctx, state, layout, sortedTiles);
   if (budget.terrainVignettes) drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
   drawRevealedFrontierRim(ctx, state, layout, sortedTiles);
 }
@@ -1132,6 +1134,152 @@ function drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles) {
       ctx.fillRect(x + s * 0.22, y + s * 0.70, s * 0.48, Math.max(1, s * 0.018));
       ctx.fillRect(x + s * 0.54, y + s * 0.28, Math.max(1, s * 0.022), s * 0.40);
     }
+  }
+  ctx.restore();
+}
+
+function drawCinematicTerrainRelief(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const tile of sortedTiles) {
+    if (!isRevealed(state, tile.x, tile.y)) continue;
+    const visible = isVisible(state, tile.x, tile.y);
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const palette = terrainPalette(tile.terrain);
+    drawCinematicTileGrade(ctx, tile, bounds, layout, visible, palette);
+    if (visible) drawCinematicTerrainSignature(ctx, tile, bounds, layout, palette);
+  }
+  ctx.restore();
+}
+
+function drawCinematicTileGrade(ctx, tile, bounds, layout, visible, palette) {
+  const { x, y, s } = bounds;
+  const relief = 0.70 + clamp(tile.elevation, 0, 1) * 0.45;
+  ctx.save();
+  tileDiamondPath(ctx, bounds, -0.25);
+  ctx.clip();
+
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = visible ? 0.18 : 0.07;
+  const sun = ctx.createLinearGradient(x + s * 0.06, y + s * 0.04, x + s * 0.68, y + s * 0.58);
+  sun.addColorStop(0, 'rgba(255, 255, 238, 0.72)');
+  sun.addColorStop(0.42, colorMix(palette.light, '#ffffff', 0.48).replace('rgb', 'rgba').replace(')', ', 0.20)'));
+  sun.addColorStop(1, 'rgba(255, 255, 238, 0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(x, y, s, s);
+
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = visible ? 0.22 * relief : 0.10 * relief;
+  const shadeWash = ctx.createLinearGradient(x + s * 0.26, y + s * 0.28, x + s * 0.98, y + s * 0.98);
+  shadeWash.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  shadeWash.addColorStop(0.62, colorMix(palette.shadow, '#1e2f24', 0.18).replace('rgb', 'rgba').replace(')', ', 0.22)'));
+  shadeWash.addColorStop(1, 'rgba(26, 37, 29, 0.40)');
+  ctx.fillStyle = shadeWash;
+  ctx.fillRect(x, y, s, s);
+  ctx.restore();
+
+  const edgeAlpha = visible ? 1 : 0.45;
+  strokeTileDiamond(ctx, bounds, `rgba(15, 47, 40, ${0.10 * edgeAlpha})`, Math.max(1, layout.tileSize * 0.020), 0.5);
+  ctx.save();
+  ctx.globalAlpha = edgeAlpha;
+  ctx.strokeStyle = 'rgba(255, 255, 239, 0.34)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
+  ctx.beginPath();
+  ctx.moveTo(bounds.cx, bounds.cy - bounds.halfH + 1);
+  ctx.lineTo(bounds.cx - bounds.halfW + 1, bounds.cy);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(32, 49, 33, 0.18)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.020);
+  ctx.beginPath();
+  ctx.moveTo(bounds.cx + bounds.halfW - 1, bounds.cy);
+  ctx.lineTo(bounds.cx, bounds.cy + bounds.halfH - 1);
+  ctx.lineTo(bounds.cx - bounds.halfW + 1, bounds.cy);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCinematicTerrainSignature(ctx, tile, bounds, layout, palette) {
+  const { x, y, s } = bounds;
+  const seed = tileNoise(tile, 1401);
+  ctx.save();
+  tileDiamondPath(ctx, bounds, 1);
+  ctx.clip();
+  ctx.globalAlpha = 0.30;
+  if (tile.terrain === 'plains') {
+    ctx.strokeStyle = colorMix(palette.accent, '#6c8f32', 0.18);
+    ctx.lineWidth = Math.max(1, s * 0.016);
+    for (let i = 0; i < 3; i += 1) {
+      const py = y + s * (0.34 + i * 0.14 + seed * 0.025);
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.18, py);
+      ctx.quadraticCurveTo(x + s * 0.45, py - s * 0.08, x + s * 0.82, py + s * 0.04);
+      ctx.stroke();
+    }
+  } else if (tile.terrain === 'forest') {
+    ctx.globalAlpha = 0.36;
+    for (let i = 0; i < 4; i += 1) {
+      ctx.fillStyle = i % 2 ? palette.crown : palette.accent;
+      ctx.beginPath();
+      ctx.ellipse(
+        x + s * (0.23 + tileNoise(tile, 1421 + i) * 0.54),
+        y + s * (0.28 + tileNoise(tile, 1431 + i) * 0.34),
+        s * (0.075 + tileNoise(tile, 1441 + i) * 0.035),
+        s * 0.044,
+        -0.40,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+  } else if (tile.terrain === 'hills' || tile.terrain === 'mountains') {
+    ctx.globalAlpha = tile.terrain === 'mountains' ? 0.42 : 0.34;
+    ctx.strokeStyle = colorMix(palette.light, '#ffffff', 0.36);
+    ctx.lineWidth = Math.max(1, s * (tile.terrain === 'mountains' ? 0.024 : 0.018));
+    for (let i = 0; i < 2; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * (0.17 + i * 0.12), y + s * (0.66 + i * 0.04));
+      ctx.quadraticCurveTo(x + s * (0.44 + seed * 0.12), y + s * (0.38 + i * 0.04), x + s * (0.83 - i * 0.06), y + s * (0.60 + i * 0.04));
+      ctx.stroke();
+    }
+  } else if (tile.terrain === 'river') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.58;
+    ctx.strokeStyle = 'rgba(244, 255, 255, 0.78)';
+    ctx.lineWidth = Math.max(1, s * 0.024);
+    for (let i = 0; i < 2; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.10, y + s * (0.43 + i * 0.16));
+      ctx.bezierCurveTo(x + s * 0.34, y + s * (0.24 + i * 0.07), x + s * 0.58, y + s * (0.75 - i * 0.05), x + s * 0.91, y + s * (0.44 + i * 0.10));
+      ctx.stroke();
+    }
+  } else if (tile.terrain === 'marsh') {
+    ctx.strokeStyle = colorMix(palette.shadow, '#eef8b8', 0.18);
+    ctx.lineWidth = Math.max(1, s * 0.018);
+    for (let i = 0; i < 5; i += 1) {
+      const px = x + s * (0.20 + i * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(px, y + s * 0.76);
+      ctx.quadraticCurveTo(px + s * 0.05, y + s * (0.47 + tileNoise(tile, 1451 + i) * 0.10), px + s * 0.12, y + s * 0.68);
+      ctx.stroke();
+    }
+  } else if (tile.terrain === 'ruins') {
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = colorMix(palette.shadow, '#fff2c1', 0.24);
+    ctx.lineWidth = Math.max(1, s * 0.018);
+    for (let i = 0; i < 3; i += 1) {
+      const px = x + s * (0.24 + i * 0.16);
+      ctx.strokeRect(px, y + s * (0.52 - i * 0.06), s * 0.13, s * 0.10);
+    }
+  } else if (tile.terrain === 'blight') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = 'rgba(183, 255, 141, 0.68)';
+    ctx.lineWidth = Math.max(1, s * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.24, y + s * 0.32);
+    ctx.bezierCurveTo(x + s * 0.42, y + s * 0.54, x + s * 0.50, y + s * 0.42, x + s * 0.76, y + s * 0.70);
+    ctx.stroke();
   }
   ctx.restore();
 }
