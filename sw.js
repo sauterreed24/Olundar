@@ -1,10 +1,16 @@
-const CACHE_NAME = 'olundar-pwa-v136';
+const CACHE_NAME = 'olundar-pwa-v137';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./assets/icons/olundar-icon.svg",
   "./assets/sprites/olundar-sprite-sheet.svg",
+  "./data/meta.json",
+  "./data/units.json",
+  "./data/buildings.json",
+  "./data/factions.json",
+  "./data/terrain.json",
+  "./data/schema.json",
   "./src/audio.js",
   "./src/content.js",
   "./src/main.js",
@@ -15,7 +21,14 @@ const APP_SHELL_ASSETS = [
   "./src/saveSlots.js",
   "./src/saveTransfer.js",
   "./src/settings.js",
-  "./src/style.css"
+  "./src/style.css",
+  "./src/engine/audio.js",
+  "./src/engine/camera.js",
+  "./src/engine/commands.js",
+  "./src/engine/content-loader.js",
+  "./src/engine/entity-factory.js",
+  "./src/engine/particles.js",
+  "./src/engine/pixi-renderer.js"
 ];
 
 const appShellUrls = APP_SHELL_ASSETS.map((asset) => new URL(asset, self.location).toString());

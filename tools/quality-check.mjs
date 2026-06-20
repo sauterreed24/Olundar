@@ -46,6 +46,8 @@ import {
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
+import { validateContentTables } from '../src/engine/content-loader.js';
+import { createCommandManager, validateUndoRoundTrip, wrapMutation } from '../src/engine/commands.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -1434,6 +1436,52 @@ check('source has no TODO/FIXME leftovers', () => {
     const text = readFileSync(file, 'utf8');
     assert(!/TODO|FIXME/.test(text), `${path.relative(root, file)} contains TODO/FIXME.`);
   }
+});
+
+check('No Canvas 2D calls outside PixiJS abstraction', () => {
+  const allowed = new Set([
+    path.join(root, 'src/engine/pixi-renderer.js')
+  ]);
+  for (const file of listFiles(path.join(root, 'src'))) {
+    const text = readFileSync(file, 'utf8');
+    if (!text.includes("getContext('2d')") && !text.includes('getContext("2d")')) continue;
+    assert(allowed.has(file), `${path.relative(root, file)} must route Canvas 2D through src/engine/pixi-renderer.js.`);
+  }
+  const renderSource = readProjectFile('src/render.js');
+  assert(renderSource.includes('resolveRenderSurface') && renderSource.includes('getDrawContext'), 'render.js should consume the Pixi draw abstraction.');
+  assert(readProjectFile('src/main.js').includes('createPixiRenderer'), 'main.js should bootstrap the Pixi renderer.');
+  assert(existsSync(path.join(root, 'src/engine/pixi-renderer.js')), 'Pixi renderer backbone is missing.');
+});
+
+check('All state mutations route through Command.execute()', () => {
+  const mainSource = readProjectFile('src/main.js');
+  assert(mainSource.includes('createCommandManager') && mainSource.includes('commandManager.execute'), 'main.js should execute player mutations through the command manager.');
+  assert(mainSource.includes('wrapMutation'), 'main.js should wrap mutations as commands.');
+  const commandSource = readProjectFile('src/engine/commands.js');
+  assert(commandSource.includes('class Command') && commandSource.includes('undo(state)'), 'Command pattern must support undo snapshots.');
+});
+
+check('JSON content validates against schema', () => {
+  const schema = JSON.parse(readFileSync(path.join(root, 'data/schema.json'), 'utf8'));
+  assert(schema.properties?.UNIT_TYPES && schema.properties?.BUILDING_TYPES, 'Content schema must describe core tables.');
+  const result = validateContentTables();
+  assert(result.ok, 'Bundled JSON content failed schema validation.');
+  for (const file of ['units.json', 'buildings.json', 'factions.json', 'terrain.json', 'meta.json']) {
+    assert(existsSync(path.join(root, 'data', file)), `Missing data/${file}`);
+  }
+});
+
+check('Undo stack reverses any player action without desync', () => {
+  const game = createGame({ scenarioId: 'founding', seed: 'undo-quality' });
+  const scout = game.units.find((unit) => unit.faction === 'olundar' && unit.type === 'scout');
+  assert(scout, 'Undo test needs a scout.');
+  const beforeX = scout.x;
+  const beforeY = scout.y;
+  const roundTrip = validateUndoRoundTrip(game, () => wrapMutation('move', (state) => moveUnit(state, scout.id, beforeX + 1, beforeY)));
+  assert(roundTrip.ok, 'Undo should restore the exact pre-action state.');
+  assert(roundTrip.changed, 'Command should mutate state before undo.');
+  const scoutAfterUndo = game.units.find((unit) => unit.id === scout.id);
+  assert(scoutAfterUndo.x === beforeX && scoutAfterUndo.y === beforeY, 'Undo left the unit desynced.');
 });
 
 for (const { name, fn } of checks) {

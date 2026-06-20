@@ -7709,3 +7709,119 @@ body {
     margin-right: 0.10rem;
   }
 }
+
+.guide-glow {
+  outline: 2px solid rgba(240, 200, 102, 0.95);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(45, 147, 170, 0.18), 0 0 18px rgba(240, 200, 102, 0.35);
+  animation: guidePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes guidePulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(45, 147, 170, 0.14), 0 0 12px rgba(240, 200, 102, 0.22); }
+  50% { box-shadow: 0 0 0 6px rgba(45, 147, 170, 0.24), 0 0 22px rgba(240, 200, 102, 0.42); }
+}
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 20%, rgba(255, 252, 238, 0.94), rgba(23, 51, 31, 0.72));
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.intro-overlay.intro-active {
+  opacity: 1;
+}
+
+.intro-sequence {
+  text-align: center;
+  color: #17331f;
+  padding: 2rem;
+}
+
+.intro-banner {
+  font-size: clamp(2rem, 8vw, 3.4rem);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transform: scale(0.82);
+  animation: bannerUnfurl 1.4s ease forwards;
+}
+
+.intro-copy {
+  margin-top: 1rem;
+  max-width: 28rem;
+  font-size: 1rem;
+  opacity: 0;
+  animation: introFade 1.2s ease 0.5s forwards;
+}
+
+@keyframes bannerUnfurl {
+  to { transform: scale(1); }
+}
+
+@keyframes introFade {
+  to { opacity: 1; }
+}
+
+.tactical-pause-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 16, 14, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.tactical-pause-card {
+  width: min(24rem, 92vw);
+  padding: 1.2rem 1.3rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 252, 238, 0.98), rgba(245, 248, 223, 0.94));
+  border: 1px solid rgba(201, 149, 82, 0.45);
+  box-shadow: 0 16px 40px rgba(23, 51, 31, 0.22);
+}
+
+.tactical-pause-card h2 {
+  margin: 0 0 0.4rem;
+  color: #661b15;
+}
+
+.tactical-pause-card button {
+  margin-top: 0.8rem;
+}
+
+.map-shell[data-cursor='sword'] {
+  cursor: crosshair;
+}
+
+.map-shell[data-cursor='hammer'] {
+  cursor: cell;
+}
+
+.map-shell[data-cursor='diplomat'] {
+  cursor: help;
+}
+
+.map-intel-forecast {
+  font-size: 0.78rem;
+  color: #3b2817;
+  margin: 0.15rem 0 0.2rem;
+}
+
+.bus-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.mod-dialog textarea {
+  width: 100%;
+  min-height: 14rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+}
