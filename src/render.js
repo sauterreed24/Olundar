@@ -101,6 +101,8 @@ export function getLayout(canvas) {
     terrainY,
     frameX,
     frameY,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
     mapWidth,
     mapHeight,
     camera
@@ -239,6 +241,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   ctx.restore();
   drawImperialMapFrame(ctx, layout);
   drawMiniMap(ctx, state, layout, lensId);
+  drawHollowCrownCompass(ctx, state, layout);
   drawStatusRibbon(ctx, state, layout);
 }
 
@@ -5359,6 +5362,139 @@ function drawMiniMapCompass(ctx, cx, cy, r) {
   ctx.lineTo(cx - r * 0.20, cy);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
+}
+
+function drawHollowCrownCompass(ctx, state, layout) {
+  if (state.status !== 'playing' || state.flags?.portalDestroyed) return;
+  const portal = state.buildings.find((building) => building.faction === 'dead' && building.type === 'portal');
+  const boss = state.units.find((unit) => unit.faction === 'dead' && unit.type === 'lichBoss');
+  const target = portal || boss;
+  if (!target) return;
+
+  const compact = layout.mapWidth < 720 || (typeof window !== 'undefined' && window.innerWidth <= 620);
+  const pad = compact ? 6 : 9;
+  const w = Math.max(compact ? 112 : 156, layout.tileSize * (compact ? 2.72 : 3.18));
+  const h = Math.max(compact ? 38 : 48, layout.tileSize * (compact ? 0.82 : 0.92));
+  const x = clamp(layout.frameX + layout.mapWidth - w - pad, pad, Math.max(pad, layout.canvasWidth - w - pad));
+  const miniScale = compact
+    ? Math.max(1.1, Math.min(1.45, layout.tileSize * 0.052))
+    : Math.max(2, Math.min(5, Math.floor(layout.tileSize * 0.15)));
+  const miniPanelH = MAP_HEIGHT * miniScale + (compact ? 10 : 16);
+  const preferredY = layout.frameY + Math.max(8, layout.tileSize * 0.96) + miniPanelH + pad;
+  const y = Math.min(layout.frameY + layout.mapHeight - h - Math.max(48, layout.tileSize * 1.06), preferredY);
+  const located = isRevealed(state, target.x, target.y);
+  const center = {
+    x: layout.camera.x + layout.camera.width * 0.5,
+    y: layout.camera.y + layout.camera.height * 0.5
+  };
+  const direction = hollowCrownDirection(layout, center, target);
+  const pressure = state.units.filter((unit) => unit.faction === 'dead').length
+    + state.buildings.filter((building) => building.faction === 'dead').length;
+  const source = state.units.find((unit) => unit.id === state.selectedUnitId)
+    || state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+    || state.units.find((unit) => unit.faction === 'olundar');
+  const distance = source ? manhattan(source.x, source.y, target.x, target.y) : manhattan(Math.round(center.x), Math.round(center.y), target.x, target.y);
+  const status = boss && isRevealed(state, boss.x, boss.y)
+    ? 'VORGATH SIGHTED'
+    : located
+      ? 'PORTAL LOCATED'
+      : 'EASTERN OMEN';
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(31, 44, 26, 0.22)';
+  ctx.shadowBlur = Math.max(5, layout.tileSize * 0.08);
+  ctx.shadowOffsetY = Math.max(2, layout.tileSize * 0.03);
+  roundRectPath(ctx, x, y, w, h, Math.max(8, h * 0.20));
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, 'rgba(255, 250, 234, 0.96)');
+  fill.addColorStop(0.58, 'rgba(235, 248, 226, 0.92)');
+  fill.addColorStop(1, located ? 'rgba(203, 255, 176, 0.74)' : 'rgba(231, 236, 205, 0.74)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = located ? 'rgba(66, 118, 50, 0.54)' : 'rgba(100, 105, 83, 0.42)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.stroke();
+
+  const cx = x + h * 0.50;
+  const cy = y + h * 0.50;
+  drawHollowCrownDial(ctx, cx, cy, h * 0.36, direction, located);
+  drawHollowCrownCompassText(ctx, x + h * 0.92, y, w - h * 1.02, h, status, pressure, distance, located, compact);
+  ctx.restore();
+}
+
+function hollowCrownDirection(layout, center, target) {
+  const screenCenter = {
+    x: layout.originX + ((center.x - layout.camera.x) - (center.y - layout.camera.y)) * layout.halfTileWidth,
+    y: layout.originY + ((center.x - layout.camera.x) + (center.y - layout.camera.y)) * layout.halfTileHeight
+  };
+  const tx = target.x - layout.camera.x;
+  const ty = target.y - layout.camera.y;
+  const screenTarget = {
+    x: layout.originX + (tx - ty) * layout.halfTileWidth,
+    y: layout.originY + (tx + ty) * layout.halfTileHeight
+  };
+  return Math.atan2(screenTarget.y - screenCenter.y, screenTarget.x - screenCenter.x);
+}
+
+function drawHollowCrownDial(ctx, cx, cy, r, direction, located) {
+  ctx.save();
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.10, cx, cy, r * 1.45);
+  glow.addColorStop(0, located ? 'rgba(156, 243, 138, 0.38)' : 'rgba(156, 243, 138, 0.20)');
+  glow.addColorStop(1, 'rgba(156, 243, 138, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - r * 1.6, cy - r * 1.6, r * 3.2, r * 3.2);
+
+  ctx.fillStyle = located ? 'rgba(32, 45, 35, 0.88)' : 'rgba(64, 58, 43, 0.82)';
+  ctx.strokeStyle = located ? 'rgba(156, 243, 138, 0.78)' : 'rgba(116, 132, 93, 0.62)';
+  ctx.lineWidth = Math.max(1, r * 0.10);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(direction);
+  ctx.fillStyle = located ? '#9cf38a' : '#526a48';
+  ctx.strokeStyle = 'rgba(255, 255, 236, 0.84)';
+  ctx.lineWidth = Math.max(1, r * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(r * 0.86, 0);
+  ctx.lineTo(-r * 0.24, -r * 0.34);
+  ctx.lineTo(-r * 0.04, 0);
+  ctx.lineTo(-r * 0.24, r * 0.34);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255, 255, 236, 0.34)';
+  ctx.lineWidth = Math.max(1, r * 0.06);
+  for (let i = 0; i < 4; i += 1) {
+    const a = i * Math.PI * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r * 0.58, cy + Math.sin(a) * r * 0.58);
+    ctx.lineTo(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.82);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHollowCrownCompassText(ctx, x, y, w, h, status, pressure, distance, located, compact) {
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = located ? '#1f4f28' : '#5d4b2f';
+  ctx.font = `900 ${Math.max(7, h * (compact ? 0.16 : 0.15))}px system-ui, sans-serif`;
+  ctx.fillText('HOLLOW CROWN', x, y + h * 0.25, w);
+  ctx.fillStyle = located ? '#173b1f' : '#7d2d22';
+  ctx.font = `900 ${Math.max(9, h * (compact ? 0.23 : 0.24))}px system-ui, sans-serif`;
+  ctx.fillText(status, x, y + h * 0.52, w);
+  ctx.fillStyle = '#365235';
+  ctx.font = `800 ${Math.max(7, h * (compact ? 0.17 : 0.16))}px system-ui, sans-serif`;
+  ctx.fillText(`${pressure} pressure | ${distance} sectors`, x, y + h * 0.76, w);
   ctx.restore();
 }
 
