@@ -15,6 +15,7 @@ import {
   fortifyUnit,
   getCampaignRecap,
   getCrisisCouncil,
+  getDeadwalkerCampaign,
   getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
@@ -1720,13 +1721,16 @@ function currentDeadwalkerIntent() {
   const pressure = deadwalkerPressureSettings();
   const next = nextDeadwalkerSurge(pressure);
   const threats = knownDeadwalkerThreats();
+  const campaign = getDeadwalkerCampaign(state);
   const pressureCount = state.units.filter((unit) => unit.faction === 'dead').length + state.buildings.filter((building) => building.faction === 'dead').length;
   const nearest = threats[0] || null;
   const nextLabel = next ? `${next.turn === state.turn + 1 ? 'Next turn' : `Turn ${next.turn}`}: ${next.labels.join(', ')}` : 'No new surge in the next twelve turns';
   const pressureLabel = nearest
     ? `${nearest.name} ${nearest.distance} sector${nearest.distance === 1 ? '' : 's'} from ${nearest.targetName}.`
     : `Portal pressure is ${pressureCount}; the front is still beyond direct sight.`;
+  const marchLabel = deadwalkerMarchLabel(campaign);
   const lines = [
+    { kicker: 'March', text: marchLabel.text, tone: marchLabel.tone },
     { kicker: 'Surge', text: nextLabel, tone: next?.turn === state.turn + 1 ? 'danger' : 'warning' },
     { kicker: 'Pressure', text: pressureLabel, tone: nearest ? 'danger' : 'warning' }
   ];
@@ -1734,13 +1738,30 @@ function currentDeadwalkerIntent() {
   return {
     next,
     nearest,
+    campaign,
     focusTarget: nearest,
     pressureCount,
     summary: nearest
       ? `Known dead pressure: ${pressureCount}. ${nearest.name} is the nearest visible/revealed threat.`
-      : `Hollow Crown pressure: ${pressureCount}. ${nextLabel}.`,
+      : `${campaign.stage} stage. ${marchLabel.text}`,
     lines
   };
+}
+
+function deadwalkerMarchLabel(campaign) {
+  if (campaign.marchingCount > 0) {
+    const closest = campaign.closest
+      ? ` Nearest column ${campaign.closest.distance} sector${campaign.closest.distance === 1 ? '' : 's'} out.`
+      : ' Columns still beyond sight.';
+    return { text: `${campaign.marchingCount} dead march on Olundar Prime.${closest}`, tone: 'danger' };
+  }
+  if (campaign.imminent) {
+    return { text: `A march of ~${campaign.nextSize} dead forms against Olundar next turn.`, tone: 'danger' };
+  }
+  if (campaign.turnsToMarch <= 3) {
+    return { text: `The Hollow Crown gathers a march on Olundar in ${campaign.turnsToMarch} turn${campaign.turnsToMarch === 1 ? '' : 's'} (~${campaign.nextSize} dead).`, tone: 'warning' };
+  }
+  return { text: `Next march on Olundar around turn ${campaign.nextMarchTurn} (~${campaign.nextSize} dead).`, tone: 'info' };
 }
 
 function deadwalkerPressureSettings() {

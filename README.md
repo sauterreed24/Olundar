@@ -15,8 +15,11 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 ## What is playable now
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
-- Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources and Deadwalker pressure.
+- **The March of the Hollow Crown:** the Deadwalkers gather menace and periodically dispatch escalating, telegraphed marches directed at Olundar Prime, conscripting their eastern horde and reinforcing from the nearest deadwork so ignoring the war is fatal and harder difficulties bite sooner.
+- **Rally healing:** wounded living units recover when resting beside friendly cities and outposts (and faster near a Sun Shrine), so attrition becomes a rotate-and-heal rhythm instead of a one-way death spiral.
+- Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources, Deadwalker spawn cadence, and the timing, size, and growth of marches on Olundar.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
+- A Deadwalker Intent panel that telegraphs the next spawn surge, the countdown and size of the next march on Olundar, and how many dead are already marching on the capital.
 - A compact First Six Turns guide that teaches the opening scout, engineer, training, iron, diplomacy, and Deadwalker-front priorities from live campaign state.
 - Siege Operations that track midgame victory work: onagers, survival pacts, Deadwalker strongholds, Vorgath, and the Bone Portal.
 - Crisis Council events for refugee caravans, thin granaries, night raids, and emergency councils, with rulings that change resources, morale, population, troops, fortifications, or relations.
@@ -68,6 +71,8 @@ Browsers that support installation will expose an **Install** button after the a
 - Select an engineer and choose a building order, then click the engineer’s tile or an adjacent valid tile.
 - Select a city or military building to train units.
 - Select an Olundaran building to upgrade it when resources allow.
+- Pull wounded units back beside a city or outpost (a Sun Shrine heals faster) and hold them clear of the enemy to rally and recover HP between turns.
+- Watch the **Deadwalker Intent** panel for the countdown and size of the next march on Olundar Prime, then position walls, towers, and reserves before it lands.
 - Press `N` or click **Next Unit** to cycle to the next ready unit.
 - Press `E` to end the turn; if units are idle, press `E` again or use `Shift + E` to confirm.
 - Click **New** to choose a scenario, difficulty, and seed.
@@ -158,10 +163,14 @@ olundar_game/
 - Combat forecasts match real attack damage without mutating state.
 - Successful attacks must expose readable Last Strike feedback and canvas impact markers.
 - Combat damages units and enforces the boss-before-portal rule.
+- Deadwalker marches dispatch on schedule, tag the horde to hunt Olundar Prime, respect their difficulty size cap, and deliver real pressure to the capital.
+- Deadwalker pressure scales coherently with difficulty: marches arrive sooner on harder presets, and a neglected capital falls sooner on Hollow Crown than on Chronicle.
+- Wounded living units rally and heal near friendly havens, clamp exactly to max HP, and gain nothing from resting in the open.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.
 
 ## Suggested next production steps
 
-1. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
-2. Add longer promise-demand chains where answered obligations unlock joint war plans, tribute bargains, or hostage diplomacy.
+1. Let allied field orders intercept incoming marches so a coalition can physically blunt the Hollow Crown's columns before they reach Olundar.
+2. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
+3. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
