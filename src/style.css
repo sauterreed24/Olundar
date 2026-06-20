@@ -741,6 +741,22 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.map-help .end-turn-directive {
+  border-color: rgba(36, 116, 142, 0.42);
+  background:
+    linear-gradient(180deg, rgba(231, 248, 255, 0.88), rgba(135, 204, 220, 0.54));
+  color: #1f3f48;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 6px 14px rgba(36, 116, 142, 0.16);
+}
+
+.map-help .end-turn-directive b {
+  margin-right: 0.22rem;
+  color: #8f2418;
+  text-transform: uppercase;
+}
+
 .map-help button:hover,
 .map-help button:focus-visible {
   border-color: rgba(36, 116, 142, 0.42);
