@@ -276,10 +276,20 @@ function renderMapHelp() {
     ];
   const chips = [
     ...(directive ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
+    endTurnReviewMapHelpChip(),
     deadwalkerMapHelpChip(),
     ...hints
   ].filter(Boolean);
   mapHelp.innerHTML = chips.join('');
+}
+
+function endTurnReviewMapHelpChip() {
+  if (state.status !== 'playing' || state.pendingEndTurn !== state.turn) return '';
+  const warnings = getEndTurnWarnings(state);
+  if (!warnings.length) return '';
+  const readyUnits = readyForceRoster(getReadyOlundarUnits(state)).length;
+  const label = readyUnits ? `${readyUnits} ready` : 'warnings';
+  return `<button type="button" class="end-turn-directive map-help-action" data-map-help-action="end-turn-review" aria-label="Review ready forces before ending the turn"><b>Review</b> ${escapeHtml(label)}</button>`;
 }
 
 function deadwalkerMapHelpChip() {
@@ -1155,7 +1165,7 @@ function renderActions() {
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, directiveSourceCard, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, directiveSourceCard, endTurnReview, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -5006,6 +5016,10 @@ mapHelp?.addEventListener('click', (event) => {
   if (action === 'deadwalker') {
     const intent = currentDeadwalkerIntent();
     if (intent) focusDeadwalkerIntent(intent);
+    return;
+  }
+  if (action === 'end-turn-review') {
+    focusEndTurnReviewInCompactRail();
   }
 });
 window.addEventListener('resize', resizeCanvas);
