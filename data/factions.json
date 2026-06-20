@@ -1,0 +1,93 @@
+{
+  "olundar": {
+    "id": "olundar",
+    "name": "Olundar",
+    "adjective": "Olundaran",
+    "temperament": "resolute",
+    "banner": "☀",
+    "player": true,
+    "color": "#f0c866",
+    "text": "A disciplined river-valley civilization with citizen legions, practical engineers, and a stubborn belief that the living world can still unite.",
+    "strengths": [
+      "Balanced infantry",
+      "Fast construction",
+      "High morale near cities"
+    ],
+    "weaknesses": [
+      "Limited early cavalry",
+      "Must manage diplomacy carefully"
+    ]
+  },
+  "dawn": {
+    "id": "dawn",
+    "name": "Dawnward League",
+    "adjective": "Dawnward",
+    "temperament": "honorable",
+    "banner": "⚜",
+    "color": "#88b7ff",
+    "text": "Hill-fort republics that prize oaths, walls, and anti-undead warfare.",
+    "strengths": [
+      "Defensive aid",
+      "Strong spear guards",
+      "Reliable alliance once trusted"
+    ],
+    "weaknesses": [
+      "Slow expansion",
+      "Reluctant to join reckless offensives"
+    ]
+  },
+  "veyr": {
+    "id": "veyr",
+    "name": "Veyr Dominion",
+    "adjective": "Veyrin",
+    "temperament": "opportunistic",
+    "banner": "◇",
+    "color": "#c48cff",
+    "text": "Merchant-princes and ambitious generals who see disaster as a market.",
+    "strengths": [
+      "Gold income",
+      "Cavalry",
+      "Can broker supplies"
+    ],
+    "weaknesses": [
+      "Selfish diplomacy",
+      "May defect if neglected"
+    ]
+  },
+  "mire": {
+    "id": "mire",
+    "name": "Mireclan Holds",
+    "adjective": "Mireclan",
+    "temperament": "suspicious",
+    "banner": "⬟",
+    "color": "#72c66e",
+    "text": "Bog-fort clans skilled at ambushes, scouts, and poison marsh survival.",
+    "strengths": [
+      "Scouts",
+      "Marsh movement",
+      "Cheap archers"
+    ],
+    "weaknesses": [
+      "Poor open-field battles",
+      "Distrustful until helped"
+    ]
+  },
+  "dead": {
+    "id": "dead",
+    "name": "Deadwalkers",
+    "adjective": "Deadwalker",
+    "temperament": "annihilating",
+    "banner": "☠",
+    "color": "#91e88b",
+    "text": "A skeleton empire pouring from a bone portal under a lich-warlord. They spread grave-blight and replace living settlements with necropolises.",
+    "strengths": [
+      "Free reinforcements",
+      "Blight expansion",
+      "Fearless attrition"
+    ],
+    "weaknesses": [
+      "Predictable hatred of life",
+      "Portal defeat ends the invasion"
+    ]
+  }
+}

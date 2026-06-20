@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, validateContentSchemas } from '../src/content.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import {
   addBuilding,
@@ -46,6 +46,7 @@ import {
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
+import { Command, CommandHistory, createMoveCommand, runPlayerCommand, validateUndoReversesAction } from '../src/engine/commands.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -1434,6 +1435,61 @@ check('source has no TODO/FIXME leftovers', () => {
     const text = readFileSync(file, 'utf8');
     assert(!/TODO|FIXME/.test(text), `${path.relative(root, file)} contains TODO/FIXME.`);
   }
+});
+
+check('no Canvas 2D calls outside PixiJS abstraction', () => {
+  const allowed = new Set([
+    path.join(root, 'src/engine/canvas-bridge.js'),
+    path.join(root, 'src/engine/pixi-renderer.js')
+  ]);
+  for (const file of listFiles(path.join(root, 'src'))) {
+    if (file.includes(`${path.sep}engine${path.sep}`) && !file.endsWith('canvas-bridge.js') && !file.endsWith('pixi-renderer.js')) {
+      const text = readFileSync(file, 'utf8');
+      assert(!/getContext\s*\(\s*['"]2d['"]\s*\)/.test(text), `${path.relative(root, file)} must not acquire Canvas 2D directly.`);
+    }
+    if (!file.includes(`${path.sep}engine${path.sep}`)) {
+      const text = readFileSync(file, 'utf8');
+      assert(!/getContext\s*\(\s*['"]2d['"]\s*\)/.test(text), `${path.relative(root, file)} must route Canvas 2D through the Pixi abstraction.`);
+    }
+  }
+  assert(existsSync(path.join(root, 'src/engine/pixi-renderer.js')), 'Pixi renderer backbone is required.');
+  assert(existsSync(path.join(root, 'src/engine/canvas-bridge.js')), 'Canvas bridge is required.');
+});
+
+check('JSON content validates against schema', () => {
+  const result = validateContentSchemas();
+  assert(result.tables >= 5, 'Content schema validation should cover core tables.');
+  for (const schemaName of ['units.schema.json', 'buildings.schema.json', 'terrain.schema.json', 'factions.schema.json']) {
+    assert(existsSync(path.join(root, 'data/schemas', schemaName)), `Missing schema ${schemaName}.`);
+  }
+  for (const dataName of ['units.json', 'buildings.json', 'factions.json', 'terrain.json', 'crisisEvents.json']) {
+    assert(existsSync(path.join(root, 'data', dataName)), `Missing data file ${dataName}.`);
+  }
+});
+
+check('player mutations route through Command.execute()', () => {
+  const mainSource = readProjectFile('src/main.js');
+  assert(mainSource.includes('runPlayerCommand(commandHistory, state, command)'), 'Main loop should execute player commands through the command history.');
+  assert(mainSource.includes('new Command({'), 'Player actions should be wrapped as commands.');
+  assert(mainSource.includes('commandHistory.undo(state)'), 'Undo should be bound to the command history.');
+  assert(mainSource.includes('commandHistory.redo(state)'), 'Redo should be bound to the command history.');
+  const state = createGame('quality-undo');
+  const unit = state.units.find((item) => item.faction === 'olundar' && !item.hasActed);
+  assert(unit, 'Undo test needs a ready Olundaran unit.');
+  const command = createMoveCommand(state, unit.id, unit.x + 1, unit.y, moveUnit);
+  const reversed = validateUndoReversesAction(state, command);
+  assert(reversed.ok, 'Undo stack should reverse a player move without desync.');
+});
+
+check('pixi renderer and audio mixer modules exist', () => {
+  const renderSource = readProjectFile('src/render.js');
+  assert(renderSource.includes("from './engine/pixi-renderer.js'"), 'Renderer should delegate to Pixi backbone.');
+  assert(renderSource.includes('drawGameCanvas'), 'Legacy art pass should remain available to the Pixi compositor.');
+  assert(existsSync(path.join(root, 'src/engine/audio.js')), 'Web Audio mixer module is required.');
+  assert(existsSync(path.join(root, 'src/engine/particles.js')), 'Particle system is required.');
+  assert(existsSync(path.join(root, 'src/engine/entity-factory.js')), 'Entity factory is required.');
+  const audioEngine = readProjectFile('src/engine/audio.js');
+  assert(audioEngine.includes('sfx') && audioEngine.includes('ambient') && audioEngine.includes('music') && audioEngine.includes('ui'), 'Audio mixer should expose SFX, Ambient, Music, and UI buses.');
 });
 
 for (const { name, fn } of checks) {

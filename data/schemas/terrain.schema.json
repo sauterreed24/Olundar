@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OlundarTerrain",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": ["id", "name", "move", "passable", "buildable"],
+    "properties": {
+      "id": { "type": "string" },
+      "name": { "type": "string" },
+      "glyph": { "type": "string" },
+      "move": { "type": "number" },
+      "defense": { "type": "number" },
+      "sight": { "type": "number" },
+      "passable": { "type": "boolean" },
+      "buildable": { "type": "boolean" },
+      "food": { "type": "number" },
+      "wood": { "type": "number" },
+      "stone": { "type": "number" },
+      "iron": { "type": "number" },
+      "tactical": { "type": "string" }
+    }
+  }
+}

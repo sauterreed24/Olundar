@@ -1,0 +1,29 @@
+{
+  "startingResources": {
+    "food": 80,
+    "wood": 70,
+    "stone": 20,
+    "iron": 25,
+    "gold": 55,
+    "influence": 3,
+    "morale": 8,
+    "dread": 0
+  },
+  "resourceNames": {
+    "food": "Food",
+    "wood": "Wood",
+    "stone": "Stone",
+    "iron": "Iron",
+    "gold": "Gold",
+    "influence": "Influence",
+    "morale": "Morale",
+    "dread": "Dread"
+  },
+  "objectives": [
+    "Reveal the eastern wasteland where the Deadwalker portal is hidden.",
+    "Build a war economy: farms, wood, iron, barracks, and archers.",
+    "Decide which civilizations deserve trust before the undead reach them.",
+    "Kill Vorgath the Hollow Crown.",
+    "Destroy the Bone Portal to end the invasion."
+  ]
+}

@@ -92,6 +92,20 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="campaignIntro" class="campaign-intro" hidden aria-hidden="true">
+      <div class="campaign-intro-banner">
+        <span class="sun">O</span>
+        <h2>Olundar</h2>
+        <p>The imperial war table awakens.</p>
+      </div>
+    </div>
+    <div id="tacticalPause" class="tactical-pause" hidden role="dialog" aria-modal="true" aria-labelledby="tacticalPauseTitle">
+      <div class="tactical-pause-card">
+        <h2 id="tacticalPauseTitle">Deadwalker March</h2>
+        <p id="tacticalPauseCopy">Skeleton armies have landed on the frontier.</p>
+        <button id="tacticalPauseDismiss" type="button">Assess the battlefield</button>
+      </div>
+    </div>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

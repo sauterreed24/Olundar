@@ -2,6 +2,10 @@ export const SETTINGS_STORAGE_KEY = 'olundar.player.settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   audioVolume: 58,
+  audioSfx: 100,
+  audioAmbient: 70,
+  audioMusic: 65,
+  audioUi: 85,
   motion: 'full',
   mapScale: 'standard'
 });
@@ -49,10 +53,14 @@ export const MAP_SCALE_PRESETS = Object.freeze({
 export function normalizeSettings(value = {}) {
   const settings = value && typeof value === 'object' ? value : {};
   const audioVolume = clampNumber(Number(settings.audioVolume), 0, 100, DEFAULT_SETTINGS.audioVolume);
+  const audioSfx = clampNumber(Number(settings.audioSfx), 0, 100, DEFAULT_SETTINGS.audioSfx);
+  const audioAmbient = clampNumber(Number(settings.audioAmbient), 0, 100, DEFAULT_SETTINGS.audioAmbient);
+  const audioMusic = clampNumber(Number(settings.audioMusic), 0, 100, DEFAULT_SETTINGS.audioMusic);
+  const audioUi = clampNumber(Number(settings.audioUi), 0, 100, DEFAULT_SETTINGS.audioUi);
   const motion = MOTION_MODES[settings.motion] ? settings.motion : DEFAULT_SETTINGS.motion;
   const mapScale = MAP_SCALE_PRESETS[settings.mapScale] ? settings.mapScale : DEFAULT_SETTINGS.mapScale;
 
-  return { audioVolume, motion, mapScale };
+  return { audioVolume, audioSfx, audioAmbient, audioMusic, audioUi, motion, mapScale };
 }
 
 export function readSettings(storage = null) {

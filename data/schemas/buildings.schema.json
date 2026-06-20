@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OlundarBuilding",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": ["id", "name", "hp", "vision", "buildTurns", "cost", "buildableBy", "trains", "income"],
+    "properties": {
+      "id": { "type": "string" },
+      "name": { "type": "string" },
+      "glyph": { "type": "string" },
+      "hp": { "type": "number", "minimum": 1 },
+      "vision": { "type": "number" },
+      "buildTurns": { "type": "integer", "minimum": 0 },
+      "cost": { "type": "object" },
+      "buildableBy": { "type": "array", "items": { "type": "string" } },
+      "trains": { "type": "array", "items": { "type": "string" } },
+      "income": { "type": "object" },
+      "text": { "type": "string" },
+      "artPath": { "type": "string" }
+    }
+  }
+}

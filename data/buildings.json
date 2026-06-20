@@ -1,0 +1,344 @@
+{
+  "city": {
+    "id": "city",
+    "name": "City Center",
+    "glyph": "⌂",
+    "hp": 60,
+    "vision": 4,
+    "buildTurns": 0,
+    "cost": {},
+    "buildableBy": [],
+    "trains": [
+      "scout",
+      "engineer"
+    ],
+    "income": {
+      "food": 6,
+      "wood": 2,
+      "gold": 5,
+      "influence": 1
+    },
+    "text": "Seat of Olundar. Produces scouts and engineers, stores population, and projects vision."
+  },
+  "farm": {
+    "id": "farm",
+    "name": "Terraced Farm",
+    "glyph": "▦",
+    "hp": 18,
+    "vision": 1,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 10,
+      "gold": 2
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "food": 8
+    },
+    "text": "Reliable food, best on plains and near rivers. Keeps armies supplied without tedium."
+  },
+  "lumberCamp": {
+    "id": "lumberCamp",
+    "name": "Lumber Camp",
+    "glyph": "♜",
+    "hp": 18,
+    "vision": 1,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 4,
+      "gold": 2
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "wood": 8
+    },
+    "text": "Harvests forest resources for buildings, bows, roads, and siege machines."
+  },
+  "mine": {
+    "id": "mine",
+    "name": "Hill Mine",
+    "glyph": "◆",
+    "hp": 20,
+    "vision": 1,
+    "buildTurns": 3,
+    "cost": {
+      "wood": 12,
+      "gold": 6
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "iron": 6,
+      "gold": 2
+    },
+    "text": "Produces iron and coin from hills or ruins. Fuels legionaries and siege."
+  },
+  "barracks": {
+    "id": "barracks",
+    "name": "Legion Barracks",
+    "glyph": "▣",
+    "hp": 32,
+    "vision": 2,
+    "buildTurns": 3,
+    "cost": {
+      "wood": 24,
+      "iron": 6,
+      "gold": 10
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [
+      "legionary",
+      "spearGuard"
+    ],
+    "income": {},
+    "text": "Trains line infantry. A must-have before Deadwalker pressure reaches the capital."
+  },
+  "archeryYard": {
+    "id": "archeryYard",
+    "name": "Archery Yard",
+    "glyph": "∴",
+    "hp": 26,
+    "vision": 2,
+    "buildTurns": 3,
+    "cost": {
+      "wood": 28,
+      "gold": 8
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [
+      "archer"
+    ],
+    "income": {},
+    "text": "Trains archers. Place near hills or walls for killing zones."
+  },
+  "stable": {
+    "id": "stable",
+    "name": "Equite Stable",
+    "glyph": "♞",
+    "hp": 28,
+    "vision": 2,
+    "buildTurns": 4,
+    "cost": {
+      "wood": 30,
+      "food": 10,
+      "gold": 18
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [
+      "cavalry"
+    ],
+    "income": {},
+    "text": "Trains cavalry for rapid response, raids, and saving distant allies."
+  },
+  "workshop": {
+    "id": "workshop",
+    "name": "Siege Workshop",
+    "glyph": "⚙",
+    "hp": 30,
+    "vision": 2,
+    "buildTurns": 4,
+    "cost": {
+      "wood": 36,
+      "iron": 14,
+      "gold": 18
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [
+      "onager"
+    ],
+    "income": {},
+    "text": "Builds onagers for destroying necropolises and the portal."
+  },
+  "watchtower": {
+    "id": "watchtower",
+    "name": "Signal Watchtower",
+    "glyph": "◬",
+    "hp": 24,
+    "vision": 6,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 18,
+      "stone": 4,
+      "gold": 6
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {},
+    "text": "Projects fog-breaking vision. Hills increase its strategic value."
+  },
+  "wall": {
+    "id": "wall",
+    "name": "Stone Wall",
+    "glyph": "▓",
+    "hp": 36,
+    "vision": 1,
+    "buildTurns": 2,
+    "cost": {
+      "stone": 12,
+      "wood": 4
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {},
+    "text": "Blocks enemy advances and turns chokepoints into kill boxes."
+  },
+  "road": {
+    "id": "road",
+    "name": "Military Road",
+    "glyph": "═",
+    "hp": 10,
+    "vision": 0,
+    "buildTurns": 1,
+    "cost": {
+      "wood": 4,
+      "stone": 2
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "gold": 1
+    },
+    "text": "Improves logistics. Units moving from road to road get cheaper movement."
+  },
+  "shrine": {
+    "id": "shrine",
+    "name": "Sun Shrine",
+    "glyph": "☉",
+    "hp": 26,
+    "vision": 2,
+    "buildTurns": 3,
+    "cost": {
+      "stone": 12,
+      "gold": 14,
+      "influence": 1
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "influence": 2,
+      "morale": 1
+    },
+    "text": "Boosts influence and morale. Living units nearby resist grave-blight attrition."
+  },
+  "outpost": {
+    "id": "outpost",
+    "name": "Frontier Outpost",
+    "glyph": "◇",
+    "hp": 34,
+    "vision": 4,
+    "buildTurns": 3,
+    "cost": {
+      "wood": 22,
+      "stone": 6,
+      "gold": 8
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [
+      "scout",
+      "spearGuard"
+    ],
+    "income": {
+      "gold": 2
+    },
+    "text": "Forward base for exploration and emergency defense."
+  },
+  "portal": {
+    "id": "portal",
+    "name": "Bone Portal",
+    "glyph": "◎",
+    "hp": 90,
+    "vision": 6,
+    "buildTurns": 0,
+    "cost": {},
+    "buildableBy": [],
+    "trains": [
+      "boneThrall",
+      "corpseArcher",
+      "graveKnight"
+    ],
+    "income": {
+      "dread": 5
+    },
+    "text": "The invasion source. Destroy it after killing the Hollow Crown to win."
+  },
+  "bonePit": {
+    "id": "bonePit",
+    "name": "Bone Pit",
+    "glyph": "☉",
+    "hp": 26,
+    "vision": 3,
+    "buildTurns": 0,
+    "cost": {},
+    "buildableBy": [],
+    "trains": [
+      "boneThrall"
+    ],
+    "income": {
+      "dread": 2
+    },
+    "text": "Spawns Bone Thralls and spreads grave-blight."
+  },
+  "graveForge": {
+    "id": "graveForge",
+    "name": "Grave Forge",
+    "glyph": "♨",
+    "hp": 34,
+    "vision": 3,
+    "buildTurns": 0,
+    "cost": {},
+    "buildableBy": [],
+    "trains": [
+      "corpseArcher",
+      "graveKnight"
+    ],
+    "income": {
+      "dread": 3
+    },
+    "text": "Deadwalker military workshop for ranged and armored undead."
+  },
+  "necropolis": {
+    "id": "necropolis",
+    "name": "Necropolis",
+    "glyph": "▥",
+    "hp": 48,
+    "vision": 4,
+    "buildTurns": 0,
+    "cost": {},
+    "buildableBy": [],
+    "trains": [
+      "boneThrall",
+      "corpseArcher",
+      "graveKnight"
+    ],
+    "income": {
+      "dread": 4
+    },
+    "text": "A captured or grown undead city. It expands the Deadwalker civilization."
+  }
+}

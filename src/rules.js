@@ -2168,7 +2168,7 @@ export function moveUnit(state, unitId, x, y) {
   maybeSurveyRuin(state, unit);
   updateVisibility(state);
   updateAftermathMissions(state);
-  return { ok: true, reason: `${unit.name} moved.` };
+  return { ok: true, reason: `${unit.name} moved.`, path, unitId };
 }
 
 function maybeSurveyRuin(state, unit) {

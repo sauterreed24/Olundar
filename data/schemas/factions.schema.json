@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OlundarFaction",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": ["id", "name", "color", "text"],
+    "properties": {
+      "id": { "type": "string" },
+      "name": { "type": "string" },
+      "adjective": { "type": "string" },
+      "temperament": { "type": "string" },
+      "banner": { "type": "string" },
+      "player": { "type": "boolean" },
+      "color": { "type": "string" },
+      "text": { "type": "string" },
+      "strengths": { "type": "array", "items": { "type": "string" } },
+      "weaknesses": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

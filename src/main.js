@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES, applyContentMods, hotReloadContentFromUrls, resetContentMods } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -43,10 +43,12 @@ import {
   isTileSupplied,
   isVisible
 } from './rules.js';
-import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
+import { describeSelection, describeTilePanel, drawGame, getLayout, pointToTile } from './render.js';
+import { Command, CommandHistory, runPlayerCommand } from './engine/commands.js';
+import { getPixiRenderer } from './engine/pixi-renderer.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 import { importSaveSnapshot } from './saveTransfer.js';
-import { audioIsEnabled, initAudioPreference, playAudioCue, setAudioVolume, toggleAudio } from './audio.js';
+import { audioIsEnabled, getAudioBusVolumes, initAudioPreference, playAudioCue, setAudioBusVolume, setAudioVolume, toggleAudio, updateDynamicMusicLayers } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 
@@ -136,6 +138,9 @@ let turnReport = null;
 let mobileIntelDrawerTouched = false;
 let syncingMobileIntelDrawer = false;
 let pendingHoverFrame = null;
+let commandHistory = new CommandHistory();
+let campaignIntroActive = false;
+let tacticalPauseVisible = false;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -167,6 +172,8 @@ function mapCanvasDprCap(width, height, compactViewport) {
 }
 
 function render() {
+  syncDynamicAudioLayers();
+  maybeShowTacticalPause();
   drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
   renderTopBar();
   renderMapLensBar();
@@ -186,7 +193,52 @@ function render() {
   renderMapIntel();
   renderMode();
   renderMobileIntelDrawer();
+  renderCampaignChrome();
   maybeOpenOutcomeRecap();
+}
+
+function syncDynamicAudioLayers() {
+  const dead = getDeadwalkerCampaign(state);
+  const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId);
+  const inCombat = Boolean(selectedUnit && !selectedUnit.hasActed && hoverTile && isVisible(state, hoverTile.x, hoverTile.y) && (
+    (unitAt(state, hoverTile.x, hoverTile.y) && isEnemy(state, selectedUnit.faction, unitAt(state, hoverTile.x, hoverTile.y).faction))
+    || (buildingAt(state, hoverTile.x, hoverTile.y) && isEnemy(state, selectedUnit.faction, buildingAt(state, hoverTile.x, hoverTile.y).faction))
+  ));
+  updateDynamicMusicLayers({ marchCountdown: dead.turnsToMarch, inCombat });
+}
+
+function maybeShowTacticalPause() {
+  // Turn-end march detection happens in requestEndTurn.
+}
+
+function showTacticalPause() {
+  tacticalPauseVisible = true;
+  document.body.classList.add('tactical-pause-active');
+  const overlay = document.querySelector('#tacticalPause');
+  const copy = document.querySelector('#tacticalPauseCopy');
+  const dead = getDeadwalkerCampaign(state);
+  if (copy) copy.textContent = `${dead.marchingCount} Deadwalker marcher${dead.marchingCount === 1 ? '' : 's'} now press Olundar. Assess defenses before issuing new orders.`;
+  if (overlay) overlay.hidden = false;
+}
+
+function dismissTacticalPause() {
+  tacticalPauseVisible = false;
+  document.body.classList.remove('tactical-pause-active');
+  const overlay = document.querySelector('#tacticalPause');
+  if (overlay) overlay.hidden = true;
+}
+
+function renderCampaignChrome() {
+  const intro = document.querySelector('#campaignIntro');
+  if (intro) intro.hidden = !campaignIntroActive;
+}
+
+function executePlayerCommand(command, successCue = 'ui') {
+  const result = runPlayerCommand(commandHistory, state, command);
+  const ok = handleResult(result, successCue);
+  render();
+  if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
+  return ok;
 }
 
 function renderTopBar() {
@@ -395,7 +447,7 @@ function renderGuide() {
     <p class="guide-summary">${escapeHtml(guide.summary)}</p>
     <ol class="guide-steps">
       ${visibleSteps.map((step) => `
-        <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current' : ''}">
+        <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current guide-highlight-target' : ''}" data-guide-target="${escapeHtml(step.id)}">
           <span class="step-status">${step.done ? 'Done' : step.id === guide.currentId ? 'Next' : 'Open'}</span>
           <strong>${escapeHtml(step.label)}</strong>
           <small>${escapeHtml(step.detail)}</small>
@@ -2926,8 +2978,17 @@ function selectBuilding(id) {
   state.cameraFocusTile = null;
 }
 
-function runAction(action, successCue = 'ui') {
-  const result = action();
+function runAction(action, successCue = 'ui', label = 'Action') {
+  const command = new Command({
+    label,
+    execute: () => action(),
+    undo: (game) => {
+      const snapshot = command._snapshot;
+      if (snapshot) Object.assign(game, deserializeState(snapshot));
+    }
+  });
+  command._snapshot = serializeState(state);
+  const result = runPlayerCommand(commandHistory, state, command);
   const ok = handleResult(result, successCue);
   render();
   if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
@@ -2944,11 +3005,36 @@ function handleResult(result, successCue = null) {
   }
   turnReport = null;
   state.pendingEndTurn = null;
-  if (successCue === 'attack') captureBattleImpact(result);
+  if (successCue === 'attack') {
+    captureBattleImpact(result);
+    triggerCombatJuice(result);
+  }
+  if (successCue === 'build' && result.building) triggerBuildJuice(result.building.x, result.building.y);
+  if (successCue === 'move') triggerMoveJuice(result);
   if (successCue === 'diplomacy') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   return true;
+}
+
+function triggerCombatJuice(result) {
+  const pixi = getPixiRenderer(canvas);
+  const layout = getLayout(canvas);
+  const lethal = Boolean(result.targetDestroyed || result.lethal);
+  pixi.onCombatImpact(result.targetX, result.targetY, layout, result.damage || 0, lethal);
+}
+
+function triggerBuildJuice(x, y) {
+  const pixi = getPixiRenderer(canvas);
+  const layout = getLayout(canvas);
+  pixi.onBuildComplete(x, y, layout);
+}
+
+function triggerMoveJuice(result) {
+  if (!result?.path?.length) return;
+  const pixi = getPixiRenderer(canvas);
+  const layout = getLayout(canvas);
+  pixi.animateUnitMove(result.unitId, result.path, layout);
 }
 
 function captureBattleImpact(result) {
@@ -4170,8 +4256,12 @@ function requestEndTurn(force = false) {
   state.mode = { type: 'select' };
   const before = captureTurnSnapshot();
   const previousTurn = state.turn;
+  const marchBefore = getDeadwalkerCampaign(state).marchingCount;
   battleImpact = null;
   endTurn(state);
+  if (getDeadwalkerCampaign(state).marchingCount > marchBefore) {
+    showTacticalPause();
+  }
   turnReport = buildTurnReport(before, previousTurn);
   focusOpeningFollowThrough(previousStepId);
   toast(turnReport.toast, turnReport.tone === 'bad' ? 'bad' : 'info');
@@ -4445,6 +4535,7 @@ function renderRecapPanel(context = 'current') {
 
 function renderSettingsPanel() {
   const settings = normalizeSettings(playerSettings);
+  const buses = getAudioBusVolumes();
   settingsPanel.innerHTML = `
     <div class="setup-head">
       <div>
@@ -4454,9 +4545,16 @@ function renderSettingsPanel() {
       <button class="icon-button" type="button" data-action="close-settings" aria-label="Close settings">X</button>
     </div>
     <label class="setup-field volume-field">
-      <span>Audio volume <b id="volumeValue">${settings.audioVolume}%</b></span>
+      <span>Master volume <b id="volumeValue">${settings.audioVolume}%</b></span>
       <input id="audioVolume" name="audioVolume" type="range" min="0" max="100" step="1" value="${settings.audioVolume}" />
     </label>
+    <h3>Audio buses</h3>
+    <div class="card-grid settings-grid audio-bus-grid">
+      ${audioBusField('audioSfx', 'SFX', settings.audioSfx)}
+      ${audioBusField('audioAmbient', 'Ambient', settings.audioAmbient)}
+      ${audioBusField('audioMusic', 'Music', settings.audioMusic)}
+      ${audioBusField('audioUi', 'UI', settings.audioUi)}
+    </div>
     <h3>Motion</h3>
     <div class="card-grid settings-grid">
       ${Object.values(MOTION_MODES).map((item) => choiceCard('motion', item.id, item.label, item.text, item.id === settings.motion)).join('')}
@@ -4476,7 +4574,12 @@ function renderSettingsPanel() {
 function applyPlayerSettings(settings) {
   playerSettings = normalizeSettings(settings);
   setAudioVolume(playerSettings.audioVolume);
+  setAudioBusVolume('sfx', playerSettings.audioSfx);
+  setAudioBusVolume('ambient', playerSettings.audioAmbient);
+  setAudioBusVolume('music', playerSettings.audioMusic);
+  setAudioBusVolume('ui', playerSettings.audioUi);
   document.body.classList.toggle('reduced-motion', playerSettings.motion === 'reduced');
+  getPixiRenderer(canvas).setReducedMotion(playerSettings.motion === 'reduced');
 }
 
 function persistPlayerSettings(settings) {
@@ -4580,8 +4683,19 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
     </div>
     <div class="setup-actions">
       <button type="submit">Start Campaign</button>
+      <button type="button" data-action="open-mod-menu">Mod Menu</button>
       <button type="button" data-action="close-setup">Cancel</button>
     </div>
+    <details id="modMenuPanel" class="mod-menu-panel" hidden>
+      <summary>Live JSON mod overrides</summary>
+      <p class="muted">Hot-reload data tables to tweak stats, costs, and art paths while playing.</p>
+      <div class="mod-menu-actions">
+        <button type="button" data-mod-action="reload-units">Reload units.json</button>
+        <button type="button" data-mod-action="reload-buildings">Reload buildings.json</button>
+        <button type="button" data-mod-action="reload-terrain">Reload terrain.json</button>
+        <button type="button" data-mod-action="reset-mods">Reset mods</button>
+      </div>
+    </details>
   `;
 }
 
@@ -4591,6 +4705,15 @@ function choiceCard(name, value, title, text, checked) {
       <input type="radio" name="${name}" value="${escapeHtml(value)}" ${checked ? 'checked' : ''} />
       <strong>${escapeHtml(title)}</strong>
       <span>${escapeHtml(text)}</span>
+    </label>
+  `;
+}
+
+function audioBusField(name, label, value) {
+  return `
+    <label class="setup-field volume-field">
+      <span>${escapeHtml(label)} <b data-bus-value="${name}">${value}%</b></span>
+      <input name="${name}" type="range" min="0" max="100" step="1" value="${value}" />
     </label>
   `;
 }
@@ -4620,9 +4743,45 @@ function startConfiguredCampaign(form) {
   focusFirstReadyUnit();
   closeCampaignRecap();
   closeCampaignSetup();
+  commandHistory.clear();
+  startCampaignIntro();
   toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
   playAudioCue('fanfare');
   render();
+}
+
+function startCampaignIntro() {
+  campaignIntroActive = true;
+  document.body.classList.add('campaign-intro-active');
+  window.setTimeout(() => {
+    campaignIntroActive = false;
+    document.body.classList.remove('campaign-intro-active');
+    render();
+  }, 2200);
+}
+
+async function handleModMenuAction(action) {
+  try {
+    if (action === 'reset-mods') {
+      resetContentMods();
+      toast('Mod overrides reset.', 'good');
+      render();
+      return;
+    }
+    const map = {
+      'reload-units': { units: './data/units.json' },
+      'reload-buildings': { buildings: './data/buildings.json' },
+      'reload-terrain': { terrain: './data/terrain.json' }
+    };
+    const urls = map[action];
+    if (!urls) return;
+    await hotReloadContentFromUrls(urls);
+    toast('Content reloaded from JSON.', 'good');
+    render();
+  } catch (error) {
+    toast(error.message || 'Mod reload failed.', 'bad');
+    playAudioCue('error');
+  }
 }
 
 function exportSave() {
@@ -5032,13 +5191,19 @@ function inMap(x, y) {
 
 function canvasCursorForTile(tile) {
   if (!tile || !inMap(tile.x, tile.y)) return '';
-  if (openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile)) return 'pointer';
+  if (diplomacyOpportunityForTile(tile)) return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext x=\'4\' y=\'18\' font-size=\'16\'%3E💬%3C/text%3E%3C/svg%3E") 4 18, pointer';
+  if (openingDirectiveForTile(tile)) return 'pointer';
+  if (state.mode.type === 'build') return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext x=\'4\' y=\'18\' font-size=\'16\'%3E🔨%3C/text%3E%3C/svg%3E") 4 18, crosshair';
   const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar' && !unit.hasActed);
   if (!selectedUnit || state.mode.type !== 'select') return '';
   const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
-  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) return 'pointer';
+  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
+    return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext x=\'2\' y=\'18\' font-size=\'16\'%3E⚔%3C/text%3E%3C/svg%3E") 4 18, pointer';
+  }
   const visibleBuilding = isVisible(state, tile.x, tile.y) ? buildingAt(state, tile.x, tile.y) : null;
-  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) return 'pointer';
+  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
+    return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext x=\'2\' y=\'18\' font-size=\'16\'%3E⚔%3C/text%3E%3C/svg%3E") 4 18, pointer';
+  }
   const def = UNIT_TYPES[selectedUnit.type];
   return findPath(state, selectedUnit, tile.x, tile.y, def.move) ? 'pointer' : '';
 }
@@ -5129,6 +5294,18 @@ window.addEventListener('keydown', (event) => {
   } else if (event.key.toLowerCase() === 'l' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     openSaveManager('load');
+  } else if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey) && event.shiftKey) {
+    event.preventDefault();
+    const result = commandHistory.redo(state);
+    if (!result?.ok && result?.reason) toast(result.reason, 'bad');
+    else if (result?.ok) toast('Redo.', 'info');
+    render();
+  } else if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    const result = commandHistory.undo(state);
+    if (!result?.ok && result?.reason) toast(result.reason, 'bad');
+    else if (result?.ok) toast(`Undid ${result.label || 'action'}.`, 'info');
+    render();
   }
 });
 
@@ -5146,6 +5323,10 @@ document.querySelector('#newTop').addEventListener('click', () => newCampaign())
 document.querySelector('#saveTop').addEventListener('click', () => openSaveManager('save'));
 document.querySelector('#loadTop').addEventListener('click', () => openSaveManager('load'));
 document.querySelector('#settingsTop').addEventListener('click', () => openSettings());
+document.querySelector('#tacticalPauseDismiss')?.addEventListener('click', () => {
+  dismissTacticalPause();
+  playAudioCue('ui');
+});
 
 function handleTurnReportAction(action) {
   if (action === 'clear-turn-report') {
@@ -5242,7 +5423,13 @@ setupOverlay.addEventListener('click', (event) => {
 });
 
 campaignSetup.addEventListener('click', (event) => {
-  if (event.target instanceof HTMLElement && event.target.dataset.action === 'close-setup') closeCampaignSetup();
+  if (!(event.target instanceof HTMLElement)) return;
+  if (event.target.dataset.action === 'close-setup') closeCampaignSetup();
+  if (event.target.dataset.action === 'open-mod-menu') {
+    const panel = campaignSetup.querySelector('#modMenuPanel');
+    if (panel) panel.hidden = !panel.hidden;
+  }
+  if (event.target.dataset.modAction) handleModMenuAction(event.target.dataset.modAction);
 });
 
 campaignSetup.addEventListener('change', (event) => {
@@ -5369,11 +5556,18 @@ settingsPanel.addEventListener('click', (event) => {
 });
 
 settingsPanel.addEventListener('input', (event) => {
-  if (event.target instanceof HTMLInputElement && event.target.name === 'audioVolume') {
+  if (!(event.target instanceof HTMLInputElement)) return;
+  if (event.target.name === 'audioVolume') {
     const settings = normalizeSettings({ ...playerSettings, audioVolume: event.target.value });
     setAudioVolume(settings.audioVolume);
     const value = settingsPanel.querySelector('#volumeValue');
     if (value) value.textContent = `${settings.audioVolume}%`;
+    return;
+  }
+  if (['audioSfx', 'audioAmbient', 'audioMusic', 'audioUi'].includes(event.target.name)) {
+    setAudioBusVolume(event.target.name.replace('audio', '').toLowerCase(), event.target.value);
+    const value = settingsPanel.querySelector(`[data-bus-value="${event.target.name}"]`);
+    if (value) value.textContent = `${event.target.value}%`;
   }
 });
 
@@ -5389,6 +5583,10 @@ settingsPanel.addEventListener('submit', (event) => {
   const data = new FormData(settingsPanel);
   persistPlayerSettings({
     audioVolume: data.get('audioVolume'),
+    audioSfx: data.get('audioSfx'),
+    audioAmbient: data.get('audioAmbient'),
+    audioMusic: data.get('audioMusic'),
+    audioUi: data.get('audioUi'),
     motion: data.get('motion'),
     mapScale: data.get('mapScale')
   });
