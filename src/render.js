@@ -2212,24 +2212,27 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
 }
 
 function drawMovementRadiusStrategicPlate(ctx, layout, reachable, maxMove, hoverMove = null) {
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   for (const item of reachable) {
     const hovered = sameTile(item, hoverMove);
     const bounds = tileBounds(layout, item.x, item.y);
     const progress = Math.max(0, Math.min(1, item.cost / Math.max(1, maxMove)));
-    const coreAlpha = hovered ? 0.38 : item.frontier ? 0.23 : 0.16 - progress * 0.03;
-    const glow = ctx.createRadialGradient(bounds.cx, bounds.cy, layout.tileSize * 0.06, bounds.cx, bounds.cy, layout.tileSize * (hovered ? 0.86 : 0.62));
+    const coreAlpha = Math.min(0.46, (hovered ? 0.38 : item.frontier ? 0.23 : 0.16 - progress * 0.03) * (overlayScale > 1 ? 1.18 : 1));
+    const radius = layout.tileSize * (hovered ? 0.86 : 0.62) * overlayScale;
+    const glow = ctx.createRadialGradient(bounds.cx, bounds.cy, layout.tileSize * 0.06, bounds.cx, bounds.cy, radius);
     glow.addColorStop(0, `rgba(255, 252, 218, ${coreAlpha})`);
     glow.addColorStop(0.56, item.road ? `rgba(137, 224, 255, ${coreAlpha * 0.54})` : `rgba(255, 213, 104, ${coreAlpha * 0.42})`);
     glow.addColorStop(1, 'rgba(255, 213, 104, 0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(bounds.cx - layout.tileSize, bounds.cy - layout.tileSize, layout.tileSize * 2, layout.tileSize * 2);
+    ctx.fillRect(bounds.cx - radius, bounds.cy - radius, radius * 2, radius * 2);
   }
   ctx.restore();
 }
 
 function drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hoverMove = null) {
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
   for (const item of reachable) {
@@ -2238,7 +2241,7 @@ function drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hover
     const progress = Math.max(0, Math.min(1, item.cost / Math.max(1, maxMove)));
     const frontier = item.cost >= maxMove;
     const rugged = item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
-    const alpha = hovered ? 0.46 : frontier ? 0.34 : rugged ? 0.30 : 0.24;
+    const alpha = Math.min(0.54, (hovered ? 0.46 : frontier ? 0.34 : rugged ? 0.30 : 0.24) * (overlayScale > 1 ? 1.14 : 1));
     const ground = item.road
       ? `rgba(116, 213, 238, ${alpha})`
       : item.supplied
@@ -2261,21 +2264,22 @@ function drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hover
     gradient.addColorStop(0.42, ground);
     gradient.addColorStop(1, shade);
     fillTileDiamond(ctx, bounds, gradient, hovered ? 0.4 : 2.8);
-    strokeTileDiamond(ctx, bounds, item.road ? 'rgba(217, 250, 255, 0.40)' : 'rgba(255, 245, 188, 0.36)', Math.max(1, layout.tileSize * (hovered ? 0.028 : 0.014)), hovered ? 2.2 : 5.2);
+    strokeTileDiamond(ctx, bounds, item.road ? 'rgba(217, 250, 255, 0.46)' : 'rgba(255, 245, 188, 0.42)', Math.max(1, layout.tileSize * (hovered ? 0.028 : 0.014) * overlayScale), hovered ? 2.2 : 5.2);
   }
   ctx.restore();
 }
 
 function drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove = null) {
   if (layout.tileSize < 30) return;
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
     const hovered = sameTile(item, hoverMove);
     const frontier = item.cost >= maxMove;
     const rough = item.terrainCost > 1 || item.relief > 0 || item.elevation > 0.62;
-    const radius = Math.max(2.6, layout.tileSize * (hovered ? 0.070 : frontier ? 0.054 : 0.040));
-    ctx.globalAlpha = hovered ? 0.92 : frontier || rough ? 0.74 : 0.56;
+    const radius = Math.max(2.6, layout.tileSize * (hovered ? 0.070 : frontier ? 0.054 : 0.040) * overlayScale);
+    ctx.globalAlpha = Math.min(0.96, (hovered ? 0.92 : frontier || rough ? 0.74 : 0.56) * (overlayScale > 1 ? 1.10 : 1));
     ctx.fillStyle = item.road
       ? 'rgba(225, 250, 255, 0.92)'
       : item.supplied
@@ -2290,7 +2294,7 @@ function drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove = n
         : rough
           ? 'rgba(157, 91, 31, 0.54)'
           : 'rgba(126, 93, 38, 0.42)';
-    ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.014 * overlayScale);
     ctx.beginPath();
     ctx.arc(bounds.cx, bounds.cy + layout.halfTileHeight * 0.18, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -2300,6 +2304,7 @@ function drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove = n
 }
 
 function drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove = null) {
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   for (const item of reachable) {
@@ -2307,8 +2312,8 @@ function drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove = 
     const hovered = sameTile(item, hoverMove);
     const frontier = item.cost >= maxMove;
     const accent = movementTerrainAccent(item);
-    const radius = layout.tileSize * (hovered ? 0.92 : frontier ? 0.70 : 0.58);
-    const alpha = hovered ? 0.42 : frontier ? 0.27 : 0.18;
+    const radius = layout.tileSize * (hovered ? 0.92 : frontier ? 0.70 : 0.58) * overlayScale;
+    const alpha = Math.min(0.48, (hovered ? 0.42 : frontier ? 0.27 : 0.18) * (overlayScale > 1 ? 1.16 : 1));
     const glow = ctx.createRadialGradient(bounds.cx, bounds.cy, layout.tileSize * 0.08, bounds.cx, bounds.cy, radius);
     glow.addColorStop(0, accent.canopyCore.replace('ALPHA', String(alpha)));
     glow.addColorStop(0.52, accent.canopyMid.replace('ALPHA', String(alpha * 0.48)));
@@ -2320,6 +2325,7 @@ function drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove = 
 }
 
 function drawMovementReachWash(ctx, bounds, layout, item, maxMove, hovered = false) {
+  const overlayScale = movementOverlayScale(layout);
   const progress = Math.max(0, Math.min(1, item.cost / Math.max(1, maxMove)));
   const pressure = Math.max(0, Math.min(1, item.terrainPressure / 4.2));
   const palette = movementRadiusPalette(item, progress, pressure, hovered);
@@ -2330,10 +2336,10 @@ function drawMovementReachWash(ctx, bounds, layout, item, maxMove, hovered = fal
 
   ctx.save();
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = layout.tileSize * (hovered ? 0.22 : 0.12);
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.22 : 0.12) * overlayScale;
   fillTileDiamond(ctx, bounds, gradient, hovered ? 0.5 : 2.0);
-  strokeTileDiamond(ctx, bounds, palette.outerStroke || 'rgba(71, 42, 16, 0.30)', Math.max(1, layout.tileSize * (hovered ? 0.050 : 0.026)), hovered ? 0.5 : 2.2);
-  strokeTileDiamond(ctx, bounds, palette.innerStroke, Math.max(1, layout.tileSize * (hovered ? 0.030 : 0.016)), hovered ? 3 : 5);
+  strokeTileDiamond(ctx, bounds, palette.outerStroke || 'rgba(71, 42, 16, 0.30)', Math.max(1, layout.tileSize * (hovered ? 0.050 : 0.026) * overlayScale), hovered ? 0.5 : 2.2);
+  strokeTileDiamond(ctx, bounds, palette.innerStroke, Math.max(1, layout.tileSize * (hovered ? 0.030 : 0.016) * overlayScale), hovered ? 3 : 5);
   drawMovementTopographyCues(ctx, bounds, layout, item, progress, pressure, hovered);
   ctx.restore();
 }
@@ -2600,9 +2606,10 @@ function drawMovementTerrainInsignia(ctx, bounds, layout, item, hovered = false)
 
 function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
   const reachableSet = new Set(reachable.map((item) => tileKey(item.x, item.y)));
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   ctx.shadowColor = 'rgba(255, 218, 126, 0.28)';
-  ctx.shadowBlur = layout.tileSize * 0.12;
+  ctx.shadowBlur = layout.tileSize * 0.12 * overlayScale;
   for (const item of reachable) {
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       if (reachableSet.has(tileKey(item.x + dx, item.y + dy))) continue;
@@ -2613,6 +2620,7 @@ function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
 }
 
 function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
+  const overlayScale = movementOverlayScale(layout);
   const [start, end] = frontierEdgePoints(bounds, dx, dy);
   const typeColor = item.road
     ? 'rgba(128, 229, 255, 0.96)'
@@ -2625,25 +2633,25 @@ function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
     ? 'rgba(255, 236, 146, 1)'
     : 'rgba(255, 248, 190, 0.98)';
   ctx.strokeStyle = 'rgba(20, 74, 90, 0.78)';
-  ctx.lineWidth = Math.max(5, layout.tileSize * 0.136);
+  ctx.lineWidth = Math.max(5, layout.tileSize * 0.136 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
   ctx.strokeStyle = 'rgba(255, 255, 244, 0.74)';
-  ctx.lineWidth = Math.max(3, layout.tileSize * 0.090);
+  ctx.lineWidth = Math.max(3, layout.tileSize * 0.090 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.012);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.012);
   ctx.stroke();
   ctx.strokeStyle = commandGold;
-  ctx.lineWidth = Math.max(2.5, layout.tileSize * 0.062);
+  ctx.lineWidth = Math.max(2.5, layout.tileSize * 0.062 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.018);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.018);
   ctx.stroke();
   ctx.strokeStyle = typeColor;
-  ctx.lineWidth = Math.max(1.2, layout.tileSize * 0.028);
+  ctx.lineWidth = Math.max(1.2, layout.tileSize * 0.028 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y - layout.tileSize * 0.036);
   ctx.lineTo(end.x, end.y - layout.tileSize * 0.036);
@@ -2652,9 +2660,10 @@ function drawMovementBoundaryEdge(ctx, bounds, layout, item, dx, dy, maxMove) {
 }
 
 function drawMovementBoundaryStud(ctx, start, end, layout, color, frontier = false) {
+  const overlayScale = movementOverlayScale(layout);
   const mx = (start.x + end.x) * 0.5;
   const my = (start.y + end.y) * 0.5 - layout.tileSize * 0.032;
-  const r = Math.max(2.3, layout.tileSize * (frontier ? 0.045 : 0.034));
+  const r = Math.max(2.3, layout.tileSize * (frontier ? 0.045 : 0.034) * overlayScale);
   ctx.save();
   ctx.shadowColor = 'rgba(255, 224, 128, 0.28)';
   ctx.shadowBlur = layout.tileSize * 0.08;
@@ -2699,6 +2708,7 @@ function drawMovementBlockedApproaches(ctx, state, layout, reachable) {
 }
 
 function drawMovementBlockedHatch(ctx, bounds, layout, dx, dy, terrain, hardBlocked) {
+  const overlayScale = movementOverlayScale(layout);
   const [start, end] = frontierEdgePoints(bounds, dx, dy);
   const adjacent = {
     x: bounds.cx + (dx - dy) * layout.halfTileWidth,
@@ -2721,20 +2731,20 @@ function drawMovementBlockedHatch(ctx, bounds, layout, dx, dy, terrain, hardBloc
           : 'rgba(126, 78, 32, 0.66)';
   ctx.save();
   ctx.shadowColor = terrain === 'blight' ? 'rgba(130, 238, 104, 0.20)' : 'rgba(255, 218, 126, 0.14)';
-  ctx.shadowBlur = layout.tileSize * 0.04;
+  ctx.shadowBlur = layout.tileSize * 0.04 * overlayScale;
   ctx.strokeStyle = 'rgba(56, 34, 16, 0.58)';
-  ctx.lineWidth = Math.max(2, layout.tileSize * 0.040);
+  ctx.lineWidth = Math.max(2, layout.tileSize * 0.040 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
   ctx.strokeStyle = terrainColor;
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018 * overlayScale);
   for (let i = 1; i <= 3; i += 1) {
     const t = i / 4;
     const px = start.x + (end.x - start.x) * t;
     const py = start.y + (end.y - start.y) * t;
-    const length = layout.tileSize * (hardBlocked ? 0.18 : 0.13);
+    const length = layout.tileSize * (hardBlocked ? 0.18 : 0.13) * overlayScale;
     ctx.beginPath();
     ctx.moveTo(px - nx * length * 0.12, py - ny * length * 0.12);
     ctx.lineTo(px + nx * length, py + ny * length);
@@ -2763,13 +2773,14 @@ function drawMoveReachTile(ctx, bounds, layout, item, maxMove, hoverMove = null)
   const close = item.cost <= 1;
   const hovered = sameTile(item, hoverMove);
   const compact = layout.mapWidth < 560 || layout.tileSize < 44;
+  const overlayScale = movementOverlayScale(layout);
   const fill = item.road
-    ? (hovered ? 'rgba(118, 205, 235, 0.36)' : 'rgba(118, 186, 210, 0.18)')
+    ? (hovered ? 'rgba(118, 205, 235, 0.40)' : `rgba(118, 186, 210, ${overlayScale > 1 ? 0.24 : 0.18})`)
     : item.supplied
-      ? (hovered ? 'rgba(186, 245, 140, 0.27)' : 'rgba(186, 245, 140, 0.13)')
+      ? (hovered ? 'rgba(186, 245, 140, 0.32)' : `rgba(186, 245, 140, ${overlayScale > 1 ? 0.18 : 0.13})`)
     : close
-      ? (hovered ? 'rgba(255, 220, 122, 0.34)' : 'rgba(244, 205, 105, 0.17)')
-      : (hovered ? 'rgba(255, 230, 130, 0.30)' : 'rgba(255, 244, 176, 0.115)');
+      ? (hovered ? 'rgba(255, 220, 122, 0.38)' : `rgba(244, 205, 105, ${overlayScale > 1 ? 0.23 : 0.17})`)
+      : (hovered ? 'rgba(255, 230, 130, 0.34)' : `rgba(255, 244, 176, ${overlayScale > 1 ? 0.16 : 0.115})`);
   const stroke = item.road
     ? 'rgba(47, 116, 141, 0.42)'
     : item.supplied
@@ -2989,7 +3000,7 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
-  if (compact) return item.road || item.cost <= 1;
+  if (compact) return item.road || item.supplied || item.cost <= 2 || item.frontier || item.terrainCost > 1;
   if (item.road || item.cost <= 2) return true;
   return item.cost >= maxMove && tileNoise(item, 940) > 0.86;
 }
@@ -3036,16 +3047,19 @@ function drawAttackReachTile(ctx, bounds, layout, target) {
 function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
   const close = item.cost <= 1;
   const hovered = Boolean(options.hovered);
-  const prominent = hovered || item.road || item.cost <= 2;
+  const overlayScale = movementOverlayScale(layout);
+  const compactField = overlayScale > 1.05;
+  const prominent = hovered || item.road || item.cost <= 2 || (compactField && (item.supplied || item.frontier || item.terrainCost > 1));
   const markerY = bounds.cy + layout.halfTileHeight * 0.35;
-  const poleHeight = layout.tileSize * (hovered ? 0.34 : item.road ? 0.30 : 0.24);
+  const poleHeight = layout.tileSize * (hovered ? 0.34 : item.road ? 0.30 : 0.24) * overlayScale;
   const poleX = bounds.cx - layout.tileSize * 0.09;
   const bannerColor = item.road ? '#9be5ff' : close || hovered ? '#ffe08a' : '#f4c866';
   const rimColor = item.road ? 'rgba(27, 93, 122, 0.78)' : item.supplied ? 'rgba(69, 118, 47, 0.68)' : 'rgba(117, 77, 25, 0.68)';
   ctx.save();
   ctx.shadowColor = item.road ? 'rgba(53, 145, 176, 0.30)' : 'rgba(214, 151, 48, 0.24)';
-  ctx.shadowBlur = layout.tileSize * (hovered ? 0.14 : 0.08);
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.14 : 0.08) * overlayScale;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016 * overlayScale);
+  drawMovementDestinationPedestal(ctx, bounds, layout, item, hovered || prominent);
   if (prominent) {
     ctx.strokeStyle = 'rgba(61, 39, 18, 0.62)';
     ctx.beginPath();
@@ -3056,32 +3070,54 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
     ctx.strokeStyle = rimColor;
     ctx.beginPath();
     ctx.moveTo(poleX, markerY - poleHeight);
-    ctx.lineTo(poleX + layout.tileSize * 0.21, markerY - poleHeight * 0.92);
-    ctx.lineTo(poleX + layout.tileSize * 0.15, markerY - poleHeight * 0.66);
+    ctx.lineTo(poleX + layout.tileSize * 0.21 * overlayScale, markerY - poleHeight * 0.92);
+    ctx.lineTo(poleX + layout.tileSize * 0.15 * overlayScale, markerY - poleHeight * 0.66);
     ctx.lineTo(poleX, markerY - poleHeight * 0.74);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
   }
-  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item, hovered);
+  drawMoveCostCartouche(ctx, prominent ? bounds.cx + layout.tileSize * 0.10 * overlayScale : bounds.cx, prominent ? markerY - poleHeight * 0.22 : markerY - layout.tileSize * 0.08, layout, item, hovered || compactField);
   if (item.road) drawRoadChevron(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout);
   else if (item.supplied) drawSupplyLaurel(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   else drawFootstepPair(ctx, bounds.cx, markerY + layout.tileSize * 0.02, layout, close);
   ctx.restore();
 }
 
+function drawMovementDestinationPedestal(ctx, bounds, layout, item, active = false) {
+  const overlayScale = movementOverlayScale(layout);
+  const width = layout.tileSize * (active ? 0.34 : 0.26) * overlayScale;
+  const height = layout.tileSize * (active ? 0.095 : 0.070) * overlayScale;
+  const cy = bounds.cy + layout.halfTileHeight * 0.38;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = active ? 0.64 : 0.42;
+  ctx.fillStyle = item.road
+    ? 'rgba(167, 234, 255, 0.70)'
+    : item.supplied
+      ? 'rgba(218, 250, 160, 0.66)'
+      : item.terrainCost > 1
+        ? 'rgba(255, 212, 116, 0.66)'
+        : 'rgba(255, 234, 152, 0.58)';
+  ctx.beginPath();
+  ctx.ellipse(bounds.cx, cy, width, height, -0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawMoveCostCartouche(ctx, x, y, layout, item, large = false) {
-  const w = Math.max(16, layout.tileSize * (large ? 0.34 : 0.24));
-  const h = Math.max(10, layout.tileSize * (large ? 0.20 : 0.16));
+  const overlayScale = movementOverlayScale(layout);
+  const w = Math.max(16, layout.tileSize * (large ? 0.34 : 0.24) * overlayScale);
+  const h = Math.max(10, layout.tileSize * (large ? 0.20 : 0.16) * overlayScale);
   ctx.save();
   roundRectPath(ctx, x - w * 0.5, y - h * 0.5, w, h, h * 0.48);
   ctx.fillStyle = item.road ? 'rgba(230, 250, 255, 0.92)' : item.supplied ? 'rgba(246, 255, 223, 0.92)' : 'rgba(255, 247, 211, 0.92)';
   ctx.strokeStyle = item.road ? 'rgba(47, 116, 141, 0.64)' : item.supplied ? 'rgba(81, 138, 60, 0.56)' : 'rgba(151, 96, 29, 0.56)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012 * overlayScale);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = item.road ? '#174a60' : item.supplied ? '#315f25' : '#733f16';
-  ctx.font = `900 ${Math.max(8, layout.tileSize * (large ? 0.15 : 0.13))}px system-ui, sans-serif`;
+  ctx.font = `900 ${Math.max(8, layout.tileSize * (large ? 0.15 : 0.13) * overlayScale)}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(String(Math.round(item.cost)), x, y + h * 0.02);
@@ -3105,10 +3141,10 @@ function drawMoveReachGlimmer(ctx, bounds, layout, item, maxMove) {
 }
 
 function drawRoadChevron(ctx, cx, cy, layout) {
-  const size = layout.tileSize * 0.10;
+  const size = layout.tileSize * 0.10 * movementOverlayScale(layout);
   ctx.save();
   ctx.strokeStyle = 'rgba(28, 98, 126, 0.62)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018 * movementOverlayScale(layout));
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (let i = -1; i <= 1; i += 1) {
@@ -3123,11 +3159,12 @@ function drawRoadChevron(ctx, cx, cy, layout) {
 }
 
 function drawSupplyLaurel(ctx, cx, cy, layout, close) {
-  const size = layout.tileSize * (close ? 0.075 : 0.064);
+  const overlayScale = movementOverlayScale(layout);
+  const size = layout.tileSize * (close ? 0.075 : 0.064) * overlayScale;
   ctx.save();
   ctx.strokeStyle = close ? 'rgba(63, 111, 43, 0.58)' : 'rgba(70, 120, 52, 0.46)';
   ctx.fillStyle = close ? 'rgba(210, 232, 142, 0.70)' : 'rgba(198, 224, 130, 0.52)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.016 * overlayScale);
   for (const side of [-1, 1]) {
     ctx.beginPath();
     ctx.moveTo(cx + side * size * 0.32, cy + size * 0.68);
@@ -3145,20 +3182,21 @@ function drawSupplyLaurel(ctx, cx, cy, layout, close) {
 }
 
 function drawSupplySeal(ctx, bounds, layout, prominent = false) {
-  const r = Math.max(3, layout.tileSize * (prominent ? 0.070 : 0.052));
+  const overlayScale = movementOverlayScale(layout);
+  const r = Math.max(3, layout.tileSize * (prominent ? 0.070 : 0.052) * overlayScale);
   const cx = bounds.cx + layout.tileSize * 0.24;
   const cy = bounds.cy - layout.halfTileHeight * 0.28;
   ctx.save();
   ctx.globalAlpha = prominent ? 0.90 : 0.64;
   ctx.fillStyle = 'rgba(248, 255, 226, 0.84)';
   ctx.strokeStyle = 'rgba(70, 118, 45, 0.58)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012 * overlayScale);
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.strokeStyle = 'rgba(62, 112, 42, 0.76)';
-  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014);
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014 * overlayScale);
   ctx.beginPath();
   ctx.moveTo(cx - r * 0.58, cy + r * 0.18);
   ctx.quadraticCurveTo(cx, cy - r * 0.62, cx + r * 0.58, cy + r * 0.18);
@@ -3167,7 +3205,7 @@ function drawSupplySeal(ctx, bounds, layout, prominent = false) {
 }
 
 function drawFootstepPair(ctx, cx, cy, layout, close) {
-  const size = layout.tileSize * (close ? 0.060 : 0.052);
+  const size = layout.tileSize * (close ? 0.060 : 0.052) * movementOverlayScale(layout);
   ctx.save();
   ctx.fillStyle = close ? 'rgba(133, 83, 24, 0.48)' : 'rgba(119, 86, 35, 0.38)';
   for (const [dx, dy, rotation] of [[-0.06, 0, -0.34], [0.07, -0.05, 0.32]]) {
@@ -3182,14 +3220,21 @@ function shouldDrawSupplySeal(item) {
   return item.road || item.cost <= 2 || item.frontier || tileNoise(item, 955) > 0.72;
 }
 
+function movementOverlayScale(layout) {
+  if (layout.mapWidth < 560 || layout.tileSize < 44) return 1.30;
+  if (layout.mapWidth < 700 || layout.tileSize < 52) return 1.14;
+  return 1;
+}
+
 function drawCommandHalo(ctx, layout, unit, active) {
   const bounds = tileBounds(layout, unit.x, unit.y);
+  const overlayScale = movementOverlayScale(layout);
   ctx.save();
   ctx.shadowColor = active ? 'rgba(255, 224, 138, 0.70)' : 'rgba(120, 95, 70, 0.30)';
-  ctx.shadowBlur = layout.tileSize * (active ? 0.22 : 0.12);
+  ctx.shadowBlur = layout.tileSize * (active ? 0.22 : 0.12) * overlayScale;
   fillTileDiamond(ctx, bounds, active ? 'rgba(255, 224, 138, 0.20)' : 'rgba(120, 95, 70, 0.12)', 5);
-  strokeTileDiamond(ctx, bounds, active ? 'rgba(255, 231, 151, 0.82)' : 'rgba(138, 114, 85, 0.44)', Math.max(2, layout.tileSize * 0.05), 5);
-  strokeTileDiamond(ctx, bounds, active ? 'rgba(77, 43, 17, 0.48)' : 'rgba(77, 43, 17, 0.26)', Math.max(1, layout.tileSize * 0.018), 12);
+  strokeTileDiamond(ctx, bounds, active ? 'rgba(255, 231, 151, 0.88)' : 'rgba(138, 114, 85, 0.44)', Math.max(2, layout.tileSize * 0.05 * overlayScale), 5);
+  strokeTileDiamond(ctx, bounds, active ? 'rgba(77, 43, 17, 0.56)' : 'rgba(77, 43, 17, 0.26)', Math.max(1, layout.tileSize * 0.018 * overlayScale), 12);
   ctx.restore();
 }
 

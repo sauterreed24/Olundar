@@ -2796,6 +2796,19 @@ button:hover:not(:disabled) {
   min-width: 0;
 }
 
+.selection-dossier {
+  display: block;
+}
+
+.selection-dossier-summary {
+  display: none;
+}
+
+.selection-dossier-body {
+  display: grid;
+  gap: 0.52rem;
+}
+
 .selection-portrait {
   position: relative;
   display: grid;
@@ -4102,6 +4115,100 @@ button:hover:not(:disabled) {
 }
 
 @media (max-width: 620px) {
+  #selectionPanel.selection-panel-collapsed {
+    padding: 0.42rem;
+  }
+
+  .selection-dossier {
+    display: block;
+  }
+
+  .selection-dossier-summary {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.48rem;
+    align-items: center;
+    min-height: 3.2rem;
+    padding: 0.34rem 0.42rem;
+    border: 1px solid rgba(38, 121, 132, 0.12);
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, rgba(255,255,253,0.96), rgba(235, 248, 224, 0.86)),
+      radial-gradient(circle at 16% 0%, rgba(255,255,255,0.72), transparent 8rem);
+    color: #223523;
+    cursor: pointer;
+    list-style: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.86),
+      0 5px 12px rgba(50, 77, 58, 0.08);
+  }
+
+  .selection-dossier-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .selection-dossier-summary::after {
+    content: "+";
+    position: absolute;
+    right: 0.86rem;
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid rgba(185, 54, 46, 0.22);
+    border-radius: 50%;
+    background: rgba(255,255,255,0.62);
+    color: #8d3024;
+    font-weight: 900;
+  }
+
+  .selection-dossier[open] .selection-dossier-summary::after {
+    content: "-";
+  }
+
+  .selection-dossier-summary .selection-portrait {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .selection-dossier-summary span {
+    display: grid;
+    min-width: 0;
+    padding-right: 2rem;
+  }
+
+  .selection-dossier-summary small {
+    color: #5a7454;
+    font-size: 0.54rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .selection-dossier-summary b {
+    overflow: hidden;
+    color: #8d3024;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.95rem;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .selection-dossier-summary em {
+    overflow: hidden;
+    color: #4f614a;
+    font-size: 0.68rem;
+    font-style: normal;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .selection-dossier-body {
+    margin-top: 0.54rem;
+  }
+
   .topbar {
     align-items: center;
     flex-direction: row;

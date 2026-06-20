@@ -958,6 +958,7 @@ function renderObjectives() {
 function renderSelection() {
   const selection = describeSelection(state);
   if (!selection) {
+    selectionPanel.classList.remove('selection-panel-collapsed');
     const readyUnits = getReadyOlundarUnits(state).length;
     selectionPanel.innerHTML = `
       <div class="command-kicker">Imperial command</div>
@@ -972,17 +973,33 @@ function renderSelection() {
     return;
   }
   const kind = selection.unit ? 'Unit' : 'Structure';
+  const collapseSelectionDossier = isMobileIntelDrawerMode();
+  selectionPanel.classList.toggle('selection-panel-collapsed', collapseSelectionDossier);
+  const mobileCollapsed = collapseSelectionDossier ? '' : ' open';
+  const portrait = selectionPortraitMarkup(selection);
   selectionPanel.innerHTML = `
-    <div class="selection-command">
-      ${selectionPortraitMarkup(selection)}
-      <div>
-        <div class="command-kicker">${escapeHtml(kind)} selected</div>
-        <h2>${escapeHtml(selection.title)}</h2>
-        <p class="muted">${escapeHtml(selection.subtitle)}</p>
+    <details class="selection-dossier"${mobileCollapsed}>
+      <summary class="selection-dossier-summary">
+        ${portrait}
+        <span>
+          <small>${escapeHtml(kind)} dossier</small>
+          <b>${escapeHtml(selection.title)}</b>
+          <em>${escapeHtml(selection.subtitle)}</em>
+        </span>
+      </summary>
+      <div class="selection-dossier-body">
+        <div class="selection-command">
+          ${portrait}
+          <div>
+            <div class="command-kicker">${escapeHtml(kind)} selected</div>
+            <h2>${escapeHtml(selection.title)}</h2>
+            <p class="muted">${escapeHtml(selection.subtitle)}</p>
+          </div>
+        </div>
+        ${selectionStatMarkup(selection)}
+        <p>${escapeHtml(selection.body)}</p>
       </div>
-    </div>
-    ${selectionStatMarkup(selection)}
-    <p>${escapeHtml(selection.body)}</p>
+    </details>
   `;
 }
 
