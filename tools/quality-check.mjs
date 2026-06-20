@@ -866,6 +866,28 @@ check('faction promise demands create answer or grievance follow-through', () =>
   assert(mireAfter.memory.grievances > beforeGrievances, 'Ignored demand should create grievance memory.');
   assert(mireState.factions.olundar.relations.mire < beforeMireRelation, 'Ignored demand should cool relations.');
   assert(mireAfter.demandHistory.some((demand) => demand.id === 'mireGuideStores' && demand.status === 'ignored'), 'Ignored demand should remain in short ledger history.');
+  assert(mireAfter.memory.records.some((record) => record.label === 'Guide Stores Vanish'), 'Ignored Mire demand should trigger a raid-style enforcement memory.');
+
+  const enforcementState = readyState('quality-demand-enforcement');
+  assert(makeDiplomaticPromise(enforcementState, 'veyr', 'veyrCaravanFund').ok, 'Veyr enforcement setup promise failed.');
+  enforcementState.factions.olundar.trades.veyr = true;
+  enforcementState.factions.veyr.trades.olundar = true;
+  enforcementState.factions.olundar.pacts.veyr = true;
+  enforcementState.factions.veyr.pacts.olundar = true;
+  enforcementState.factions.olundar.fieldOrders.veyr = 'reinforceCapital';
+  enforcementState.turn += 3;
+  const beforeEnforcementGold = enforcementState.factions.olundar.resources.gold;
+  const beforeEnforcementFood = enforcementState.factions.olundar.resources.food;
+  const ignoredVeyr = resolvePromiseDemand(enforcementState, 'veyr', 'veyrRouteTolls', 'ignore');
+  assert(ignoredVeyr.ok, ignoredVeyr.reason || 'Veyr enforcement ignore failed.');
+  assert(!enforcementState.factions.olundar.trades.veyr && !enforcementState.factions.veyr.trades.olundar, 'Ignored demand should trigger a trade embargo.');
+  assert(!enforcementState.factions.olundar.pacts.veyr && !enforcementState.factions.veyr.pacts.olundar, 'Ignored demand should dissolve an active Survival Pact under grievance pressure.');
+  assert(!enforcementState.factions.olundar.fieldOrders.veyr, 'Dissolved pacts should clear active field orders.');
+  assert(enforcementState.factions.olundar.resources.gold < beforeEnforcementGold && enforcementState.factions.olundar.resources.food < beforeEnforcementFood, 'Broken-promise enforcement should raid relevant stores.');
+  const veyrLedger = getDiplomacyLedger(enforcementState).entries.find((entry) => entry.id === 'veyr');
+  assert(veyrLedger.memory.records.some((record) => record.label === 'Trade Embargo'), 'Broken-promise enforcement should record the trade embargo.');
+  assert(veyrLedger.memory.records.some((record) => record.label === 'Pact Dissolved'), 'Broken-promise enforcement should record pact dissolution.');
+  assert(veyrLedger.memory.records.some((record) => record.label === 'Caravan Raid'), 'Broken-promise enforcement should record the raid penalty.');
 
   const poorState = readyState('quality-demand-poor');
   assert(makeDiplomaticPromise(poorState, 'dawn', 'dawnWallGuard').ok, 'Poor demand setup promise failed.');

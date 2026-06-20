@@ -2647,11 +2647,58 @@ export function resolvePromiseDemand(state, targetFaction, demandId, choiceId) {
     addMessage(state, `${target.name} resents the ignored demand: ${demand.name}.`, 'danger');
     recordDiplomacy(state, targetFaction, demand.id, `Ignored: ${demand.name}`, detail, 'danger');
     recordDiplomaticMemory(state, targetFaction, 'grievance', `Ignored: ${demand.name}`, detail, demand.memory + 1);
+    const enforcement = enforceBrokenPromise(state, targetFaction, demand);
     updateVisibility(state);
-    return { ok: true, reason: detail, outcome: { tone: 'danger', text: detail } };
+    return { ok: true, reason: enforcement?.detail || detail, outcome: { tone: 'danger', text: enforcement?.detail || detail, enforcement } };
   }
 
   return { ok: false, reason: 'Unknown demand response.' };
+}
+
+function enforceBrokenPromise(state, targetFaction, demand) {
+  const actor = state.factions.olundar;
+  const target = state.factions[targetFaction];
+  const memory = ensureDiplomacyMemory(state, targetFaction);
+  const penalties = [];
+  if (actor.trades?.[targetFaction] || target.trades?.olundar) {
+    delete actor.trades[targetFaction];
+    delete target.trades.olundar;
+    penalties.push(`${target.name} closes trade routes in a promise embargo.`);
+    recordDiplomacy(state, targetFaction, `${demand.id}:embargo`, 'Trade embargoed', `${target.name} cut trade after Olundar ignored ${demand.name}.`, 'danger');
+    recordDiplomaticMemory(state, targetFaction, 'grievance', 'Trade Embargo', `${target.name} enforced the broken promise by closing trade routes.`, 1);
+  }
+  if (actor.pacts?.[targetFaction] && memory.grievances >= 3) {
+    delete actor.pacts[targetFaction];
+    delete target.pacts.olundar;
+    delete actor.fieldOrders[targetFaction];
+    penalties.push(`${target.name} dissolves the Survival Pact until trust is repaired.`);
+    recordDiplomacy(state, targetFaction, `${demand.id}:pactDissolved`, 'Survival Pact dissolved', `${target.name} dissolved the pact after stacked broken-promise grievances.`, 'danger');
+    recordDiplomaticMemory(state, targetFaction, 'grievance', 'Pact Dissolved', `${target.name} withdrew shared sight and field orders after Olundar broke the follow-through demand.`, 2);
+  }
+  if (!actor.trades?.[targetFaction] && !actor.pacts?.[targetFaction]) {
+    const raid = brokenPromiseRaidPenalty(targetFaction);
+    applyResourceLoss(actor.resources, raid.loss);
+    penalties.push(`${target.name} sanctions border stores: ${formatCost(raid.loss)} lost.`);
+    recordDiplomacy(state, targetFaction, `${demand.id}:raid`, raid.label, `${target.name} answered the ignored promise with ${raid.detail}.`, 'danger');
+    recordDiplomaticMemory(state, targetFaction, 'grievance', raid.label, `${target.name} enforced the broken promise with ${raid.detail}.`, 1);
+  }
+  if (!penalties.length) return null;
+  const detail = penalties.join(' ');
+  addMessage(state, detail, 'danger');
+  return { detail, penalties };
+}
+
+function brokenPromiseRaidPenalty(targetFaction) {
+  if (targetFaction === 'dawn') return { label: 'Border Stores Withheld', detail: 'a defensive embargo on frontier stone and wood', loss: { wood: 8, stone: 6 } };
+  if (targetFaction === 'veyr') return { label: 'Caravan Raid', detail: 'a fast caravan raid on gold and food stores', loss: { gold: 12, food: 10 } };
+  if (targetFaction === 'mire') return { label: 'Guide Stores Vanish', detail: 'marsh guides pulling food and influence support', loss: { food: 8, influence: 1 } };
+  return { label: 'Promise Sanction', detail: 'a border sanction on stores', loss: { gold: 8 } };
+}
+
+function applyResourceLoss(resources, loss = {}) {
+  for (const [resource, amount] of Object.entries(loss)) {
+    resources[resource] = Math.max(0, (resources[resource] || 0) - amount);
+  }
 }
 
 function applyPromiseDemandAnswer(state, demand) {
