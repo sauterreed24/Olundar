@@ -2745,6 +2745,7 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const streamlinedOverlay = shouldStreamlineMovementOverlay(layout, reachable, hoverMove);
   ctx.save();
   drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove, streamlinedOverlay);
+  drawSelectedMovementCommandAegis(ctx, layout, unit, reachable, def.move, hoverMove);
   drawCommandRangeFrontier(ctx, layout, reachable, def.move);
   if (!streamlinedOverlay) {
     drawMovementBlockedApproaches(ctx, state, layout, reachable);
@@ -2765,6 +2766,162 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
 function shouldStreamlineMovementOverlay(layout, reachable, hoverMove) {
   if (hoverMove || reachable.length <= 4) return false;
   return layout.canvasWidth * layout.canvasHeight >= 1100000;
+}
+
+function drawSelectedMovementCommandAegis(ctx, layout, unit, reachable, maxMove, hoverMove = null) {
+  if (!reachable.length) return;
+  const origin = tileBounds(layout, unit.x, unit.y);
+  const color = FACTION_COLORS[unit.faction] || '#f0c866';
+  const overlayScale = movementOverlayScale(layout);
+  const compact = layout.mapWidth < 620 || layout.tileSize < 42;
+  const routeLimit = compact ? 4 : 7;
+  const routes = selectedCommandAegisRoutes(reachable, maxMove, routeLimit, hoverMove);
+  ctx.save();
+  drawCommandAegisSourceField(ctx, origin, layout, color, overlayScale);
+  for (const item of routes) drawCommandAegisRoute(ctx, layout, origin, item, maxMove, sameTile(item, hoverMove), overlayScale);
+  drawCommandAegisLaurel(ctx, origin, layout, color, overlayScale, compact);
+  ctx.restore();
+}
+
+function selectedCommandAegisRoutes(reachable, maxMove, limit, hoverMove = null) {
+  const scored = reachable
+    .map((item) => ({
+      item,
+      score: selectedCommandAegisScore(item, maxMove, sameTile(item, hoverMove))
+    }))
+    .sort((a, b) => b.score - a.score || a.item.cost - b.item.cost);
+  return scored.slice(0, limit).map((entry) => entry.item);
+}
+
+function selectedCommandAegisScore(item, maxMove, hovered = false) {
+  let score = hovered ? 100 : 0;
+  if (item.frontier || item.cost >= maxMove) score += 22;
+  if (item.road) score += 16;
+  if (item.supplied) score += 11;
+  if (item.terrainCost > 1 || item.relief > 0.35) score += 9;
+  score += Math.min(14, item.cost * 2.8);
+  score += Math.max(0, item.elevation - 0.5) * 8;
+  return score;
+}
+
+function drawCommandAegisSourceField(ctx, origin, layout, color, overlayScale) {
+  const radius = layout.tileSize * 1.24 * overlayScale;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const glow = ctx.createRadialGradient(origin.cx, origin.cy, layout.tileSize * 0.10, origin.cx, origin.cy, radius);
+  glow.addColorStop(0, colorMix(color, '#fff6b5', 0.54).replace('rgb', 'rgba').replace(')', ', 0.40)'));
+  glow.addColorStop(0.42, 'rgba(255, 225, 113, 0.17)');
+  glow.addColorStop(1, 'rgba(255, 225, 113, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(origin.cx - radius, origin.cy - radius, radius * 2, radius * 2);
+  ctx.restore();
+}
+
+function drawCommandAegisRoute(ctx, layout, origin, item, maxMove, hovered, overlayScale) {
+  const route = item.route?.length ? item.route.map(tileFromKey) : [{ x: item.x, y: item.y }];
+  if (!route.length) return;
+  const points = [
+    { x: origin.cx, y: origin.cy + layout.halfTileHeight * 0.12 },
+    ...route.map((step) => {
+      const center = tileCenter(layout, step.x, step.y);
+      return { x: center.x, y: center.y + layout.halfTileHeight * 0.14 };
+    })
+  ];
+  const accent = item.road
+    ? 'rgba(114, 219, 247, ALPHA)'
+    : item.supplied
+      ? 'rgba(204, 248, 121, ALPHA)'
+      : item.terrainCost > 1 || item.frontier
+        ? 'rgba(255, 200, 82, ALPHA)'
+        : 'rgba(255, 232, 142, ALPHA)';
+  const alpha = hovered ? 0.72 : item.frontier || item.road ? 0.46 : 0.32;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = accent.replace('ALPHA', String(Math.min(0.28, alpha * 0.52)));
+  ctx.shadowBlur = layout.tileSize * (hovered ? 0.11 : 0.065) * overlayScale;
+  ctx.strokeStyle = 'rgba(50, 32, 16, 0.30)';
+  ctx.lineWidth = Math.max(2, layout.tileSize * (hovered ? 0.070 : 0.050) * overlayScale);
+  drawAegisRoutePath(ctx, points, layout);
+  ctx.stroke();
+  ctx.strokeStyle = accent.replace('ALPHA', String(alpha));
+  ctx.lineWidth = Math.max(1.2, layout.tileSize * (hovered ? 0.034 : 0.024) * overlayScale);
+  ctx.setLineDash([layout.tileSize * 0.18 * overlayScale, layout.tileSize * 0.12 * overlayScale]);
+  drawAegisRoutePath(ctx, points, layout);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const target = tileBounds(layout, item.x, item.y);
+  drawCommandAegisDestinationSeal(ctx, target, layout, item, maxMove, hovered, overlayScale);
+  ctx.restore();
+}
+
+function drawAegisRoutePath(ctx, points, layout) {
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const point = points[i];
+    const midX = (prev.x + point.x) * 0.5;
+    const midY = (prev.y + point.y) * 0.5 - layout.tileSize * 0.035;
+    ctx.quadraticCurveTo(midX, midY, point.x, point.y);
+  }
+}
+
+function drawCommandAegisDestinationSeal(ctx, bounds, layout, item, maxMove, hovered, overlayScale) {
+  const frontier = item.frontier || item.cost >= maxMove;
+  const r = Math.max(3.4, layout.tileSize * (hovered ? 0.074 : frontier ? 0.058 : 0.046) * overlayScale);
+  const cx = bounds.cx;
+  const cy = bounds.cy + layout.halfTileHeight * 0.22;
+  ctx.save();
+  ctx.fillStyle = item.road
+    ? 'rgba(232, 252, 255, 0.94)'
+    : item.supplied
+      ? 'rgba(241, 255, 196, 0.92)'
+      : 'rgba(255, 244, 177, 0.92)';
+  ctx.strokeStyle = item.road ? 'rgba(28, 110, 148, 0.72)' : 'rgba(117, 70, 20, 0.66)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.014 * overlayScale);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = frontier ? '#8f2418' : item.road ? '#156c8f' : '#79501d';
+  ctx.font = `900 ${Math.max(6, r * 1.05)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(Math.max(0, Math.round(maxMove - item.cost))), cx, cy + r * 0.04, r * 1.45);
+  ctx.restore();
+}
+
+function drawCommandAegisLaurel(ctx, origin, layout, color, overlayScale, compact) {
+  const rx = layout.tileSize * (compact ? 0.43 : 0.52) * overlayScale;
+  const ry = layout.tileSize * (compact ? 0.17 : 0.20) * overlayScale;
+  const cy = origin.cy + layout.halfTileHeight * 0.26;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(255, 224, 128, 0.38)';
+  ctx.shadowBlur = layout.tileSize * 0.08 * overlayScale;
+  ctx.strokeStyle = colorMix(color, '#fff2a8', 0.42);
+  ctx.lineWidth = Math.max(1.4, layout.tileSize * 0.026 * overlayScale);
+  ctx.beginPath();
+  ctx.ellipse(origin.cx, cy, rx, ry, 0, Math.PI * 0.12, Math.PI * 0.88);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(origin.cx, cy, rx, ry, 0, Math.PI * 1.12, Math.PI * 1.88);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(95, 59, 20, 0.56)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012 * overlayScale);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 4; i += 1) {
+      const a = side < 0 ? Math.PI * (0.23 + i * 0.13) : Math.PI * (1.23 + i * 0.13);
+      const px = origin.cx + Math.cos(a) * rx;
+      const py = cy + Math.sin(a) * ry;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + side * layout.tileSize * 0.075 * overlayScale, py - layout.tileSize * 0.055 * overlayScale);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function collectReachableTiles(state, unit, move) {
