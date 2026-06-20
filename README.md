@@ -31,7 +31,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
 - Faction-specific promises for Dawnward wall guards, Veyr war caravans, and Mireclan marsh routes, each with distinct costs, effects, and delayed follow-through demands.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
-- Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
+- Pact-based allied field orders for defending Olundar roads, reinforcing the capital, harassing Deadwalker structures, or intercepting Hollow Crown marches.
 - Compact strategic map lenses for blight, roads, supply reach, Survival Pact vision, and aftermath mission targets.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
@@ -39,7 +39,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Attack forecasts that show damage, range, target HP, terrain/fortify defense, siege bonuses, and portal reformation before the player commits.
 - Last Strike combat feedback that summarizes the attacker, target, damage, HP change, portal reformation, and a visible impact marker on the struck map tile.
 - Player units: Pathfinder Scout, Shield Legionary, Spear Guard, Archer, Equite Cavalry, Field Engineer, and Onager Crew.
-- Buildings: City Center, Farms, Lumber Camps, Mines, Barracks, Archery Yard, Stable, Workshop, Watchtower, Walls, Roads, Shrine, and Outpost.
+- Buildings: City Center, Farms, Lumber Camps, Mines, Barracks, Archery Yard, Stable, Workshop, Watchtower, Walls, Roads, Shrine, Rally Banner, and Outpost.
 - Building upgrades that increase durability, vision, income, training capacity, and city housing without adding tedious micromanagement.
 - Deadwalker civilization: Bone Portal, Bone Pits, Grave Forges, Necropolises, Bone Thralls, Corpse Archers, Grave Knights, and Vorgath the Hollow Crown.
 - Diplomacy with the Dawnward League, Veyr Dominion, and Mireclan Holds.
@@ -172,6 +172,6 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Let allied field orders intercept incoming marches so a coalition can physically blunt the Hollow Crown's columns before they reach Olundar.
-2. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
-3. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
+1. Add Playwright smoke tests for campaign start, scout movement, and end-turn flow.
+2. Split `main.js` and `render.js` into smaller modules for easier maintenance.
+3. Let allied intercept orders slow march momentum when they destroy enough of a column before it reaches Olundar.
