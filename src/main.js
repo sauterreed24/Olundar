@@ -1509,9 +1509,23 @@ function renderMapTurnReport() {
     mapTurnReport.innerHTML = '';
     return;
   }
-  const glance = turnReport.metrics.slice(0, 2).map((item) => `
+  const glance = turnReport.metrics.map((item) => `
     <span><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>
   `).join('');
+  const deltas = turnReport.deltas.length ? `
+    <div class="map-turn-report-deltas">
+      ${turnReport.deltas.slice(0, 3).map((item) => `
+        <span class="${escapeHtml(item.tone)}"><b>${escapeHtml(item.value)}</b> ${escapeHtml(item.label)}</span>
+      `).join('')}
+    </div>
+  ` : '';
+  const notes = turnReport.messages.length ? `
+    <div class="map-turn-report-notes">
+      ${turnReport.messages.slice(0, 2).map((message) => `
+        <p class="${escapeHtml(message.tone || 'info')}">${escapeHtml(message.text)}</p>
+      `).join('')}
+    </div>
+  ` : '';
   mapTurnReport.className = `map-turn-report ${turnReport.tone}`;
   mapTurnReport.innerHTML = `
     <div class="map-turn-report-head">
@@ -1521,6 +1535,8 @@ function renderMapTurnReport() {
     </div>
     <p>${escapeHtml(turnReport.summary)}</p>
     <div class="map-turn-report-glance">${glance}</div>
+    ${deltas}
+    ${notes}
     <div class="map-turn-report-actions">
       <button type="button" data-action="continue-turn-orders">Continue orders</button>
     </div>
@@ -2013,7 +2029,7 @@ function turnReportCard() {
   `).join('');
   const deltas = turnReport.deltas.length ? `
     <div class="turn-report-deltas">
-      ${turnReport.deltas.map((item) => `<span class="${escapeHtml(item.tone)}"><b>${escapeHtml(item.value)}</b>${escapeHtml(item.label)}</span>`).join('')}
+      ${turnReport.deltas.map((item) => `<span class="${escapeHtml(item.tone)}"><b>${escapeHtml(item.value)}</b> ${escapeHtml(item.label)}</span>`).join('')}
     </div>
   ` : '';
   const messages = turnReport.messages.length ? `
