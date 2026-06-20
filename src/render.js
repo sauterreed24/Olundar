@@ -388,6 +388,7 @@ function drawTiles(ctx, state, layout) {
   drawGeographyOverlays(ctx, state, layout, sortedTiles);
   drawTerrainCanopyHighlights(ctx, state, layout, sortedTiles);
   if (budget.cinematicRelief) drawCinematicTerrainRelief(ctx, state, layout, sortedTiles);
+  drawRevealedTerrainPresenceGrade(ctx, state, layout, sortedTiles);
   if (budget.terrainVignettes) drawTerrainLandmarkVignettes(ctx, state, layout, sortedTiles);
   drawRevealedFrontierRim(ctx, state, layout, sortedTiles);
 }
@@ -535,8 +536,8 @@ function drawWorldLight(ctx, state, layout) {
     layout.frameY + layout.mapHeight * 0.10,
     Math.max(layout.mapWidth, layout.mapHeight) * 0.74
   );
-  glow.addColorStop(0, 'rgba(255, 244, 190, 0.18)');
-  glow.addColorStop(0.44, 'rgba(255, 230, 152, 0.05)');
+  glow.addColorStop(0, 'rgba(255, 244, 190, 0.12)');
+  glow.addColorStop(0.44, 'rgba(255, 230, 152, 0.028)');
   glow.addColorStop(1, 'rgba(255, 230, 152, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
@@ -575,8 +576,8 @@ function drawImperialColorGrade(ctx, state, layout) {
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   const sun = ctx.createLinearGradient(layout.frameX, layout.frameY, layout.frameX + layout.mapWidth * 0.66, layout.frameY + layout.mapHeight * 0.72);
-  sun.addColorStop(0, 'rgba(255, 255, 236, 0.18)');
-  sun.addColorStop(0.34, 'rgba(255, 237, 167, 0.055)');
+  sun.addColorStop(0, 'rgba(255, 255, 236, 0.11)');
+  sun.addColorStop(0.34, 'rgba(255, 237, 167, 0.028)');
   sun.addColorStop(1, 'rgba(255, 237, 167, 0)');
   ctx.fillStyle = sun;
   ctx.fillRect(layout.frameX, layout.frameY, layout.mapWidth, layout.mapHeight);
@@ -1807,6 +1808,54 @@ function drawTileRelief(ctx, tile, x, y, s, visible) {
     ctx.fill();
   }
   ctx.restore();
+}
+
+function drawRevealedTerrainPresenceGrade(ctx, state, layout, sortedTiles) {
+  ctx.save();
+  for (const tile of sortedTiles) {
+    if (!isVisible(state, tile.x, tile.y)) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const palette = terrainPalette(tile.terrain);
+    const pressure = Math.min(1, Math.max(0, (tile.elevation || 0) * 0.72 + terrainReliefRank(tile.terrain) * 0.08));
+    const alpha = terrainPresenceAlpha(tile.terrain, pressure);
+
+    ctx.globalCompositeOperation = tile.terrain === 'river' ? 'screen' : 'multiply';
+    ctx.globalAlpha = alpha;
+    fillTileDiamond(ctx, bounds, terrainPresenceColor(tile.terrain, palette), layout.tileSize * 0.035);
+
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = tile.terrain === 'river' ? 0.28 : 0.16 + pressure * 0.08;
+    strokeTileDiamond(ctx, bounds, colorMix(palette.light, '#ffffff', 0.38), Math.max(1, layout.tileSize * 0.018), layout.tileSize * 0.055);
+
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.10 + pressure * 0.08;
+    ctx.strokeStyle = colorMix(palette.shadow, '#24311f', tile.terrain === 'river' ? 0.08 : 0.18);
+    ctx.lineWidth = Math.max(1, layout.tileSize * (tile.terrain === 'mountains' ? 0.032 : 0.020));
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx + bounds.halfW * 0.88, bounds.cy - bounds.halfH * 0.02);
+    ctx.lineTo(bounds.cx, bounds.cy + bounds.halfH * 0.86);
+    ctx.lineTo(bounds.cx - bounds.halfW * 0.88, bounds.cy + bounds.halfH * 0.02);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function terrainPresenceAlpha(terrain, pressure) {
+  if (terrain === 'river') return 0.25;
+  if (terrain === 'forest') return 0.24 + pressure * 0.06;
+  if (terrain === 'hills' || terrain === 'mountains') return 0.22 + pressure * 0.08;
+  if (terrain === 'marsh') return 0.19 + pressure * 0.05;
+  if (terrain === 'blight') return 0.27 + pressure * 0.06;
+  return 0.17 + pressure * 0.05;
+}
+
+function terrainPresenceColor(terrain, palette) {
+  if (terrain === 'river') return colorMix(palette.light, '#ffffff', 0.30);
+  if (terrain === 'forest') return colorMix(palette.base, palette.shadow, 0.24);
+  if (terrain === 'hills' || terrain === 'mountains') return colorMix(palette.base, palette.shadow, 0.16);
+  if (terrain === 'marsh') return colorMix(palette.base, '#9fd46f', 0.18);
+  if (terrain === 'blight') return colorMix(palette.base, '#9cf38a', 0.18);
+  return colorMix(palette.base, '#f8df6f', 0.18);
 }
 
 function drawTerrainTexture(ctx, tile, x, y, s, visible) {
