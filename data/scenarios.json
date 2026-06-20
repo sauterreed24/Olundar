@@ -312,5 +312,29 @@
         "text": "Destroy the Bone Portal in the generated frontier."
       }
     ]
+  },
+  "weeklyChallenge": {
+    "id": "weeklyChallenge",
+    "name": "Weekly Challenge",
+    "seed": "Weekly-Challenge",
+    "difficultyId": "legion",
+    "procedural": true,
+    "challenge": true,
+    "text": "A locked weekly procedural campaign seed for comparable runs, leaderboard exports, and one-more-campaign replayability.",
+    "victoryConditions": [
+      {
+        "id": "weeklyPreviewPacts",
+        "type": "holdPacts",
+        "target": 1,
+        "label": "Bind the weekly pact",
+        "text": "The active weekly seed chooses its own pact target."
+      },
+      {
+        "id": "weeklyPreviewPortal",
+        "type": "portal",
+        "label": "End the weekly war",
+        "text": "Destroy the Bone Portal on this week's locked frontier."
+      }
+    ]
   }
 }

@@ -29,6 +29,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getCampaignRecap,
+  getChallengeLeaderboardExport,
   getAftermathMissions,
   getCrisisCouncil,
   getDeadwalkerCampaign,
@@ -40,6 +41,7 @@ import {
   getSiegeOperations,
   getStrategicMapLens,
   getWarCouncil,
+  getWeeklyChallenge,
   isTileSupplied,
   makeDiplomaticPromise,
   moveUnit,
@@ -1243,6 +1245,7 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(renderSource.includes('function shouldShowMoveCostCartouche') && renderSource.includes('const compactAnchor = compact && (frontier || punishingTerrain || item.road || item.cost <= 1);') && renderSource.includes('return frontier || punishingTerrain || (logisticMove && closeMove) || compactAnchor;') && renderSource.includes('const roadAnchor = item.road && (compact || item.cost <= 2 || frontier);') && renderSource.includes('const suppliedAnchor = item.supplied && (compact || item.cost <= 2 || frontier);'), 'Selected movement overlays should show deterministic cost cartouches for compact, frontier, rough, road, and supplied movement decisions.');
   assert(mainSource.includes('data-map-help-action="opening"') && mainSource.includes('data-map-help-action="deadwalker"') && mainSource.includes('data-map-help-action="end-turn-review"') && mainSource.includes("mapHelp?.addEventListener('click'") && mainSource.includes('focusOpeningDirective(directive.current.id)') && mainSource.includes('focusDeadwalkerIntent(intent)') && mainSource.includes('focusEndTurnReviewInCompactRail()') && styleSource.includes('.map-help button') && styleSource.includes('.map-help button:focus-visible') && styleSource.includes('.end-turn-directive'), 'Battlefield help chips should be touch-accessible controls for the next order, Deadwalker pressure, and pending ready-force review, not passive labels.');
   assert(mainSource.includes('const IDLE_HELP_DELAY_MS = 10000') && mainSource.includes('function showIdleHelpChips') && mainSource.includes('function resetIdleHelpTimer') && mainSource.includes('function idleContextualHelpChips') && mainSource.includes('data-map-help-action="next-ready"') && mainSource.includes("['click', 'keydown', 'wheel', 'mousemove', 'scroll']") && mainSource.includes("event.target.closest('.map-help')") && styleSource.includes('.map-help.idle-help-active') && styleSource.includes('z-index: 6') && styleSource.includes('.map-help .idle-help-chip'), 'Contextual help chips should appear after 10 seconds of idle time and offer actionable next-order controls.');
+  assert(mainSource.includes('function exportChallengeLeaderboard') && mainSource.includes('getWeeklyChallenge(data.get') && mainSource.includes('Challenge JSON') && mainSource.includes('data-action="export-challenge"') && mainSource.includes('challenge-lock') && styleSource.includes('.choice-card.challenge-choice') && styleSource.includes('.campaign-challenge-meta'), 'Weekly Challenge Mode should expose a locked weekly seed in setup, council metadata, and leaderboard JSON export controls.');
   assert(mainSource.includes('function selectedCommandStrip') && mainSource.includes('function unitCommandRole') && mainSource.includes('actionPanel.appendChild(commandStrip)') && mainSource.includes('const compactRail = isCompactCommandRailMode();') && mainSource.includes('const directiveSourceCard = openingDirectiveSourceCard();') && mainSource.includes('const tacticalMoveCard = tacticalMoveOrdersCard(selectedUnit);') && mainSource.includes('const deadwalkerIntent = deadwalkerIntentCard();') && mainSource.includes('const readyForcesCard = activeReadyForcesCard(selectedUnit);') && mainSource.includes('const musterCard = musterReadyCard(selectedBuilding);') && mainSource.includes('const endTurnReview = endTurnReviewCard();') && mainSource.includes('const priorityCommandCards = [placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);') && normalizedMainSource.includes('if (compactRail) {\n    for (const card of priorityCommandCards) actionPanel.appendChild(card);\n    if (counselCard) actionPanel.appendChild(counselCard);') && styleSource.includes('.mobile-command-strip') && styleSource.includes('.mobile-command-strip-stats'), 'Mobile order rail should keep selected context visible while putting pending end-turn reviews, the recommended order source, immediate guided orders, terrain-aware tactical moves, Deadwalker intent, the ready-force queue, and available musters before tactical counsel on compact rails.');
   assert(mainSource.includes('function openingDirectiveSourceCard') && mainSource.includes('openingActionMatchesSelection(recommendation)') && mainSource.includes('openingActionSource(recommendation)') && mainSource.includes('Focus ${source.label}') && mainSource.includes('previewOpeningDirective(recommendation)') && styleSource.includes('.directive-source-card') && styleSource.includes('.directive-source-body') && styleSource.includes('.directive-source-actions'), 'When the current selection is not the recommended opening-order actor, the command rail should surface a compact source card before generic movement choices.');
   assert(mainSource.includes('function activeReadyForcesCard') && mainSource.includes('function readyForceRoster') && mainSource.includes('function readyForceButton') && mainSource.includes('function focusReadyForce') && mainSource.includes('ready-forces-card') && mainSource.includes('ready-force-grid') && mainSource.includes('This force is already selected') && styleSource.includes('.ready-forces-card') && styleSource.includes('.ready-force-button') && styleSource.includes('.ready-force-main') && styleSource.includes('.ready-force-meta'), 'Ready Olundaran forces should surface as direct touch targets in the primary command stack instead of hiding behind blind next-unit cycling.');
@@ -1278,10 +1281,13 @@ check('scenario and difficulty presets change campaign shape', () => {
   const procedural = createGame({ scenarioId: 'proceduralFrontier', difficultyId: 'standard', seed: 'quality-procedural-a' });
   const proceduralVariants = ['quality-procedural-a', 'quality-procedural-b', 'quality-procedural-c', 'quality-procedural-d']
     .map((seed) => createGame({ scenarioId: 'proceduralFrontier', difficultyId: 'standard', seed }));
+  const weekly = getWeeklyChallenge('2026-06-20T12:00:00.000Z');
+  const challenge = createGame({ scenarioId: 'weeklyChallenge', difficultyId: 'chronicle', seed: 'ignored-seed', challengeDate: '2026-06-20T12:00:00.000Z' });
+  const nextChallenge = createGame({ scenarioId: 'weeklyChallenge', challengeDate: '2026-06-27T12:00:00.000Z' });
   const chronicle = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-scenario' });
   const hollow = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
 
-  assert(Object.keys(SCENARIOS).length >= 8, 'Campaign setup should include the three replayability scenarios and procedural frontier.');
+  assert(Object.keys(SCENARIOS).length >= 9, 'Campaign setup should include the three replayability scenarios, procedural frontier, and weekly challenge.');
   assert(dawnroad.campaign.scenarioName === SCENARIOS.dawnroad.name, 'Scenario name is not preserved in campaign metadata.');
   assert(dawnroad.units.some((u) => u.name === 'Road Oath-Spear'), 'Dawnward Road scenario should add its sworn spear.');
   assert(dawnroad.factions.olundar.resources.influence > founding.factions.olundar.resources.influence, 'Scenario resource changes did not apply.');
@@ -1307,6 +1313,15 @@ check('scenario and difficulty presets change campaign shape', () => {
   assert(proceduralSignatures.size >= 2, 'Procedural campaign seeds should produce distinct faction placement, scarcity, or cadence signatures.');
   const proceduralLoaded = deserializeState(serializeState(procedural));
   assert(proceduralLoaded.campaign.scenarioName === procedural.campaign.scenarioName && proceduralLoaded.campaign.deadwalkerMarch.firstTurn === procedural.campaign.deadwalkerMarch.firstTurn && proceduralLoaded.objectives.includes('End the seeded frontier war'), 'Procedural campaign metadata should survive save/load normalization.');
+  assert(weekly.weekId === '2026-W25' && weekly.seed === 'Olundar-Weekly-2026-W25', 'Weekly challenge seed should be deterministic from the ISO week.');
+  assert(challenge.campaign.scenarioId === 'weeklyChallenge' && challenge.campaign.challenge.weekId === weekly.weekId && challenge.seed === weekly.seed, 'Weekly Challenge should create a locked weekly campaign seed.');
+  assert(challenge.campaign.difficultyId === SCENARIOS.weeklyChallenge.difficultyId && challenge.campaign.difficultyId !== 'chronicle', 'Weekly Challenge should ignore non-leaderboard difficulty overrides.');
+  assert(nextChallenge.campaign.challenge.weekId !== challenge.campaign.challenge.weekId && nextChallenge.seed !== challenge.seed, 'Weekly Challenge should rotate to a new seed when the ISO week changes.');
+  const challengeExport = getChallengeLeaderboardExport(challenge, '2026-06-20T13:00:00.000Z');
+  assert(challengeExport.eligible && challengeExport.type === 'olundar.weeklyChallenge.leaderboard.v1' && challengeExport.challenge.weekId === weekly.weekId, 'Weekly Challenge should export eligible leaderboard JSON metadata.');
+  assert(challengeExport.leaderboard.entries.length === 1 && challengeExport.leaderboard.entries[0].score > 0 && challengeExport.leaderboard.entries[0].objectivesTotal === challenge.objectives.length, 'Weekly Challenge leaderboard export should include a scored local entry.');
+  const challengeLoaded = deserializeState(serializeState(challenge));
+  assert(challengeLoaded.campaign.challenge.weekId === challenge.campaign.challenge.weekId && challengeLoaded.seed === challenge.seed && getChallengeLeaderboardExport(challengeLoaded).eligible, 'Weekly Challenge metadata should survive save/load and remain exportable.');
   assert(chronicle.factions.olundar.resources.food > founding.factions.olundar.resources.food, 'Chronicle should give more opening resources.');
   assert(hollow.factions.olundar.resources.morale < founding.factions.olundar.resources.morale, 'Hollow Crown should start with lower morale.');
 

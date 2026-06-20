@@ -23,6 +23,8 @@ import { generateWorld, idx, inBounds, makeRng, manhattan, neighbors4, xy } from
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
 const DIPLOMACY_MEMORY_MAX = 12;
 const DEFAULT_MARCH = { firstTurn: 12, interval: 9, size: 3, growth: 1, cap: 8, menacePerTurn: 1 };
+const CHALLENGE_SEASON_ID = 'frontier-rotation';
+const CHALLENGE_SEASON_NAME = 'Frontier Rotation';
 
 const CRISIS_OUTCOME_PREVIEWS = {
   refugeeCaravan: {
@@ -60,7 +62,8 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       difficultyId: campaign.difficulty.id,
       difficultyName: campaign.difficulty.name,
       difficultyText: campaign.difficulty.text,
-      deadwalkerMarch: campaign.scenario.deadwalkerMarch || null
+      deadwalkerMarch: campaign.scenario.deadwalkerMarch || null,
+      challenge: campaign.challenge ? clone(campaign.challenge) : null
     },
     turn: 1,
     status: 'playing',
@@ -108,13 +111,60 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
 function normalizeCampaignConfig(seedOrConfig, options = {}) {
   const raw = typeof seedOrConfig === 'object' && seedOrConfig !== null ? { ...seedOrConfig } : { seed: seedOrConfig, ...options };
   const baseScenario = SCENARIOS[raw.scenarioId] || SCENARIOS.founding;
-  const difficulty = DIFFICULTY_PRESETS[raw.difficultyId || baseScenario.difficultyId] || DIFFICULTY_PRESETS.standard;
-  const seed = raw.seed || baseScenario.seed || `Olundar-${new Date().getFullYear()}`;
+  const challenge = baseScenario.challenge ? getWeeklyChallenge(raw.challengeDate || raw.challenge?.generatedForDate) : null;
+  const difficultyId = challenge ? baseScenario.difficultyId : (raw.difficultyId || baseScenario.difficultyId);
+  const difficulty = DIFFICULTY_PRESETS[difficultyId] || DIFFICULTY_PRESETS.standard;
+  const seed = challenge?.seed || raw.seed || baseScenario.seed || `Olundar-${new Date().getFullYear()}`;
   const scenario = baseScenario.procedural ? createProceduralScenario(seed, baseScenario, difficulty) : baseScenario;
   return {
     seed,
     scenario,
-    difficulty
+    difficulty,
+    challenge
+  };
+}
+
+export function getWeeklyChallenge(dateInput = new Date()) {
+  const week = isoWeekInfo(dateInput);
+  const seed = `Olundar-Weekly-${week.weekId}`;
+  return {
+    id: `weekly-${week.weekId}`,
+    seasonId: CHALLENGE_SEASON_ID,
+    seasonName: CHALLENGE_SEASON_NAME,
+    weekId: week.weekId,
+    weekYear: week.weekYear,
+    weekNumber: week.weekNumber,
+    startsAt: week.startsAt,
+    endsAt: week.endsAt,
+    generatedForDate: week.generatedForDate,
+    scenarioId: 'weeklyChallenge',
+    difficultyId: SCENARIOS.weeklyChallenge?.difficultyId || 'legion',
+    seed
+  };
+}
+
+function isoWeekInfo(dateInput) {
+  const input = new Date(dateInput || Date.now());
+  const validInput = Number.isNaN(input.getTime()) ? new Date() : input;
+  const dayDate = new Date(Date.UTC(validInput.getUTCFullYear(), validInput.getUTCMonth(), validInput.getUTCDate()));
+  const isoDay = dayDate.getUTCDay() || 7;
+  const thursday = new Date(dayDate);
+  thursday.setUTCDate(dayDate.getUTCDate() + 4 - isoDay);
+  const weekYear = thursday.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(weekYear, 0, 1));
+  const weekNumber = Math.ceil((((thursday - yearStart) / 86400000) + 1) / 7);
+  const starts = new Date(thursday);
+  starts.setUTCDate(thursday.getUTCDate() - ((thursday.getUTCDay() || 7) - 1));
+  const ends = new Date(starts);
+  ends.setUTCDate(starts.getUTCDate() + 7);
+  const paddedWeek = String(weekNumber).padStart(2, '0');
+  return {
+    weekYear,
+    weekNumber,
+    weekId: `${weekYear}-W${paddedWeek}`,
+    startsAt: starts.toISOString().slice(0, 10),
+    endsAt: ends.toISOString().slice(0, 10),
+    generatedForDate: validInput.toISOString()
   };
 }
 
@@ -378,6 +428,9 @@ function normalizeCampaignState(state) {
     state.campaign.scenarioName = scenario.name;
     state.campaign.victoryConditions = scenarioVictoryConditions(scenario);
     state.campaign.deadwalkerMarch = scenario.deadwalkerMarch || null;
+    state.campaign.challenge = baseScenario.challenge
+      ? normalizeChallengeMetadata(state.campaign.challenge, state.campaign.seed || state.seed)
+      : null;
     state.objectives = campaignObjectives(scenario);
     normalizeDeadwalkerCampaign(state);
     return;
@@ -391,10 +444,42 @@ function normalizeCampaignState(state) {
     difficultyId: fallback.difficulty.id,
     difficultyName: fallback.difficulty.name,
     difficultyText: fallback.difficulty.text,
-    deadwalkerMarch: fallback.scenario.deadwalkerMarch || null
+    deadwalkerMarch: fallback.scenario.deadwalkerMarch || null,
+    challenge: fallback.challenge ? clone(fallback.challenge) : null
   };
   state.objectives = campaignObjectives(fallback.scenario);
   normalizeDeadwalkerCampaign(state);
+}
+
+function normalizeChallengeMetadata(raw, fallbackSeed) {
+  if (!raw || typeof raw !== 'object') {
+    const weekId = String(fallbackSeed || '').match(/(\d{4}-W\d{2})/)?.[1];
+    if (!weekId) return null;
+    return {
+      id: `weekly-${weekId}`,
+      seasonId: CHALLENGE_SEASON_ID,
+      seasonName: CHALLENGE_SEASON_NAME,
+      weekId,
+      seed: fallbackSeed,
+      scenarioId: 'weeklyChallenge',
+      difficultyId: SCENARIOS.weeklyChallenge?.difficultyId || 'legion'
+    };
+  }
+  const weekId = raw.weekId || String(fallbackSeed || raw.seed || '').match(/(\d{4}-W\d{2})/)?.[1] || getWeeklyChallenge(raw.generatedForDate || new Date()).weekId;
+  return {
+    id: raw.id || `weekly-${weekId}`,
+    seasonId: raw.seasonId || CHALLENGE_SEASON_ID,
+    seasonName: raw.seasonName || CHALLENGE_SEASON_NAME,
+    weekId,
+    weekYear: Number(raw.weekYear) || Number(weekId.slice(0, 4)),
+    weekNumber: Number(raw.weekNumber) || Number(weekId.slice(6)),
+    startsAt: raw.startsAt || '',
+    endsAt: raw.endsAt || '',
+    generatedForDate: raw.generatedForDate || '',
+    scenarioId: 'weeklyChallenge',
+    difficultyId: raw.difficultyId || SCENARIOS.weeklyChallenge?.difficultyId || 'legion',
+    seed: raw.seed || fallbackSeed
+  };
 }
 
 function scenarioVictoryConditions(scenario) {
@@ -961,7 +1046,8 @@ export function getWarCouncil(state) {
       scenarioName: state.campaign.scenarioName,
       victoryConditions: state.campaign.victoryConditions || [],
       difficultyName: state.campaign.difficultyName,
-      difficultyText: state.campaign.difficultyText
+      difficultyText: state.campaign.difficultyText,
+      challenge: state.campaign.challenge || null
     },
     priorities: priorities.slice(0, 4),
     stats: [
@@ -1225,6 +1311,7 @@ export function getCampaignRecap(state, context = 'current') {
   const olundarBuildings = state.buildings.filter((building) => building.faction === 'olundar');
   const deadBuildings = state.buildings.filter((building) => building.faction === 'dead');
   const mapped = Math.round(revealedPercent(state));
+  const challenge = state.campaign.challenge || null;
   const tone = state.status === 'won' ? 'good' : state.status === 'lost' ? 'danger' : 'info';
   const statusLabel = state.status === 'won' ? 'Victory' : state.status === 'lost' ? 'Defeat' : 'In Progress';
   const milestones = state.objectives.map((objective, index) => ({
@@ -1245,9 +1332,11 @@ export function getCampaignRecap(state, context = 'current') {
       { label: 'Army', value: olundarUnits.length },
       { label: 'Holdings', value: olundarBuildings.length },
       { label: 'Pacts', value: `${pacts}/3` },
-      { label: 'Deadworks', value: deadBuildings.length }
+      { label: 'Deadworks', value: deadBuildings.length },
+      ...(challenge ? [{ label: 'Challenge', value: challenge.weekId }] : [])
     ],
     details: [
+      ...(challenge ? [`Weekly Challenge ${challenge.weekId} uses locked seed ${challenge.seed}.`] : []),
       `Morale ${Math.floor(state.factions.olundar.resources.morale || 0)} with ${state.factions.olundar.population}/${state.factions.olundar.housing} population housed.`,
       `${discoveredLiving}/3 living civilizations contacted, ${pacts} survival pact${pacts === 1 ? '' : 's'}, ${trades} trade route${trades === 1 ? '' : 's'}.`,
       `${state.flags.deadStrongholdsDestroyed || 0} Deadwalker stronghold${state.flags.deadStrongholdsDestroyed === 1 ? '' : 's'} destroyed; threat pressure is ${knownDead ? knownDead.label.toLowerCase() : 'unknown'}.`
@@ -1255,6 +1344,84 @@ export function getCampaignRecap(state, context = 'current') {
     milestones,
     nextSteps: recapNextSteps(state, objectiveProgress, knownDead)
   };
+}
+
+export function getChallengeLeaderboardExport(state, exportedAt = new Date().toISOString()) {
+  normalizeCampaignState(state);
+  const challenge = state.campaign.challenge || null;
+  const objectiveProgress = getObjectiveProgress(state);
+  const objectivesCompleted = objectiveProgress.filter((entry) => entry.done).length;
+  const objectivesTotal = objectiveProgress.length;
+  const mappedPercent = Math.round(revealedPercent(state));
+  const pacts = Object.values(state.factions.olundar.pacts || {}).filter(Boolean).length;
+  const trades = Object.values(state.factions.olundar.trades || {}).filter(Boolean).length;
+  const livingFactionsContacted = Object.values(state.factions).filter((faction) => !faction.player && faction.id !== 'dead' && faction.discovered).length;
+  const army = state.units.filter((unit) => unit.faction === 'olundar').length;
+  const holdings = state.buildings.filter((building) => building.faction === 'olundar').length;
+  const morale = Math.floor(state.factions.olundar.resources.morale || 0);
+  const deadworksDestroyed = state.flags.deadStrongholdsDestroyed || 0;
+  const score = challengeScore({
+    status: state.status,
+    objectivesCompleted,
+    objectivesTotal,
+    mappedPercent,
+    pacts,
+    trades,
+    livingFactionsContacted,
+    army,
+    holdings,
+    morale,
+    deadworksDestroyed,
+    turn: state.turn
+  });
+  const entry = {
+    commander: 'Local Commander',
+    score,
+    status: state.status,
+    winner: state.winner || null,
+    turn: state.turn,
+    objectivesCompleted,
+    objectivesTotal,
+    mappedPercent,
+    pacts,
+    trades,
+    livingFactionsContacted,
+    deadworksDestroyed,
+    army,
+    holdings,
+    morale
+  };
+  return {
+    type: 'olundar.weeklyChallenge.leaderboard.v1',
+    game: 'Olundar',
+    eligible: Boolean(challenge),
+    exportedAt,
+    challenge: challenge ? clone(challenge) : null,
+    campaign: {
+      seed: state.campaign.seed,
+      scenarioId: state.campaign.scenarioId,
+      scenarioName: state.campaign.scenarioName,
+      difficultyId: state.campaign.difficultyId,
+      difficultyName: state.campaign.difficultyName
+    },
+    leaderboard: {
+      format: 'single-entry-export',
+      scoreFormula: 'victory + objectives + map knowledge + alliances + deadworks + surviving army/holdings + morale - turn pressure',
+      entries: [entry]
+    }
+  };
+}
+
+function challengeScore(metrics) {
+  const victory = metrics.status === 'won' ? 5000 : metrics.status === 'lost' ? -750 : 0;
+  const objectiveValue = metrics.objectivesCompleted * 850;
+  const progressValue = metrics.objectivesTotal ? Math.round((metrics.objectivesCompleted / metrics.objectivesTotal) * 900) : 0;
+  const mapValue = metrics.mappedPercent * 8;
+  const allianceValue = (metrics.pacts * 350) + (metrics.trades * 125) + (metrics.livingFactionsContacted * 150);
+  const warValue = metrics.deadworksDestroyed * 425;
+  const survivalValue = (metrics.army * 35) + (metrics.holdings * 20) + (metrics.morale * 30);
+  const turnPressure = Math.max(0, metrics.turn - 1) * (metrics.status === 'won' ? 18 : 8);
+  return Math.max(0, victory + objectiveValue + progressValue + mapValue + allianceValue + warValue + survivalValue - turnPressure);
 }
 
 function recapTitle(state, context) {

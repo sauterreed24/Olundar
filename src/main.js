@@ -13,6 +13,7 @@ import {
   findPath,
   getAftermathMissions,
   getCampaignRecap,
+  getChallengeLeaderboardExport,
   getCrisisCouncil,
   getDeadwalkerCampaign,
   getDiplomacyLedger,
@@ -21,6 +22,7 @@ import {
   getObjectiveProgress,
   getReadyOlundarUnits,
   getSiegeOperations,
+  getWeeklyChallenge,
   getWarCouncil,
   makeDiplomaticPromise,
   resolveCrisis,
@@ -512,9 +514,11 @@ function deadwalkerMapHelpChip() {
 function renderCouncil() {
   const council = getWarCouncil(state);
   const scenarioGoals = (council.campaign.victoryConditions || []).slice(0, 3);
+  const challenge = council.campaign.challenge;
   councilPanel.innerHTML = `
     <h2>${escapeHtml(council.headline)}</h2>
     <p class="campaign-meta">${escapeHtml(council.campaign.scenarioName)} · ${escapeHtml(council.campaign.difficultyName)}</p>
+    ${challenge ? `<p class="campaign-challenge-meta">Weekly Challenge ${escapeHtml(challenge.weekId)} - locked seed ${escapeHtml(challenge.seed)}</p>` : ''}
     ${scenarioGoals.length ? `<p class="campaign-goals">${scenarioGoals.map((goal) => escapeHtml(goal.label)).join(' / ')}</p>` : ''}
     <div class="council-stats">
       ${council.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
@@ -1417,6 +1421,7 @@ function renderActions() {
     const section = actionSection('Campaign resolved', 'Archive the result or begin another war council.');
     const actions = commandActions('campaign-tools');
     actions.appendChild(orderButton('Campaign recap', 'Review final milestones', () => openCampaignRecap('current'), { tone: 'primary' }));
+    if (state.campaign.challenge) actions.appendChild(orderButton('Challenge JSON', 'Export leaderboard entry', () => exportChallengeLeaderboard(), { tone: 'primary' }));
     actions.appendChild(orderButton('Save campaign', 'Store the finished state', () => openSaveManager('save')));
     actions.appendChild(orderButton('New campaign', 'Start a fresh table', () => newCampaign()));
     section.appendChild(actions);
@@ -1513,6 +1518,7 @@ function renderActions() {
   tools.appendChild(orderButton('Load', 'Open a saved campaign', () => openSaveManager('load')));
   tools.appendChild(orderButton('New', 'Restart from setup', () => newCampaign()));
   tools.appendChild(orderButton('Export', 'Download save file', () => exportSave()));
+  if (state.campaign.challenge) tools.appendChild(orderButton('Challenge JSON', 'Export leaderboard entry', () => exportChallengeLeaderboard(), { tone: 'primary' }));
   tools.appendChild(orderButton('Import', 'Load save file', () => openImportSaveFile()));
   const toolsDrawer = document.createElement('details');
   toolsDrawer.className = 'campaign-tools-drawer';
@@ -4627,6 +4633,7 @@ function renderRecapPanel(context = 'current') {
     </ol>
     <div class="setup-actions">
       <button type="button" data-action="close-recap">${state.status === 'playing' ? 'Return to campaign' : 'Close'}</button>
+      ${state.campaign.challenge ? '<button type="button" data-action="export-challenge">Export challenge JSON</button>' : ''}
       <button type="button" data-action="save-campaign">Save campaign</button>
       <button type="button" data-action="new-campaign">New campaign</button>
     </div>
@@ -4768,8 +4775,10 @@ function formatSavedAt(value) {
 
 function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 'founding', selectedDifficultyId = state.campaign?.difficultyId || SCENARIOS[selectedScenarioId]?.difficultyId || 'standard', seedOverride = null) {
   const scenario = SCENARIOS[selectedScenarioId] || SCENARIOS.founding;
-  const difficultyId = DIFFICULTY_PRESETS[selectedDifficultyId] ? selectedDifficultyId : scenario.difficultyId;
-  const seedValue = seedOverride || scenario.seed;
+  const challenge = scenario.challenge ? getWeeklyChallenge() : null;
+  const difficultyId = challenge ? scenario.difficultyId : (DIFFICULTY_PRESETS[selectedDifficultyId] ? selectedDifficultyId : scenario.difficultyId);
+  const seedValue = challenge?.seed || seedOverride || scenario.seed;
+  const difficultyChoices = challenge ? [DIFFICULTY_PRESETS[difficultyId]] : Object.values(DIFFICULTY_PRESETS);
   campaignSetup.innerHTML = `
     <div class="setup-head">
       <div>
@@ -4780,15 +4789,16 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
     </div>
     <label class="setup-field">
       <span>Seed</span>
-      <input id="campaignSeed" name="seed" value="${escapeHtml(seedValue)}" autocomplete="off" />
+      <input id="campaignSeed" name="seed" value="${escapeHtml(seedValue)}" autocomplete="off" ${challenge ? 'readonly aria-readonly="true"' : ''} />
+      ${challenge ? `<small class="challenge-lock">Weekly Challenge ${escapeHtml(challenge.weekId)} is locked until ${escapeHtml(challenge.endsAt)}.</small><input type="hidden" name="challengeDate" value="${escapeHtml(challenge.generatedForDate)}" />` : ''}
     </label>
     <h3>Scenario</h3>
     <div class="card-grid">
-      ${Object.values(SCENARIOS).map((item) => choiceCard('scenarioId', item.id, item.name, scenarioChoiceText(item), item.id === selectedScenarioId)).join('')}
+      ${Object.values(SCENARIOS).map((item) => choiceCard('scenarioId', item.id, item.name, scenarioChoiceText(item), item.id === selectedScenarioId, item.challenge ? 'challenge-choice' : '')).join('')}
     </div>
     <h3>Difficulty</h3>
     <div class="card-grid difficulty-grid">
-      ${Object.values(DIFFICULTY_PRESETS).map((item) => choiceCard('difficultyId', item.id, item.name, item.text, item.id === difficultyId)).join('')}
+      ${difficultyChoices.map((item) => choiceCard('difficultyId', item.id, item.name, challenge ? `${item.text} Fixed for leaderboard comparability.` : item.text, item.id === difficultyId)).join('')}
     </div>
     <details class="mod-menu-drawer">
       <summary>Mod Menu — hot-reload JSON tweaks</summary>
@@ -4812,12 +4822,14 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
 
 function scenarioChoiceText(scenario) {
   const goals = (scenario.victoryConditions || []).slice(0, 2).map((condition) => condition.label).join(' / ');
-  return goals ? `${scenario.text} Goals: ${goals}.` : scenario.text;
+  const challenge = scenario.challenge ? getWeeklyChallenge() : null;
+  const prefix = challenge ? `This week's seed is ${challenge.seed}. ` : '';
+  return goals ? `${prefix}${scenario.text} Goals: ${goals}.` : `${prefix}${scenario.text}`;
 }
 
-function choiceCard(name, value, title, text, checked) {
+function choiceCard(name, value, title, text, checked, className = '') {
   return `
-    <label class="choice-card ${checked ? 'selected' : ''}">
+    <label class="choice-card ${className} ${checked ? 'selected' : ''}">
       <input type="radio" name="${name}" value="${escapeHtml(value)}" ${checked ? 'checked' : ''} />
       <strong>${escapeHtml(title)}</strong>
       <span>${escapeHtml(text)}</span>
@@ -4829,9 +4841,10 @@ function startConfiguredCampaign(form) {
   const data = new FormData(form);
   const scenarioId = data.get('scenarioId') || 'founding';
   const scenario = SCENARIOS[scenarioId] || SCENARIOS.founding;
-  const difficultyId = data.get('difficultyId') || scenario.difficultyId || 'standard';
-  const seed = String(data.get('seed') || scenario.seed).trim() || scenario.seed;
-  state = createGame({ scenarioId, difficultyId, seed });
+  const challenge = scenario.challenge ? getWeeklyChallenge(data.get('challengeDate') || new Date()) : null;
+  const difficultyId = challenge?.difficultyId || data.get('difficultyId') || scenario.difficultyId || 'standard';
+  const seed = challenge?.seed || String(data.get('seed') || scenario.seed).trim() || scenario.seed;
+  state = createGame({ scenarioId, difficultyId, seed, challengeDate: challenge?.generatedForDate });
   activeSaveSlotId = null;
   hoverTile = null;
   lastTile = { x: 7, y: 16 };
@@ -4910,16 +4923,32 @@ function applyModPatchesFromForm(form) {
 }
 
 function exportSave() {
-  const blob = new Blob([serializeState(state)], { type: 'application/json' });
+  downloadJsonFile(serializeState(state), `olundar-save-turn-${state.turn}.json`);
+  playAudioCue('save');
+}
+
+function exportChallengeLeaderboard() {
+  const payload = getChallengeLeaderboardExport(state);
+  if (!payload.eligible || !payload.challenge) {
+    toast('Challenge leaderboard exports only apply to Weekly Challenge campaigns.', 'bad');
+    playAudioCue('error');
+    return;
+  }
+  downloadJsonFile(JSON.stringify(payload, null, 2), `olundar-${payload.challenge.weekId}-leaderboard-turn-${state.turn}.json`);
+  toast(`Challenge ${payload.challenge.weekId} leaderboard JSON exported.`);
+  playAudioCue('save');
+}
+
+function downloadJsonFile(contents, filename) {
+  const blob = new Blob([contents], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `olundar-save-turn-${state.turn}.json`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  playAudioCue('save');
 }
 
 function focusCampaign() {
@@ -5577,11 +5606,12 @@ campaignSetup.addEventListener('change', (event) => {
   const data = new FormData(campaignSetup);
   const scenarioId = data.get('scenarioId') || 'founding';
   const scenario = SCENARIOS[scenarioId] || SCENARIOS.founding;
+  const challenge = scenario.challenge ? getWeeklyChallenge() : null;
   const scenarioChanged = event.target instanceof HTMLInputElement && event.target.name === 'scenarioId';
-  const difficultyId = scenarioChanged ? (scenario.difficultyId || 'standard') : (data.get('difficultyId') || scenario.difficultyId || 'standard');
+  const difficultyId = challenge?.difficultyId || (scenarioChanged ? (scenario.difficultyId || 'standard') : (data.get('difficultyId') || scenario.difficultyId || 'standard'));
   const seed = event.target instanceof HTMLInputElement && event.target.name === 'scenarioId'
-    ? scenario.seed
-    : String(data.get('seed') || scenario.seed);
+    ? (challenge?.seed || scenario.seed)
+    : (challenge?.seed || String(data.get('seed') || scenario.seed));
   renderCampaignSetup(scenarioId, difficultyId, seed);
 });
 
@@ -5607,6 +5637,8 @@ recapPanel.addEventListener('click', (event) => {
   const action = event.target.dataset.action;
   if (action === 'close-recap') {
     closeCampaignRecap();
+  } else if (action === 'export-challenge') {
+    exportChallengeLeaderboard();
   } else if (action === 'save-campaign') {
     closeCampaignRecap();
     openSaveManager('save');
