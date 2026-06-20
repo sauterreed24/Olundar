@@ -1023,6 +1023,8 @@ function renderActions() {
   if (turnReport && !isMobileIntelDrawerMode()) actionPanel.appendChild(turnReportCard());
   const commandStrip = selectedCommandStrip(selectedUnit, selectedBuilding);
   if (commandStrip) actionPanel.appendChild(commandStrip);
+  const counselCard = tacticalCounselCard(selectedUnit, selectedBuilding);
+  if (counselCard) actionPanel.appendChild(counselCard);
   const placementCard = buildPlacementCard();
   if (placementCard) actionPanel.appendChild(placementCard);
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
@@ -1194,6 +1196,218 @@ function unitCommandRole(unit) {
   if (tags.includes('siege')) return 'Siege';
   if (tags.includes('undead')) return 'Undead';
   return 'Line';
+}
+
+function tacticalCounselCard(selectedUnit, selectedBuilding) {
+  const counsel = selectedUnit
+    ? unitTacticalCounsel(selectedUnit)
+    : selectedBuilding ? buildingTacticalCounsel(selectedBuilding) : null;
+  if (!counsel) return null;
+  const card = document.createElement('article');
+  card.className = `tactical-counsel ${counsel.tone}`.trim();
+  card.innerHTML = `
+    <div class="tactical-counsel-head">
+      <span>${escapeHtml(counsel.kicker)}</span>
+      <b>${escapeHtml(counsel.badge)}</b>
+    </div>
+    <strong>${escapeHtml(counsel.title)}</strong>
+    <p>${escapeHtml(counsel.detail)}</p>
+    <div class="tactical-counsel-tags">
+      ${counsel.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}
+    </div>
+    <div class="tactical-counsel-stats">
+      ${counsel.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b><small>${escapeHtml(stat.label)}</small></span>`).join('')}
+    </div>
+  `;
+  return card;
+}
+
+function unitTacticalCounsel(unit) {
+  const def = UNIT_TYPES[unit.type];
+  const tile = tileAt(state, unit.x, unit.y);
+  const terrain = TERRAIN[tile?.terrain] || TERRAIN.plains;
+  const tags = def.tags || [];
+  const supplied = tile ? isTileSupplied(state, unit.x, unit.y) : false;
+  const road = Boolean(tile?.road || state.buildings.some((building) => building.type === 'road' && building.x === unit.x && building.y === unit.y));
+  const threats = visibleHostilePressure(unit.x, unit.y);
+  const attackable = visibleHostileTargets(unit, def.range);
+  const stance = bestReachableTacticalStance(unit);
+  const terrainLine = terrainCounselLine(unit, tile, terrain);
+  const logisticsLine = road
+    ? 'Road pivot keeps tempo high.'
+    : supplied
+      ? 'Supplied ground supports a hold.'
+      : 'Unsupplied ground is risky for long stands.';
+  const threatLine = threats.length
+    ? `${threats[0].name} at ${threats[0].distance} sector${threats[0].distance === 1 ? '' : 's'}.`
+    : 'No nearby hostile sighted.';
+  const readyLine = unit.faction === 'olundar'
+    ? unit.hasActed
+      ? 'Orders spent; plan next turn.'
+      : attackable.length
+        ? `${attackable[0].name} is in range. Check the forecast.`
+        : stance
+          ? `Best stance: ${stance.label}.`
+          : 'Hold, fortify, or road-pivot.'
+    : 'Observed force. Use diplomacy, blockers, or ranged pressure around it.';
+  return {
+    tone: attackable.length ? 'attack' : threats.length ? 'danger' : supplied || road ? 'good' : 'neutral',
+    kicker: 'Battlefield counsel',
+    badge: unit.hasActed ? 'planned' : 'ready',
+    title: `${terrain.name} stance`,
+    detail: `${terrainLine} ${logisticsLine} ${threatLine} ${readyLine}`,
+    tags: tacticalCounselTags(unit, tile, terrain, threats, attackable, stance),
+    stats: [
+      { value: terrain.name, label: 'terrain' },
+      { value: terrain.defense >= 0 ? `+${terrain.defense}` : `${terrain.defense}`, label: 'defense' },
+      { value: `${terrain.move}`, label: 'move cost' },
+      { value: road ? 'road' : supplied ? 'supply' : 'field', label: 'logistics' }
+    ]
+  };
+}
+
+function buildingTacticalCounsel(building) {
+  const def = BUILDING_TYPES[building.type];
+  const tile = tileAt(state, building.x, building.y);
+  const terrain = TERRAIN[tile?.terrain] || TERRAIN.plains;
+  const threats = visibleHostilePressure(building.x, building.y);
+  const queue = building.queue?.length || 0;
+  const operational = building.turnsLeft <= 0;
+  const supplyNode = ['city', 'outpost', 'road'].includes(building.type);
+  const pressure = threats.length ? `${threats[0].name} ${threats[0].distance} sectors from this work.` : 'No visible hostile pressure on this work.';
+  const output = buildingIncomeCounsel(building, tile);
+  return {
+    tone: threats.length ? 'danger' : operational ? 'good' : 'neutral',
+    kicker: 'Imperial works counsel',
+    badge: operational ? 'online' : `${turnCountLabel(building.turnsLeft)} left`,
+    title: `${def.name} on ${terrain.name}`,
+    detail: `${output} ${supplyNode ? 'This site anchors roads, vision, or supply.' : 'Keep it tied to roads before Deadwalker pressure rises.'} ${pressure}`,
+    tags: [
+      operational ? 'operational' : 'under construction',
+      supplyNode ? 'supply node' : 'local work',
+      queue ? `${queue} queued` : 'queue clear',
+      terrain.tactical
+    ].filter(Boolean).slice(0, 4),
+    stats: [
+      { value: `${building.hp}/${building.maxHp}`, label: 'hp' },
+      { value: `T${(building.upgraded || 0) + 1}`, label: 'tier' },
+      { value: queue ? `${queue}/${trainingQueueLimit(building)}` : 'none', label: 'queue' },
+      { value: terrain.name, label: 'terrain' }
+    ]
+  };
+}
+
+function terrainCounselLine(unit, tile, terrain) {
+  const def = UNIT_TYPES[unit.type];
+  const tags = def.tags || [];
+  if (!tile) return 'Unknown ground; scout before committing.';
+  if (tile.terrain === 'hills' && tags.includes('ranged')) return 'High ground boosts archer control.';
+  if (tile.terrain === 'hills') return 'High ground trades speed for sight and armor.';
+  if (tile.terrain === 'forest' && tags.includes('recon')) return 'Forest favors scouts and ambush sightlines.';
+  if (tile.terrain === 'forest') return 'Forest defends but slows heavy lines.';
+  if (tile.terrain === 'river') return 'River crossings are costly trap lanes.';
+  if (tile.terrain === 'marsh') return 'Marsh punishes heavy and mounted troops.';
+  if (tile.terrain === 'ruins') return 'Ruins defend and can become relic rewards.';
+  if (tile.terrain === 'blight') return 'Grave-blight favors the Deadwalkers.';
+  return 'Fast, farmable ground for roads and tempo.';
+}
+
+function tacticalCounselTags(unit, tile, terrain, threats, attackable, stance) {
+  const def = UNIT_TYPES[unit.type];
+  const tags = [];
+  if (attackable.length) tags.push(`${attackable.length} target${attackable.length === 1 ? '' : 's'} in range`);
+  if (threats.length) tags.push(`nearest threat ${threats[0].distance}`);
+  if (stance && !unit.hasActed) tags.push(`${stance.label} | ${stance.cost}/${def.move}`);
+  if (tile?.road) tags.push('road pivot');
+  else if (tile && isTileSupplied(state, unit.x, unit.y)) tags.push('inside supply');
+  else tags.push('field risk');
+  if (terrain.defense > 0) tags.push(`terrain armor +${terrain.defense}`);
+  if (terrain.sight > 0) tags.push(`sight +${terrain.sight}`);
+  if (terrain.sight < 0) tags.push(`sight ${terrain.sight}`);
+  return tags.length ? tags.slice(0, 4) : [terrain.name];
+}
+
+function bestReachableTacticalStance(unit) {
+  const def = UNIT_TYPES[unit.type];
+  if (unit.hasActed || unit.faction !== 'olundar') return null;
+  const candidates = [];
+  for (let y = Math.max(0, unit.y - def.move); y <= Math.min(MAP_HEIGHT - 1, unit.y + def.move); y += 1) {
+    for (let x = Math.max(0, unit.x - def.move); x <= Math.min(MAP_WIDTH - 1, unit.x + def.move); x += 1) {
+      const path = findPath(state, unit, x, y, def.move);
+      if (!path) continue;
+      const tile = tileAt(state, x, y);
+      if (!tile || !isVisible(state, x, y)) continue;
+      const terrain = TERRAIN[tile.terrain] || TERRAIN.plains;
+      const supplied = isTileSupplied(state, x, y);
+      const enemyDistance = visibleHostilePressure(x, y)[0]?.distance ?? 8;
+      let score = 0;
+      score += (terrain.defense || 0) * 3;
+      score += (terrain.sight || 0) * 1.5;
+      if (tile.road) score += 3;
+      if (supplied) score += 2;
+      if (def.tags.includes('ranged') && tile.terrain === 'hills') score += 5;
+      if (def.tags.includes('recon')) score += forecastRevealGain(unit, x, y) * 0.55;
+      if (def.tags.includes('builder') && (tile.road || supplied)) score += 2.5;
+      if (tile.terrain === 'blight') score -= 8;
+      if (enemyDistance <= 2 && !def.tags.includes('line') && !def.tags.includes('shield') && !def.tags.includes('spear')) score -= 4;
+      score -= path.cost * 0.4;
+      candidates.push({
+        x,
+        y,
+        cost: path.cost,
+        terrain: tile.terrain,
+        score,
+        label: `${terrain.name} ${x},${y}`
+      });
+    }
+  }
+  const best = candidates.sort((a, b) => b.score - a.score || a.cost - b.cost)[0];
+  if (!best || (best.x === unit.x && best.y === unit.y)) return null;
+  return best;
+}
+
+function visibleHostilePressure(x, y) {
+  return [
+    ...state.units
+      .filter((unit) => isVisible(state, unit.x, unit.y) && isEnemy(state, 'olundar', unit.faction))
+      .map((unit) => ({
+        name: unit.name,
+        distance: gridDistance(x, y, unit.x, unit.y),
+        x: unit.x,
+        y: unit.y
+      })),
+    ...state.buildings
+      .filter((building) => isVisible(state, building.x, building.y) && isEnemy(state, 'olundar', building.faction))
+      .map((building) => ({
+        name: building.name,
+        distance: gridDistance(x, y, building.x, building.y),
+        x: building.x,
+        y: building.y
+      }))
+  ].sort((a, b) => a.distance - b.distance);
+}
+
+function visibleHostileTargets(unit, range) {
+  return state.units
+    .filter((target) => target.id !== unit.id
+      && isVisible(state, target.x, target.y)
+      && isEnemy(state, unit.faction, target.faction)
+      && gridDistance(unit.x, unit.y, target.x, target.y) <= range)
+    .concat(state.buildings
+      .filter((target) => isVisible(state, target.x, target.y)
+        && isEnemy(state, unit.faction, target.faction)
+        && gridDistance(unit.x, unit.y, target.x, target.y) <= range))
+    .sort((a, b) => gridDistance(unit.x, unit.y, a.x, a.y) - gridDistance(unit.x, unit.y, b.x, b.y));
+}
+
+function buildingIncomeCounsel(building, tile) {
+  if (building.type === 'farm') return tile?.terrain === 'marsh' ? 'Marsh food is weaker; road it before relying on it.' : 'Food income keeps army upkeep simple.';
+  if (building.type === 'lumberCamp') return tile?.terrain === 'forest' ? 'Forest wood accelerates expansion and archery.' : 'This camp needs forest adjacency to justify itself.';
+  if (building.type === 'mine') return tile?.terrain === 'hills' ? 'Hill iron feeds legionaries, spear guards, and siege.' : 'Ruin mines lean toward gold and relic value.';
+  if (building.type === 'watchtower') return tile?.terrain === 'hills' ? 'Hill towers convert terrain into early warning.' : 'Watchtowers push fog back before diplomacy or raids.';
+  if (building.type === 'city') return 'Capital output is broad; use queues to avoid idle turns.';
+  if (BUILDING_TYPES[building.type]?.trains?.length) return 'Muster halls should match terrain: bows on hills, infantry on roads, cavalry on open lanes.';
+  return BUILDING_TYPES[building.type]?.text || 'This work supports the long campaign.';
 }
 
 function buildDoctrineCard(builder) {
