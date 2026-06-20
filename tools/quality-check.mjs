@@ -235,6 +235,7 @@ check('first-turn guide gives actionable live onboarding', () => {
   assert(training.ok, training.reason || 'Guide setup training failed.');
   const ironHandoffGuide = getFirstTurnsGuide(state);
   assert(ironHandoffGuide.steps.find((step) => step.id === 'iron').detail.includes('Engineer refreshes next turn'), 'Blocked iron guide should explain the hold-and-refresh handoff.');
+  assert(ironHandoffGuide.steps.find((step) => step.id === 'iron').detail.includes('Scout or hold safely'), 'Blocked iron guide should match the actual scout-or-hold recovery orders.');
   addBuilding(state, 'mine', 'olundar', 9, 18, { complete: true });
   state.flags.firstAllySeen = true;
   state.flags.firstDeadwalkerSeen = true;
