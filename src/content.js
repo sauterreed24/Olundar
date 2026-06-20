@@ -79,3 +79,16 @@ export function applyContentBundle(nextBundle) {
     }
   }
 }
+
+/** Merge per-id stat overrides from the mod menu into the live content tables. */
+export function applyModPatches(overrides = {}) {
+  for (const [category, entries] of Object.entries(overrides)) {
+    const table = bundle[category];
+    if (!table || typeof table !== 'object' || !entries || typeof entries !== 'object') continue;
+    for (const [id, patch] of Object.entries(entries)) {
+      if (table[id] && patch && typeof patch === 'object') {
+        table[id] = { ...table[id], ...patch };
+      }
+    }
+  }
+}

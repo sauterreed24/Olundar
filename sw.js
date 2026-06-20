@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v137';
+const CACHE_NAME = 'olundar-pwa-v138';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -6,11 +6,18 @@ const APP_SHELL_ASSETS = [
   "./assets/icons/olundar-icon.svg",
   "./assets/sprites/olundar-sprite-sheet.svg",
   "./data/meta.json",
-  "./data/units.json",
-  "./data/buildings.json",
+  "./data/difficulty.json",
+  "./data/scenarios.json",
   "./data/factions.json",
   "./data/terrain.json",
+  "./data/units.json",
+  "./data/buildings.json",
+  "./data/resources.json",
+  "./data/diplomacy.json",
+  "./data/war-aims.json",
   "./data/crisis.json",
+  "./data/map-lenses.json",
+  "./data/objectives.json",
   "./src/audio.js",
   "./src/content.js",
   "./src/engine/audio.js",

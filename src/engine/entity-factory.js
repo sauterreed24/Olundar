@@ -4,6 +4,7 @@
  */
 
 import { Container, Graphics, Sprite } from 'pixi.js';
+import { applyModPatches } from '../content.js';
 import { getAtlasTexture, getImperialPalette } from './pixi-renderer.js';
 
 let contentBundle = null;
@@ -71,6 +72,7 @@ export function getContentBundle() {
 export function setModOverrides(overrides = {}) {
   modOverrides = overrides && typeof overrides === 'object' ? overrides : {};
   applyModOverrides();
+  applyModPatches(modOverrides);
 }
 
 export function getModOverrides() {

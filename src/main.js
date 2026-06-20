@@ -46,7 +46,7 @@ import {
 import { describeSelection, describeTilePanel, drawGame, drawGameCore, getLayout, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 import { importSaveSnapshot } from './saveTransfer.js';
-import { applyContentBundle, getContentBundle } from './content.js';
+import { applyModPatches, getContentBundle } from './content.js';
 import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAudioVolume, setBusVolume, toggleAudio, updateDynamicMusic, notifyCombatEngaged } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
@@ -65,7 +65,7 @@ import {
   fieldOrderCommand,
   crisisCommand
 } from './engine/commands.js';
-import { setModOverrides, validateContentSchema } from './engine/entity-factory.js';
+import { validateContentSchema } from './engine/entity-factory.js';
 import { loadContentAsync } from './engine/content-loader.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
@@ -4807,10 +4807,8 @@ function applyModPatchesFromForm(form) {
   try {
     const unitsPatch = JSON.parse(String(form.querySelector('#modUnitsPatch')?.value || '{}'));
     const buildingsPatch = JSON.parse(String(form.querySelector('#modBuildingsPatch')?.value || '{}'));
-    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch });
-    const bundle = getContentBundle();
-    validateContentSchema(bundle);
-    applyContentBundle(bundle);
+    applyModPatches({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch });
+    validateContentSchema(getContentBundle());
     toast('Mod patches applied.');
     playAudioCue('ui');
   } catch (error) {

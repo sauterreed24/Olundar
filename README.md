@@ -30,7 +30,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
 - Faction-specific promises for Dawnward wall guards, Veyr war caravans, and Mireclan marsh routes, each with distinct costs, effects, and delayed follow-through demands.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
-- Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
+- Pact-based allied field orders for defending Olundar roads, intercepting Hollow Crown marches, reinforcing the capital, or harassing Deadwalker structures.
 - Compact strategic map lenses for blight, roads, supply reach, Survival Pact vision, and aftermath mission targets.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
@@ -52,14 +52,15 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 
 ## Run it locally
 
+PixiJS is loaded as an ES module dependency, so install once before playing:
+
 ```bash
+npm install
 npm run quality:check
 npm start
 ```
 
 Then open the local URL printed by the server, usually `http://localhost:4173`.
-
-No package install is required because this prototype has no third-party runtime dependencies.
 Browsers that support installation will expose an **Install** button after the app is eligible; the service worker keeps the app shell available for offline reloads after the first visit.
 
 ## Controls
@@ -171,6 +172,5 @@ olundar_game/
 
 ## Suggested next production steps
 
-1. Let allied field orders intercept incoming marches so a coalition can physically blunt the Hollow Crown's columns before they reach Olundar.
-2. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
-3. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
+1. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
+2. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.

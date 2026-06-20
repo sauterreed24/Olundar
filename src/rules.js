@@ -314,7 +314,8 @@ export function addUnit(state, type, faction, x, y, extra = {}) {
     xp: extra.xp ?? 0,
     hasActed: false,
     fortified: 0,
-    stance: extra.stance || 'ready'
+    stance: extra.stance || 'ready',
+    march: extra.march === true
   };
   state.units.push(unit);
   return unit;
@@ -3197,7 +3198,13 @@ function runLivingAiTurn(state, factionId) {
       if (fieldOrder === 'harassDeadworks') {
         recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
       } else if (fieldOrder === 'defendRoads') {
-        recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
+        if (orderTarget?.ref?.march) {
+          recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'March Intercepted', `${faction.name} moved to blunt a Hollow Crown column under pact orders.`, 2);
+        } else {
+          recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
+        }
+      } else if (fieldOrder === 'reinforceCapital' && orderTarget?.ref?.march) {
+        recordFieldOrderFulfillment(state, factionId, 'reinforceCapital', 'March Intercepted', `${faction.name} moved to blunt a Hollow Crown column under pact orders.`, 2);
       }
       aiTryAttack(state, unit);
       continue;
@@ -3273,6 +3280,11 @@ function fieldOrderTarget(state, unit, orderId) {
   if (orderId === 'harassDeadworks') {
     return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
   }
+  if (orderId === 'reinforceCapital' || orderId === 'defendRoads') {
+    const interceptRadius = orderId === 'reinforceCapital' ? 30 : 24;
+    const intercept = nearestMarchInterceptTarget(state, unit.x, unit.y, interceptRadius);
+    if (intercept) return intercept;
+  }
   if (orderId === 'reinforceCapital') {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost']);
   }
@@ -3280,6 +3292,24 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
   }
   return null;
+}
+
+// Pact allies with defend/reinforce orders intercept Hollow Crown marches before they reach Olundar Prime.
+function nearestMarchInterceptTarget(state, x, y, maxDistance = 24) {
+  const capital = olundarCapital(state);
+  if (!capital) return null;
+  return state.units
+    .filter((unit) => unit.faction === 'dead' && unit.march)
+    .map((unit) => ({
+      kind: 'unit',
+      ref: unit,
+      x: unit.x,
+      y: unit.y,
+      dist: manhattan(x, y, unit.x, unit.y),
+      capitalDist: manhattan(unit.x, unit.y, capital.x, capital.y)
+    }))
+    .filter((target) => target.dist <= maxDistance)
+    .sort((a, b) => a.capitalDist - b.capitalDist || a.dist - b.dist)[0] || null;
 }
 
 function easternScoutTarget(state, x, y) {

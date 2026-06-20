@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CUES, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
+import { BUILDING_TYPES, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, applyModPatches, getContentBundle } from '../src/content.js';
 import { dataFilesExist, loadContentSync } from '../src/engine/content-loader.js';
 import { validateContentSchema } from '../src/engine/entity-factory.js';
 import {
@@ -912,6 +912,33 @@ check('pact field orders steer allied AI', () => {
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
 });
 
+check('pact field orders intercept Hollow Crown marches', () => {
+  const state = createGame('quality-march-intercept');
+  state.factions.dawn.discovered = true;
+  state.factions.olundar.pacts.dawn = true;
+  state.factions.dawn.pacts.olundar = true;
+  state.factions.olundar.relations.dawn = 45;
+  state.factions.dawn.relations.olundar = 45;
+  const order = setFieldOrder(state, 'dawn', 'defendRoads');
+  assert(order.ok, order.reason || 'Field order setup failed.');
+  const ally = state.units.find((unit) => unit.faction === 'dawn');
+  state.units = state.units.filter((unit) => unit.faction !== 'dawn' || unit.id === ally.id);
+  state.units = state.units.filter((unit) => unit.faction !== 'dead');
+  addUnit(state, 'boneThrall', 'dead', ally.x + 3, ally.y, { march: true });
+  endTurn(state);
+  const dawnMemory = getDiplomacyLedger(state).entries.find((entry) => entry.id === 'dawn').memory;
+  assert(dawnMemory.records.some((record) => record.label === 'March Intercepted' && record.type === 'fulfilled'), 'Defend Roads should record march interception when allies pursue Hollow Crown columns.');
+});
+
+check('mod menu patches apply to live content bundle', () => {
+  const originalHp = UNIT_TYPES.legionary.hp;
+  applyModPatches({ UNIT_TYPES: { legionary: { hp: originalHp + 99 } } });
+  assert(UNIT_TYPES.legionary.hp === originalHp + 99, 'Unit mod patch should merge into content bundle.');
+  applyModPatches({ UNIT_TYPES: { legionary: { hp: originalHp } } });
+  assert(UNIT_TYPES.legionary.hp === originalHp, 'Mod patch restore should reset content bundle stats.');
+  validateContentSchema(getContentBundle());
+});
+
 check('living faction war aims guide pre-pact behavior', () => {
   const ledgerState = createGame('quality-war-aim-ledger');
   for (const id of ['dawn', 'veyr', 'mire']) ledgerState.factions[id].discovered = true;
@@ -1040,6 +1067,8 @@ check('pwa install shell references real app assets', () => {
     './src/style.css'
   ];
   for (const asset of requiredAssets) assert(shellAssets.includes(asset), `Service worker shell cache missing ${asset}.`);
+  const dataFiles = readdirSync(path.join(root, 'data')).filter((file) => file.endsWith('.json'));
+  for (const file of dataFiles) assert(shellAssets.includes(`./data/${file}`), `Service worker shell cache missing data/${file}.`);
   for (const asset of shellAssets) {
     assert(!asset.startsWith('http'), `Service worker asset should be relative: ${asset}`);
     assert(webPathExists(asset), `Service worker caches missing asset: ${asset}`);

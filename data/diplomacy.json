@@ -118,12 +118,12 @@
     "defendRoads": {
       "id": "defendRoads",
       "name": "Defend Roads",
-      "text": "Patrol Olundar roads, outposts, and city approaches before pursuing distant targets."
+      "text": "Patrol Olundar roads and intercept Hollow Crown marches before they reach the capital."
     },
     "reinforceCapital": {
       "id": "reinforceCapital",
       "name": "Reinforce Capital",
-      "text": "Muster pact aid near Olundar Prime when possible."
+      "text": "Muster pact aid near Olundar Prime and intercept incoming marches when possible."
     },
     "harassDeadworks": {
       "id": "harassDeadworks",
