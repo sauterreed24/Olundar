@@ -1203,7 +1203,7 @@ function renderActions() {
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, directiveSourceCard, endTurnReview, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
