@@ -1,0 +1,22 @@
+{
+  "STARTING_RESOURCES": {
+    "food": 80,
+    "wood": 70,
+    "stone": 20,
+    "iron": 25,
+    "gold": 55,
+    "influence": 3,
+    "morale": 8,
+    "dread": 0
+  },
+  "RESOURCE_NAMES": {
+    "food": "Food",
+    "wood": "Wood",
+    "stone": "Stone",
+    "iron": "Iron",
+    "gold": "Gold",
+    "influence": "Influence",
+    "morale": "Morale",
+    "dread": "Dread"
+  }
+}

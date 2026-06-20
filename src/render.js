@@ -2,6 +2,8 @@ import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TE
 import { drawGameWithPixi } from './engine/pixi-renderer.js';
 import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
+import { getCamera } from './engine/camera.js';
+import { isPixiReady, renderPixiFrame } from './engine/pixi-renderer.js';
 
 const TERRAIN_COLORS = {
   plains: '#cfe66d',
@@ -201,8 +203,13 @@ export function pointToTile(canvas, clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  const x = (clientX - rect.left) * scaleX;
-  const y = (clientY - rect.top) * scaleY;
+  let x = (clientX - rect.left) * scaleX;
+  let y = (clientY - rect.top) * scaleY;
+  if (isPixiReady()) {
+    const adjusted = getCamera().screenToWorld(x, y, canvas.width, canvas.height);
+    x = adjusted.x;
+    y = adjusted.y;
+  }
   const layout = getLayout(canvas);
   if (x < layout.frameX || y < layout.frameY || x > layout.frameX + layout.mapWidth || y > layout.frameY + layout.mapHeight) {
     return { x: -1, y: -1 };
@@ -226,7 +233,15 @@ export function pointToTile(canvas, clientX, clientY) {
   return candidates[0] ? { x: candidates[0].x, y: candidates[0].y } : { x: -1, y: -1 };
 }
 
-export function drawGameToContext(ctx, canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
+  if (isPixiReady()) {
+    renderPixiFrame(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay, drawGameCore);
+    return;
+  }
+  drawGameCore(canvas, state, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay);
+}
+
+export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
   canvas.__olundarState = state;
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);

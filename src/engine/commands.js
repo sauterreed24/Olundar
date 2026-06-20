@@ -1,193 +1,162 @@
 /**
  * Command pattern for undoable player actions.
+ * All mutating player actions route through Command.execute().
  */
 
 import {
   attackBuilding,
   attackUnit,
-  fortifyUnit,
-  makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
   resolveCrisis,
-  resolvePromiseDemand,
   setFieldOrder,
   startConstruction,
   startTraining,
   upgradeBuilding,
-  serializeState,
-  deserializeState
+  makeDiplomaticPromise
 } from '../rules.js';
+import { serializeState, deserializeState } from '../rules.js';
 
-export function createCommandHistory(limit = 64) {
-  return {
-    undoStack: [],
-    redoStack: [],
-    limit
-  };
-}
+const MAX_HISTORY = 64;
 
-export class Command {
-  constructor(executeFn, undoFn, label = 'action') {
-    this.executeFn = executeFn;
-    this.undoFn = undoFn;
-    this.label = label;
+export class CommandHistory {
+  constructor() {
+    this.undoStack = [];
+    this.redoStack = [];
   }
 
-  execute(state) {
-    return this.executeFn(state);
+  clear() {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
+  execute(command, state) {
+    const snapshot = serializeState(state);
+    const result = command.run(state);
+    if (result?.ok !== false) {
+      this.undoStack.push({ command, snapshot });
+      if (this.undoStack.length > MAX_HISTORY) this.undoStack.shift();
+      this.redoStack = [];
+    }
+    return result;
   }
 
   undo(state) {
-    return this.undoFn(state);
+    const entry = this.undoStack.pop();
+    if (!entry) return { ok: false, reason: 'Nothing to undo.' };
+    this.redoStack.push({ command: entry.command, snapshot: serializeState(state) });
+    applyState(state, deserializeState(entry.snapshot));
+    return { ok: true, reason: entry.command.undoLabel || 'Undid last action.' };
+  }
+
+  redo(state) {
+    const entry = this.redoStack.pop();
+    if (!entry) return { ok: false, reason: 'Nothing to redo.' };
+    this.undoStack.push({ command: entry.command, snapshot: serializeState(state) });
+    const result = entry.command.run(state);
+    return result?.ok === false ? result : { ok: true, reason: entry.command.label || 'Redid action.' };
+  }
+
+  canUndo() {
+    return this.undoStack.length > 0;
+  }
+
+  canRedo() {
+    return this.redoStack.length > 0;
   }
 }
 
-function snapshotState(state) {
-  return deserializeState(serializeState(state));
+export class Command {
+  constructor(type, payload, label = '') {
+    this.type = type;
+    this.payload = payload;
+    this.label = label;
+    this.undoLabel = `Undid ${label || type}`;
+  }
+
+  run(state) {
+    return Command.execute(this.type, state, this.payload);
+  }
+
+  static execute(type, state, payload) {
+    switch (type) {
+      case 'move':
+        return moveUnit(state, payload.unitId, payload.x, payload.y);
+      case 'attack':
+        if (payload.targetType === 'building') {
+          return attackBuilding(state, payload.unitId, payload.targetId);
+        }
+        return attackUnit(state, payload.unitId, payload.targetId);
+      case 'build':
+        return startConstruction(state, payload.unitId, payload.buildingType, payload.x, payload.y);
+      case 'train':
+        return startTraining(state, payload.buildingId, payload.unitType);
+      case 'upgrade':
+        return upgradeBuilding(state, payload.buildingId);
+      case 'diplomacy':
+        return performDiplomacy(state, payload.factionId, payload.actionId);
+      case 'diplomacyPromise':
+        return makeDiplomaticPromise(state, payload.factionId, payload.promiseId);
+      case 'fieldOrder':
+        return setFieldOrder(state, payload.factionId, payload.orderId);
+      case 'crisis':
+        return resolveCrisis(state, payload.eventId, payload.choiceId);
+      default:
+        return { ok: false, reason: `Unknown command type: ${type}` };
+    }
+  }
 }
 
-export function pushCommand(history, command, state) {
-  const before = snapshotState(state);
-  const result = command.execute(state);
-  if (result?.ok === false) return result;
-  const after = snapshotState(state);
-  history.undoStack.push({
-    label: command.label,
-    before,
-    after,
-    command
-  });
-  if (history.undoStack.length > history.limit) history.undoStack.shift();
-  history.redoStack = [];
-  return result;
+export function moveCommand(unitId, x, y) {
+  return new Command('move', { unitId, x, y }, 'Move unit');
 }
 
-export function undoCommand(history, state) {
-  const entry = history.undoStack.pop();
-  if (!entry) return { ok: false, message: 'Nothing to undo.' };
-  Object.assign(state, deserializeState(serializeState(entry.before)));
-  history.redoStack.push(entry);
-  return { ok: true, message: `Undid ${entry.label}.` };
+export function attackCommand(unitId, targetId, targetType = 'unit') {
+  return new Command('attack', { unitId, targetId, targetType }, 'Attack');
 }
 
-export function redoCommand(history, state) {
-  const entry = history.redoStack.pop();
-  if (!entry) return { ok: false, message: 'Nothing to redo.' };
-  Object.assign(state, deserializeState(serializeState(entry.after)));
-  history.undoStack.push(entry);
-  return { ok: true, message: `Redid ${entry.label}.` };
+export function buildCommand(unitId, buildingType, x, y) {
+  return new Command('build', { unitId, buildingType, x, y }, 'Build structure');
 }
 
-export function createCallableCommand(actionFn, label = 'action') {
-  return new Command((state) => actionFn(state), () => ({ ok: true }), label);
+export function trainCommand(buildingId, unitType) {
+  return new Command('train', { buildingId, unitType }, 'Train unit');
 }
 
-export function createFortifyCommand(unitId) {
-  return new Command(
-    (state) => fortifyUnit(state, unitId),
-    () => ({ ok: true }),
-    'fortify'
-  );
+export function upgradeCommand(buildingId) {
+  return new Command('upgrade', { buildingId }, 'Upgrade building');
 }
 
-export function createPromiseDemandCommand(factionId, promiseId, demandId, choice) {
-  return new Command(
-    (state) => resolvePromiseDemand(state, factionId, promiseId, demandId, choice),
-    () => ({ ok: true }),
-    'diplomacy demand'
-  );
+export function diplomacyCommand(factionId, actionId) {
+  return new Command('diplomacy', { factionId, actionId }, 'Diplomatic action');
 }
 
-export function createDiplomaticPromiseCommand(factionId, promiseId) {
-  return new Command(
-    (state) => makeDiplomaticPromise(state, factionId, promiseId),
-    () => ({ ok: true }),
-    'diplomatic promise'
-  );
+export function diplomacyPromiseCommand(factionId, promiseId) {
+  return new Command('diplomacyPromise', { factionId, promiseId }, 'Diplomatic promise');
 }
 
-export function createMoveCommand(unitId, x, y) {
-  return new Command(
-    (state) => moveUnit(state, unitId, x, y),
-    () => ({ ok: true }),
-    'move'
-  );
+export function fieldOrderCommand(factionId, orderId) {
+  return new Command('fieldOrder', { factionId, orderId }, 'Field order');
 }
 
-export function createAttackUnitCommand(attackerId, targetId) {
-  return new Command(
-    (state) => attackUnit(state, attackerId, targetId),
-    () => ({ ok: true }),
-    'attack'
-  );
+export function crisisCommand(eventId, choiceId) {
+  return new Command('crisis', { eventId, choiceId }, 'Crisis ruling');
 }
 
-export function createAttackBuildingCommand(attackerId, buildingId) {
-  return new Command(
-    (state) => attackBuilding(state, attackerId, buildingId),
-    () => ({ ok: true }),
-    'attack building'
-  );
+let sharedHistory = null;
+
+export function getCommandHistory() {
+  if (!sharedHistory) sharedHistory = new CommandHistory();
+  return sharedHistory;
 }
 
-export function createBuildCommand(unitId, buildingType, x, y) {
-  return new Command(
-    (state) => startConstruction(state, unitId, buildingType, x, y),
-    () => ({ ok: true }),
-    'build'
-  );
+export function executePlayerCommand(state, command) {
+  return getCommandHistory().execute(command, state);
 }
 
-export function createTrainCommand(buildingId, unitType) {
-  return new Command(
-    (state) => startTraining(state, buildingId, unitType),
-    () => ({ ok: true }),
-    'train'
-  );
-}
-
-export function createUpgradeCommand(buildingId) {
-  return new Command(
-    (state) => upgradeBuilding(state, buildingId),
-    () => ({ ok: true }),
-    'upgrade'
-  );
-}
-
-export function createDiplomacyCommand(factionId, actionId) {
-  return new Command(
-    (state) => performDiplomacy(state, factionId, actionId),
-    () => ({ ok: true }),
-    'diplomacy'
-  );
-}
-
-export function createFieldOrderCommand(factionId, orderId) {
-  return new Command(
-    (state) => setFieldOrder(state, factionId, orderId),
-    () => ({ ok: true }),
-    'field order'
-  );
-}
-
-export function createCrisisCommand(crisisId, choiceId) {
-  return new Command(
-    (state) => resolveCrisis(state, crisisId, choiceId),
-    () => ({ ok: true }),
-    'crisis choice'
-  );
-}
-
-export function executePlayerCommand(history, state, command) {
-  return pushCommand(history, command, state);
-}
-
-export function validateUndoStack(history, state, replayFn) {
-  if (!history.undoStack.length) return true;
-  const probe = snapshotState(state);
-  const entry = history.undoStack[history.undoStack.length - 1];
-  Object.assign(probe, deserializeState(serializeState(entry.before)));
-  const replay = replayFn(probe);
-  return replay !== false;
+function applyState(target, source) {
+  for (const key of Object.keys(target)) {
+    if (!(key in source)) delete target[key];
+  }
+  Object.assign(target, source);
 }

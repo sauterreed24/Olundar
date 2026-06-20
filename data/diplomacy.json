@@ -1,0 +1,134 @@
+{
+  "DIPLOMACY_ACTIONS": {
+    "pact": {
+      "name": "Offer Survival Pact",
+      "cost": {
+        "influence": 2
+      },
+      "relation": 18,
+      "text": "Spend influence to create shared vision and occasional military aid."
+    },
+    "trade": {
+      "name": "Open Trade",
+      "cost": {
+        "influence": 1,
+        "gold": 12
+      },
+      "relation": 10,
+      "text": "Gain steady gold and improve relations."
+    },
+    "aid": {
+      "name": "Request War Aid",
+      "cost": {
+        "influence": 1
+      },
+      "relation": -4,
+      "text": "Ask a discovered civilization for units or supplies."
+    },
+    "pressure": {
+      "name": "Pressure Them",
+      "cost": {
+        "morale": 1
+      },
+      "relation": -18,
+      "text": "Try to extract resources quickly at a diplomatic cost."
+    }
+  },
+  "DIPLOMATIC_PROMISES": {
+    "dawnWallGuard": {
+      "id": "dawnWallGuard",
+      "factionId": "dawn",
+      "name": "Promise Wall Guard",
+      "cost": {
+        "wood": 14,
+        "influence": 1
+      },
+      "relation": 7,
+      "memory": 2,
+      "text": "Send timber, engineers, and oath-guards to strengthen Dawnward walls before the dead reach them.",
+      "preview": "Dawnward holdings gain durability, relations improve, and the ledger records a kept wall oath.",
+      "demand": {
+        "id": "dawnWallWatch",
+        "delay": 3,
+        "name": "Maintain the Wall Watch",
+        "cost": {
+          "stone": 10,
+          "gold": 8
+        },
+        "relation": 6,
+        "memory": 2,
+        "text": "Dawnward captains ask Olundar to keep the promised wall guard supplied as raids gather below the hillforts.",
+        "preview": "Answering reinforces Dawnward holdings again; ignoring creates a wall-oath grievance."
+      }
+    },
+    "veyrCaravanFund": {
+      "id": "veyrCaravanFund",
+      "factionId": "veyr",
+      "name": "Fund War Caravans",
+      "cost": {
+        "gold": 22,
+        "wood": 6
+      },
+      "relation": 7,
+      "memory": 2,
+      "text": "Underwrite Veyr wagons, escorts, and road bribes so their merchants commit supply to the living front.",
+      "preview": "Olundar receives food and iron from the first convoy while Veyr records the funded route.",
+      "demand": {
+        "id": "veyrRouteTolls",
+        "delay": 3,
+        "name": "Pay the Route Tolls",
+        "cost": {
+          "gold": 18,
+          "influence": 1
+        },
+        "relation": 6,
+        "memory": 2,
+        "text": "Veyr factors demand route tolls and escort bribes before the next war caravan risks the roads.",
+        "preview": "Answering brings another supply convoy; ignoring makes Veyr treat the promise as unpaid politics."
+      }
+    },
+    "mireMarshRoutes": {
+      "id": "mireMarshRoutes",
+      "factionId": "mire",
+      "name": "Scout Marsh Routes",
+      "cost": {
+        "food": 10,
+        "influence": 1
+      },
+      "relation": 7,
+      "memory": 2,
+      "text": "Feed Mireclan guides and swear to respect their marsh routes in exchange for safer scouting paths.",
+      "preview": "A Mire route guide joins near Olundar, relations improve, and the ledger records the route oath.",
+      "demand": {
+        "id": "mireGuideStores",
+        "delay": 3,
+        "name": "Feed the Marsh Guides",
+        "cost": {
+          "food": 14,
+          "wood": 6
+        },
+        "relation": 6,
+        "memory": 2,
+        "text": "Mireclan guides ask for food and dry timber before they keep marking the blight-shadow routes.",
+        "preview": "Answering reveals practical route knowledge; ignoring creates a marsh-oath grievance."
+      }
+    }
+  },
+  "FIELD_ORDERS": {
+    "defendRoads": {
+      "id": "defendRoads",
+      "name": "Defend Roads",
+      "text": "Patrol Olundar roads, outposts, and city approaches before pursuing distant targets."
+    },
+    "reinforceCapital": {
+      "id": "reinforceCapital",
+      "name": "Reinforce Capital",
+      "text": "Muster pact aid near Olundar Prime when possible."
+    },
+    "harassDeadworks": {
+      "id": "harassDeadworks",
+      "name": "Harass Deadworks",
+      "text": "Push toward revealed Deadwalker structures and pressure their expansion."
+    }
+  }
+}

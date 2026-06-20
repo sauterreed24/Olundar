@@ -1,141 +1,143 @@
 /**
- * Smooth battlefield camera: wheel zoom with inertia, edge-panning, bounded scroll.
+ * Smooth viewport camera: wheel zoom with inertia, edge-panning, bounded scrolling.
+ * Tactical framing from render.js is preserved; this layer adds player-controlled view motion.
  */
 
-const MIN_ZOOM = 0.72;
-const MAX_ZOOM = 1.85;
-const ZOOM_STEP = 0.08;
-const EDGE_PAN_MARGIN = 28;
-const EDGE_PAN_SPEED = 4.2;
-const ZOOM_INERTIA = 0.82;
-const PAN_INERTIA = 0.88;
-const WHEEL_ZOOM_SENSITIVITY = 0.0012;
+const DEFAULT_BOUNDS = {
+  minZoom: 0.72,
+  maxZoom: 2.35,
+  minPanX: -420,
+  maxPanX: 420,
+  minPanY: -320,
+  maxPanY: 320
+};
 
-export function createCamera() {
-  return {
-    offsetX: 0,
-    offsetY: 0,
-    zoom: 1,
-    targetZoom: 1,
-    velocityX: 0,
-    velocityY: 0,
-    zoomVelocity: 0,
-    bounds: { minX: -320, maxX: 320, minY: -240, maxY: 240 },
-    pointerInside: false,
-    pointerX: 0,
-    pointerY: 0,
-    viewportW: 1280,
-    viewportH: 860
-  };
-}
-
-export function setCameraViewport(camera, width, height) {
-  camera.viewportW = width;
-  camera.viewportH = height;
-  updateCameraBounds(camera);
-}
-
-export function updateCameraBounds(camera, mapWidth = 0, mapHeight = 0) {
-  const padX = Math.max(120, mapWidth * 0.18);
-  const padY = Math.max(90, mapHeight * 0.18);
-  camera.bounds = {
-    minX: -padX,
-    maxX: padX,
-    minY: -padY,
-    maxY: padY
-  };
-}
-
-export function clampCamera(camera) {
-  camera.offsetX = clamp(camera.offsetX, camera.bounds.minX, camera.bounds.maxX);
-  camera.offsetY = clamp(camera.offsetY, camera.bounds.minY, camera.bounds.maxY);
-  camera.zoom = clamp(camera.zoom, MIN_ZOOM, MAX_ZOOM);
-  camera.targetZoom = clamp(camera.targetZoom, MIN_ZOOM, MAX_ZOOM);
-}
-
-export function resetCamera(camera) {
-  camera.offsetX = 0;
-  camera.offsetY = 0;
-  camera.zoom = 1;
-  camera.targetZoom = 1;
-  camera.velocityX = 0;
-  camera.velocityY = 0;
-  camera.zoomVelocity = 0;
-}
-
-export function focusCameraOn(camera, screenX, screenY, strength = 0.22) {
-  const cx = camera.viewportW * 0.5;
-  const cy = camera.viewportH * 0.5;
-  camera.velocityX += (cx - screenX) * strength * 0.02;
-  camera.velocityY += (cy - screenY) * strength * 0.02;
-}
-
-export function handleCameraWheel(camera, deltaY, clientX, clientY, rect) {
-  const before = screenToWorld(camera, clientX - rect.left, clientY - rect.top, rect);
-  const direction = deltaY < 0 ? 1 : -1;
-  camera.targetZoom = clamp(camera.targetZoom + direction * ZOOM_STEP, MIN_ZOOM, MAX_ZOOM);
-  camera.zoomVelocity += direction * 0.04;
-  const after = screenToWorld(camera, clientX - rect.left, clientY - rect.top, rect);
-  camera.offsetX += (after.x - before.x) * camera.zoom;
-  camera.offsetY += (after.y - before.y) * camera.zoom;
-  clampCamera(camera);
-}
-
-export function handleCameraPointerMove(camera, clientX, clientY, rect) {
-  camera.pointerInside = true;
-  camera.pointerX = clientX - rect.left;
-  camera.pointerY = clientY - rect.top;
-}
-
-export function handleCameraPointerLeave(camera) {
-  camera.pointerInside = false;
-}
-
-export function tickCamera(camera, deltaMs = 16) {
-  const dt = deltaMs / 16;
-
-  if (camera.pointerInside) {
-    const w = camera.viewportW;
-    const h = camera.viewportH;
-    if (camera.pointerX < EDGE_PAN_MARGIN) camera.velocityX += EDGE_PAN_SPEED * dt * (1 - camera.pointerX / EDGE_PAN_MARGIN);
-    if (camera.pointerX > w - EDGE_PAN_MARGIN) camera.velocityX -= EDGE_PAN_SPEED * dt * (1 - (w - camera.pointerX) / EDGE_PAN_MARGIN);
-    if (camera.pointerY < EDGE_PAN_MARGIN) camera.velocityY += EDGE_PAN_SPEED * dt * (1 - camera.pointerY / EDGE_PAN_MARGIN);
-    if (camera.pointerY > h - EDGE_PAN_MARGIN) camera.velocityY -= EDGE_PAN_SPEED * dt * (1 - (h - camera.pointerY) / EDGE_PAN_MARGIN);
+export class Camera {
+  constructor(bounds = DEFAULT_BOUNDS) {
+    this.bounds = { ...DEFAULT_BOUNDS, ...bounds };
+    this.panX = 0;
+    this.panY = 0;
+    this.zoom = 1;
+    this.targetZoom = 1;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.zoomVelocity = 0;
+    this.edgePanMargin = 36;
+    this.edgePanSpeed = 5.5;
+    this.inertia = 0.88;
+    this.zoomInertia = 0.82;
+    this.pointerInside = false;
+    this.lastPointer = { x: 0, y: 0 };
   }
 
-  const zoomDelta = camera.targetZoom - camera.zoom;
-  camera.zoom += zoomDelta * (1 - ZOOM_INERTIA) * dt + camera.zoomVelocity;
-  camera.zoomVelocity *= ZOOM_INERTIA;
+  reset() {
+    this.panX = 0;
+    this.panY = 0;
+    this.zoom = 1;
+    this.targetZoom = 1;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.zoomVelocity = 0;
+  }
 
-  camera.offsetX += camera.velocityX * dt;
-  camera.offsetY += camera.velocityY * dt;
-  camera.velocityX *= PAN_INERTIA;
-  camera.velocityY *= PAN_INERTIA;
+  focusTile(tileX, tileY, layout) {
+    if (!layout) return;
+    const center = tileCenterScreen(layout, tileX, tileY);
+    const cx = layout.canvasWidth * 0.5;
+    const cy = layout.canvasHeight * 0.5;
+    this.panX = clamp(this.panX + (cx - center.x) * 0.35, this.bounds.minPanX, this.bounds.maxPanX);
+    this.panY = clamp(this.panY + (cy - center.y) * 0.35, this.bounds.minPanY, this.bounds.maxPanY);
+  }
 
-  clampCamera(camera);
+  handleWheel(deltaY, clientX, clientY, canvasRect) {
+    const factor = deltaY > 0 ? 0.92 : 1.08;
+    const next = clamp(this.targetZoom * factor, this.bounds.minZoom, this.bounds.maxZoom);
+    const ratio = next / this.targetZoom;
+    const px = clientX - canvasRect.left;
+    const py = clientY - canvasRect.top;
+    const cx = canvasRect.width * 0.5;
+    const cy = canvasRect.height * 0.5;
+    this.panX += (px - cx) * (1 - ratio);
+    this.panY += (py - cy) * (1 - ratio);
+    this.targetZoom = next;
+    this.zoomVelocity += (next - this.zoom) * 0.15;
+  }
+
+  setPointer(clientX, clientY, inside, canvasRect) {
+    this.pointerInside = inside;
+    if (!inside || !canvasRect) return;
+    this.lastPointer = {
+      x: clientX - canvasRect.left,
+      y: clientY - canvasRect.top
+    };
+  }
+
+  panBy(dx, dy) {
+    this.panX = clamp(this.panX + dx, this.bounds.minPanX, this.bounds.maxPanX);
+    this.panY = clamp(this.panY + dy, this.bounds.minPanY, this.bounds.maxPanY);
+  }
+
+  update(dtMs, canvasWidth, canvasHeight) {
+    const dt = Math.min(32, dtMs) / 16.67;
+
+    if (this.pointerInside) {
+      const { x, y } = this.lastPointer;
+      const m = this.edgePanMargin;
+      if (x < m) this.velocityX -= this.edgePanSpeed * dt * (1 - x / m);
+      else if (x > canvasWidth - m) this.velocityX += this.edgePanSpeed * dt * (1 - (canvasWidth - x) / m);
+      if (y < m) this.velocityY -= this.edgePanSpeed * dt * (1 - y / m);
+      else if (y > canvasHeight - m) this.velocityY += this.edgePanSpeed * dt * (1 - (canvasHeight - y) / m);
+    }
+
+    this.panX = clamp(this.panX + this.velocityX * dt, this.bounds.minPanX, this.bounds.maxPanX);
+    this.panY = clamp(this.panY + this.velocityY * dt, this.bounds.minPanY, this.bounds.maxPanY);
+    this.velocityX *= this.inertia;
+    this.velocityY *= this.inertia;
+
+    this.zoomVelocity += (this.targetZoom - this.zoom) * 0.18;
+    this.zoom += this.zoomVelocity;
+    this.zoomVelocity *= this.zoomInertia;
+    this.zoom = clamp(this.zoom, this.bounds.minZoom, this.bounds.maxZoom);
+  }
+
+  getTransform() {
+    return {
+      panX: this.panX,
+      panY: this.panY,
+      zoom: this.zoom,
+      centerX: 0,
+      centerY: 0
+    };
+  }
+
+  applyToPoint(screenX, screenY, canvasWidth, canvasHeight) {
+    const cx = canvasWidth * 0.5;
+    const cy = canvasHeight * 0.5;
+    return {
+      x: (screenX - cx - this.panX) / this.zoom + cx,
+      y: (screenY - cy - this.panY) / this.zoom + cy
+    };
+  }
+
+  screenToWorld(screenX, screenY, canvasWidth, canvasHeight) {
+    return this.applyToPoint(screenX, screenY, canvasWidth, canvasHeight);
+  }
 }
 
-export function screenToWorld(camera, x, y, rect = null) {
-  const scaleX = rect ? (camera.viewportW / rect.width) : 1;
-  const scaleY = rect ? (camera.viewportH / rect.height) : 1;
-  const sx = x * scaleX;
-  const sy = y * scaleY;
+let sharedCamera = null;
+
+export function getCamera() {
+  if (!sharedCamera) sharedCamera = new Camera();
+  return sharedCamera;
+}
+
+function tileCenterScreen(layout, x, y) {
+  const halfW = layout.halfTileWidth;
+  const halfH = layout.halfTileHeight;
   return {
-    x: (sx - camera.viewportW * 0.5 - camera.offsetX) / camera.zoom + camera.viewportW * 0.5,
-    y: (sy - camera.viewportH * 0.5 - camera.offsetY) / camera.zoom + camera.viewportH * 0.5
+    x: layout.originX + (x - y) * halfW,
+    y: layout.originY + (x + y) * halfH
   };
-}
-
-export function getCameraTransform(camera) {
-  return {
-    x: camera.viewportW * 0.5 + camera.offsetX,
-    y: camera.viewportH * 0.5 + camera.offsetY,
-    scale: camera.zoom
-  };
-}
-
-export function applyWheelInertia(camera, deltaY) {
-  camera.zoomVelocity += -deltaY * WHEEL_ZOOM_SENSITIVITY;
 }
 
 function clamp(value, min, max) {
