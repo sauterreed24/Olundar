@@ -136,6 +136,27 @@ const BUILD_DOCTRINE_GROUPS = [
 ];
 const IDLE_HELP_DELAY_MS = 10000;
 const IDLE_ACTIVITY_THROTTLE_MS = 650;
+const OPENING_TUTORIAL_STORAGE_KEY = 'olundar.player.openingTutorial.v1';
+const OPENING_TUTORIAL_STEPS = [
+  {
+    id: 'move',
+    label: 'Move',
+    title: 'Move one force',
+    text: 'Choose a highlighted scout or tactical move and commit it. The tutorial advances only after a real move command succeeds.'
+  },
+  {
+    id: 'build',
+    label: 'Build',
+    title: 'Start one construction',
+    text: 'Use the engineer to place a legal road, farm, mine, tower, or camp. A valid build command completes this step.'
+  },
+  {
+    id: 'attack',
+    label: 'Attack',
+    title: 'Land one attack',
+    text: 'When a hostile is visible and in range, commit the forecasted strike. This step waits for a successful attack command.'
+  }
+];
 
 let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
@@ -147,6 +168,7 @@ let idleHelpVisible = false;
 let lastIdleActivityAt = 0;
 let playerSettings = readSettings();
 let cosmeticProfile = readCosmeticProfile();
+let openingTutorial = readOpeningTutorialState();
 let lastAutoRecapKey = null;
 let activeMapLens = 'normal';
 let focusedMissionId = null;
@@ -209,6 +231,7 @@ function mapCanvasDprCap(width, height, compactViewport) {
 
 function render() {
   const activeCanvas = getCanvas();
+  document.body.classList.toggle('tutorial-active', openingTutorialActive());
   drawGame(activeCanvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay(), cosmeticProfile);
   syncDynamicAudio();
   renderTacticalPause();
@@ -427,12 +450,19 @@ function renderMapHelp() {
     ];
   const chips = [
     ...(showIdleHelp ? idleContextualHelpChips(directive) : []),
+    ...(showIdleHelp ? [] : [openingTutorialMapHelpChip()]),
     ...(directive && !showIdleHelp ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
     movementFieldMapHelpChip(),
     ...(showIdleHelp ? [] : [endTurnReviewMapHelpChip(), deadwalkerMapHelpChip()]),
     ...hints
   ].filter(Boolean);
   mapHelp.innerHTML = chips.join('');
+}
+
+function openingTutorialMapHelpChip() {
+  const step = currentOpeningTutorialStep();
+  if (!step) return '';
+  return `<button type="button" class="tutorial-directive map-help-action" data-map-help-action="tutorial" aria-label="Focus tutorial step ${escapeHtml(step.title)}"><b>Tutorial</b> ${escapeHtml(step.label)}</button>`;
 }
 
 function idleBuildHelpChips(def) {
@@ -567,15 +597,289 @@ function renderGuide() {
   applyGuideHighlights(guide);
 }
 
+function openingTutorialActive() {
+  return state.status === 'playing' && !openingTutorial.skipped && !openingTutorial.completedAt && Boolean(currentOpeningTutorialStep());
+}
+
+function currentOpeningTutorialStep() {
+  if (state.status !== 'playing' || openingTutorial.skipped || openingTutorial.completedAt) return null;
+  return OPENING_TUTORIAL_STEPS.find((step) => !openingTutorial.completedStepIds.includes(step.id)) || null;
+}
+
+function readOpeningTutorialState() {
+  try {
+    return normalizeOpeningTutorialState(JSON.parse(localStorage.getItem(OPENING_TUTORIAL_STORAGE_KEY) || '{}'));
+  } catch {
+    return normalizeOpeningTutorialState();
+  }
+}
+
+function saveOpeningTutorialState(nextState) {
+  openingTutorial = normalizeOpeningTutorialState(nextState);
+  try {
+    localStorage.setItem(OPENING_TUTORIAL_STORAGE_KEY, JSON.stringify(openingTutorial));
+  } catch {
+    // Tutorial progress is optional player preference state.
+  }
+  return openingTutorial;
+}
+
+function normalizeOpeningTutorialState(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  const valid = new Set(OPENING_TUTORIAL_STEPS.map((step) => step.id));
+  const completedStepIds = Array.isArray(source.completedStepIds)
+    ? source.completedStepIds.filter((id, index, list) => valid.has(id) && list.indexOf(id) === index)
+    : [];
+  const completedAt = completedStepIds.length === OPENING_TUTORIAL_STEPS.length
+    ? source.completedAt || new Date().toISOString()
+    : null;
+  return {
+    skipped: Boolean(source.skipped),
+    completedStepIds,
+    completedAt
+  };
+}
+
+function openingTutorialCard() {
+  const step = currentOpeningTutorialStep();
+  if (!step) return null;
+  const action = openingTutorialAction(step.id);
+  const index = OPENING_TUTORIAL_STEPS.findIndex((item) => item.id === step.id);
+  const completedCount = openingTutorial.completedStepIds.length;
+  const card = actionSection('Opening Tutorial', `Step ${index + 1}/${OPENING_TUTORIAL_STEPS.length}. ${completedCount} completed by real commands.`, `opening-tutorial-card tutorial-focus tutorial-step-${step.id}`);
+  const progress = document.createElement('div');
+  progress.className = 'opening-tutorial-progress';
+  progress.innerHTML = OPENING_TUTORIAL_STEPS.map((item) => {
+    const done = openingTutorial.completedStepIds.includes(item.id);
+    const current = item.id === step.id;
+    return `<span class="${done ? 'done' : current ? 'current' : ''}"><b>${escapeHtml(item.label)}</b></span>`;
+  }).join('');
+  card.appendChild(progress);
+
+  const body = document.createElement('div');
+  body.className = 'opening-tutorial-body';
+  body.innerHTML = `
+    <strong>${escapeHtml(step.title)}</strong>
+    <p>${escapeHtml(step.text)}</p>
+    ${action ? `<small>${escapeHtml(action.meta || action.previewMeta || 'Ready when the command is available.')}</small>` : '<small>Keep scouting and use the blight lens until a legal target appears.</small>'}
+  `;
+  card.appendChild(body);
+
+  const actions = commandActions('opening-tutorial-actions');
+  if (action?.canExecute) {
+    actions.appendChild(orderButton(action.executeLabel || action.label, action.executeMeta || action.meta, () => executeOpeningTutorialAction(action), {
+      tone: 'primary'
+    }));
+  } else {
+    actions.appendChild(orderButton(action?.label || tutorialFallbackLabel(step.id), action?.previewMeta || tutorialFallbackMeta(step.id), () => focusOpeningTutorialStep(step.id), {
+      tone: 'primary'
+    }));
+  }
+  actions.appendChild(orderButton('Skip tutorial', 'Hide these success gates for this browser', () => skipOpeningTutorial()));
+  card.appendChild(actions);
+  return card;
+}
+
+function openingTutorialAction(stepId) {
+  if (stepId === 'move') return tutorialMoveAction();
+  if (stepId === 'build') return tutorialBuildAction();
+  if (stepId === 'attack') return tutorialAttackAction();
+  return null;
+}
+
+function tutorialMoveAction() {
+  const openingMove = ['scout', 'contact', 'front']
+    .map((id) => openingDirectiveAction(id))
+    .find((action) => action?.kind === 'move' && action.canExecute && !action.disabled);
+  if (openingMove) return openingMove;
+  const unit = getReadyOlundarUnits(state).find((candidate) => tacticalMoveOrders(candidate).length);
+  const order = unit ? tacticalMoveOrders(unit)[0] : null;
+  if (!unit || !order) return null;
+  return {
+    kind: 'move',
+    unitId: unit.id,
+    x: order.x,
+    y: order.y,
+    canExecute: true,
+    label: order.label,
+    meta: order.meta,
+    executeLabel: 'Do move',
+    executeMeta: `${order.x},${order.y} sector`
+  };
+}
+
+function tutorialBuildAction() {
+  const build = ['engineer', 'iron']
+    .map((id) => openingDirectiveAction(id))
+    .find((action) => action?.kind === 'build' && action.canExecute && !action.disabled);
+  if (build) return { ...build, executeLabel: 'Do build' };
+  const engineer = openingUnitByTag('builder');
+  if (!engineer) return null;
+  return {
+    kind: 'focus',
+    unitId: engineer.id,
+    x: engineer.x,
+    y: engineer.y,
+    label: `Focus ${engineer.name}`,
+    meta: engineer.hasActed ? 'Engineer refreshes next turn.' : 'Choose a legal construction site.',
+    previewMeta: 'Select builder'
+  };
+}
+
+function tutorialAttackAction() {
+  for (const unit of getReadyOlundarUnits(state)) {
+    const range = UNIT_TYPES[unit.type]?.range || 1;
+    const target = visibleHostileTargets(unit, range)[0];
+    if (!target) continue;
+    const targetBuilding = Boolean(BUILDING_TYPES[target.type]);
+    const forecast = targetBuilding
+      ? forecastBuildingAttack(state, unit.id, target.id)
+      : forecastUnitAttack(state, unit.id, target.id);
+    if (!forecast.ok) continue;
+    return {
+      kind: 'attack',
+      unitId: unit.id,
+      targetId: target.id,
+      targetType: targetBuilding ? 'building' : 'unit',
+      x: target.x,
+      y: target.y,
+      canExecute: true,
+      label: `Attack ${target.name || forecast.targetName}`,
+      meta: `${forecast.damage} damage | HP ${forecast.targetHpBefore}->${forecast.targetHpAfter}`,
+      executeLabel: 'Do attack',
+      executeMeta: `${forecast.distance}/${forecast.range} range`
+    };
+  }
+  return null;
+}
+
+function executeOpeningTutorialAction(action) {
+  if (action.kind === 'move') {
+    selectUnit(action.unitId);
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+    const ok = runCommand(moveCommand(action.unitId, action.x, action.y), 'move');
+    if (ok && window.innerWidth <= 980) scrollBattlefieldIntoView();
+    return;
+  }
+  if (action.kind === 'build') {
+    selectUnit(action.unitId);
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+    const ok = runCommand(buildCommand(action.unitId, action.buildingType, action.x, action.y), 'build');
+    if (ok && window.innerWidth <= 980) scrollBattlefieldIntoView();
+    return;
+  }
+  if (action.kind === 'attack') {
+    selectUnit(action.unitId);
+    lastTile = { x: action.x, y: action.y };
+    hoverTile = lastTile;
+    runCommand(attackCommand(action.unitId, action.targetId, action.targetType), 'attack');
+    if (window.innerWidth <= 980) scrollBattlefieldIntoView();
+    return;
+  }
+  focusOpeningTutorialStep(action.kind || 'move');
+}
+
+function focusOpeningTutorialStep(stepId) {
+  if (stepId === 'move') {
+    const action = tutorialMoveAction();
+    if (action) {
+      previewOpeningDirective(action);
+      return;
+    }
+    selectNextReadyUnit();
+    return;
+  }
+  if (stepId === 'build') {
+    const action = tutorialBuildAction();
+    if (action?.kind === 'build') {
+      previewOpeningDirective(action);
+      return;
+    }
+    const engineer = openingUnitByTag('builder');
+    if (engineer) focusReadyForce(engineer.id);
+    return;
+  }
+  const attack = tutorialAttackAction();
+  if (attack) {
+    selectUnit(attack.unitId);
+    lastTile = { x: attack.x, y: attack.y };
+    hoverTile = lastTile;
+    state.cameraFocusTile = lastTile;
+    toast(`${attack.label}: ${attack.meta}.`);
+    render();
+    return;
+  }
+  activeMapLens = 'blight';
+  const intent = currentDeadwalkerIntent();
+  focusDeadwalkerIntent(intent);
+}
+
+function recordOpeningTutorialSuccess(successCue, result) {
+  const completedId = successCue === 'build' && result?.building
+    ? 'build'
+    : successCue === 'move'
+      ? 'move'
+      : successCue === 'attack'
+        ? 'attack'
+        : null;
+  if (!completedId || openingTutorial.skipped || openingTutorial.completedAt || openingTutorial.completedStepIds.includes(completedId)) return;
+  const nextCompleted = [...openingTutorial.completedStepIds, completedId];
+  const finished = nextCompleted.length === OPENING_TUTORIAL_STEPS.length;
+  saveOpeningTutorialState({
+    ...openingTutorial,
+    completedStepIds: nextCompleted,
+    completedAt: finished ? new Date().toISOString() : null
+  });
+  const step = OPENING_TUTORIAL_STEPS.find((item) => item.id === completedId);
+  toast(finished ? 'Opening tutorial complete.' : `Tutorial step complete: ${step.label}.`, 'good');
+}
+
+function skipOpeningTutorial() {
+  saveOpeningTutorialState({ ...openingTutorial, skipped: true });
+  clearGuideHighlights();
+  toast('Opening tutorial skipped.');
+  render();
+}
+
+function tutorialFallbackLabel(stepId) {
+  if (stepId === 'attack') return 'Find target';
+  if (stepId === 'build') return 'Focus builder';
+  return 'Focus move';
+}
+
+function tutorialFallbackMeta(stepId) {
+  if (stepId === 'attack') return 'Show blight pressure and visible threats';
+  if (stepId === 'build') return 'Select the engineer or wait for a fresh action';
+  return 'Select a ready unit with legal movement';
+}
+
 function applyGuideHighlights(guide) {
   clearGuideHighlights();
   const current = guide.steps.find((step) => step.id === guide.currentId);
+  const tutorialStep = currentOpeningTutorialStep();
+  if (tutorialStep) {
+    for (const selector of tutorialHighlightTargets(tutorialStep.id)) {
+      const el = document.querySelector(selector);
+      if (el) el.classList.add('guide-ui-glow');
+    }
+  }
   if (!current) return;
   const targets = guideHighlightTargets(current.id);
   for (const selector of targets) {
     const el = document.querySelector(selector);
     if (el) el.classList.add('guide-ui-glow');
   }
+}
+
+function tutorialHighlightTargets(stepId) {
+  const map = {
+    move: ['#gameCanvas', '#actionPanel', '#nextUnitTop'],
+    build: ['#gameCanvas', '#actionPanel', '#selectionPanel'],
+    attack: ['#gameCanvas', '#actionPanel', '#mapLensBar']
+  };
+  return map[stepId] || ['#actionPanel'];
 }
 
 function guideHighlightTargets(stepId) {
@@ -1392,6 +1696,10 @@ function renderSelection() {
 
 function renderActions() {
   actionPanel.innerHTML = '';
+  actionPanel.classList.toggle('tutorial-active', openingTutorialActive());
+  const tutorialStep = currentOpeningTutorialStep();
+  if (tutorialStep) actionPanel.dataset.tutorialStep = tutorialStep.id;
+  else delete actionPanel.dataset.tutorialStep;
   actionPanel.appendChild(orderHeader());
   const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
   const selectedBuilding = state.buildings.find((b) => b.id === state.selectedBuildingId);
@@ -1411,7 +1719,8 @@ function renderActions() {
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
+  const tutorialCard = openingTutorialCard();
+  const priorityCommandCards = [tutorialCard, placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -3157,6 +3466,7 @@ function handleResult(result, successCue = null) {
   if (successCue === 'diplomacy') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
+  recordOpeningTutorialSuccess(successCue, result);
   return true;
 }
 
@@ -5470,6 +5780,11 @@ mapHelp?.addEventListener('click', (event) => {
   const target = event.target instanceof HTMLElement ? event.target.closest('[data-map-help-action]') : null;
   if (!(target instanceof HTMLElement)) return;
   const action = target.dataset.mapHelpAction;
+  if (action === 'tutorial') {
+    const step = currentOpeningTutorialStep();
+    if (step) focusOpeningTutorialStep(step.id);
+    return;
+  }
   if (action === 'opening') {
     const directive = currentOpeningDirective();
     if (directive) focusOpeningDirective(directive.current.id);

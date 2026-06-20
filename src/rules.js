@@ -1528,7 +1528,7 @@ export function getFirstTurnsGuide(state) {
   const current = steps.find((step) => !step.done) || steps[steps.length - 1];
   const early = state.turn <= 6;
   return {
-    title: early ? 'First Six Turns' : 'War Rhythm',
+    title: early ? 'Opening Orders' : 'War Rhythm',
     phase: guidePhase(state, completed, steps.length),
     summary: guideSummary(state, current),
     currentId: current.id,

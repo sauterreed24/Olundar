@@ -8023,6 +8023,90 @@ body {
   animation: guide-pulse 1.4s ease-in-out infinite;
 }
 
+.opening-tutorial-card {
+  border-color: rgba(39, 100, 126, 0.42);
+  background:
+    linear-gradient(145deg, rgba(232, 247, 252, 0.90), rgba(204, 226, 222, 0.66)),
+    radial-gradient(circle at 100% 0%, rgba(240, 200, 102, 0.18), transparent 8rem);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.20), 0 0 22px rgba(39, 100, 126, 0.14);
+}
+
+.opening-tutorial-card .order-section-head h3 {
+  color: #8d3024;
+}
+
+.opening-tutorial-card .order-section-head p,
+.opening-tutorial-body p {
+  color: #3d2b1b;
+}
+
+.opening-tutorial-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.opening-tutorial-progress span {
+  display: grid;
+  min-height: 1.8rem;
+  place-items: center;
+  border: 1px solid rgba(150, 92, 36, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 248, 236, 0.58);
+  color: #806d4f;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.opening-tutorial-progress span.current {
+  border-color: rgba(39, 100, 126, 0.42);
+  background: rgba(214, 242, 248, 0.76);
+  color: #1d5871;
+  box-shadow: 0 0 16px rgba(39, 100, 126, 0.14);
+}
+
+.opening-tutorial-progress span.done {
+  border-color: rgba(61, 139, 110, 0.36);
+  background: rgba(210, 242, 219, 0.70);
+  color: #24593f;
+}
+
+.opening-tutorial-body {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.opening-tutorial-body strong {
+  color: #8d3024;
+}
+
+.opening-tutorial-body small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.opening-tutorial-actions {
+  margin-top: 0.18rem;
+}
+
+.tutorial-directive {
+  border-color: rgba(39, 100, 126, 0.34) !important;
+  background:
+    linear-gradient(180deg, rgba(232, 247, 252, 0.90), rgba(204, 226, 222, 0.70)) !important;
+  color: #1d5871 !important;
+}
+
+.tutorial-active #actionPanel[data-tutorial-step="move"] .tactical-move-card,
+.tutorial-active #actionPanel[data-tutorial-step="build"] .build-orders,
+.tutorial-active #actionPanel[data-tutorial-step="attack"] .battle-forecast {
+  outline: 2px solid rgba(240, 200, 102, 0.82);
+  outline-offset: 3px;
+  box-shadow: 0 0 18px rgba(240, 200, 102, 0.45);
+}
+
 @keyframes guide-pulse {
   0%, 100% { box-shadow: 0 0 12px rgba(240, 200, 102, 0.35); }
   50% { box-shadow: 0 0 22px rgba(240, 200, 102, 0.7); }
