@@ -1136,9 +1136,10 @@ function renderActions() {
   const placementCard = buildPlacementCard();
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
   const readyForcesCard = activeReadyForcesCard(selectedUnit);
+  const musterCard = musterReadyCard(selectedBuilding);
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -1365,6 +1366,106 @@ function readyForceButton(unit, selectedUnitId) {
     <span class="ready-force-meta">${escapeHtml(`${unit.x},${unit.y}`)}</span>
   `;
   return el;
+}
+
+function musterReadyCard(selectedBuilding) {
+  if (state.status !== 'playing' || state.mode.type === 'build') return null;
+  const orders = musterReadyOrders();
+  if (!orders.length) return null;
+  if (orders.length === 1 && selectedBuilding?.id === orders[0].building.id) return null;
+  const visible = orders.slice(0, isCompactCommandRailMode() ? 3 : 4);
+  const card = actionSection('Muster Ready', `${orders.length} war queue${orders.length === 1 ? '' : 's'} can start before the turn ends.`, 'muster-ready-card');
+  const list = commandActions('muster-ready-grid');
+  for (const order of visible) list.appendChild(musterReadyButton(order));
+  if (orders.length > visible.length) {
+    list.appendChild(orderButton('More musters', `${orders.length - visible.length} more production site${orders.length - visible.length === 1 ? '' : 's'}`, () => focusMusterSite(orders[visible.length].building.id), { tone: 'secondary' }));
+  }
+  card.appendChild(list);
+  return card;
+}
+
+function musterReadyOrders() {
+  return state.buildings
+    .filter((building) => {
+      const def = BUILDING_TYPES[building.type];
+      return building.faction === 'olundar' && building.turnsLeft <= 0 && def?.trains?.length && building.queue.length < trainingQueueLimit(building);
+    })
+    .map((building) => preferredMusterOrder(building))
+    .filter(Boolean)
+    .sort((a, b) => musterSiteScore(a.building) - musterSiteScore(b.building));
+}
+
+function preferredMusterOrder(building) {
+  const def = BUILDING_TYPES[building.type];
+  const preferred = building.type === 'city'
+    ? ['scout', 'engineer']
+    : building.type === 'barracks'
+      ? ['legionary', 'spearGuard']
+      : def.trains;
+  const resources = state.factions.olundar.resources;
+  const unitType = [...preferred, ...def.trains].find((type, index, list) => list.indexOf(type) === index && def.trains.includes(type) && canAfford(resources, UNIT_TYPES[type]?.cost));
+  if (!unitType) return null;
+  const unitDef = UNIT_TYPES[unitType];
+  return {
+    building,
+    buildingDef: def,
+    unitType,
+    unitDef,
+    turns: trainingTurnsFor(building, unitType)
+  };
+}
+
+function musterSiteScore(building) {
+  if (building.type === 'city') return 0;
+  if (building.type === 'barracks') return 10;
+  if (building.type === 'archeryYard') return 20;
+  if (building.type === 'stable') return 30;
+  if (building.type === 'workshop') return 40;
+  return 50;
+}
+
+function musterReadyButton(order) {
+  const { building, buildingDef, unitDef, unitType, turns } = order;
+  const el = button(`Queue ${unitDef.name}`, () => queueMusterOrder(building.id, unitType), false, `Start ${unitDef.name} at ${building.name || buildingDef.name}`);
+  el.className = 'muster-ready-button';
+  el.innerHTML = `
+    ${selectionPortraitMarkup({ building })}
+    <span class="muster-ready-main">
+      <b>${escapeHtml(unitDef.name)}</b>
+      <small>${escapeHtml(building.name || buildingDef.name)} · ${turns}t</small>
+    </span>
+    <span class="muster-ready-cost">${escapeHtml(formatCost(unitDef.cost))}</span>
+  `;
+  return el;
+}
+
+function queueMusterOrder(buildingId, unitType) {
+  const building = state.buildings.find((item) => item.id === buildingId && item.faction === 'olundar');
+  const unitDef = UNIT_TYPES[unitType];
+  if (!building || !unitDef) {
+    toast('That muster order is no longer available.', 'bad');
+    playAudioCue('warning');
+    return;
+  }
+  selectBuilding(building.id);
+  lastTile = { x: building.x, y: building.y };
+  hoverTile = lastTile;
+  const ok = handleResult(startTraining(state, building.id, unitType), 'train');
+  if (ok) toast(`${unitDef.name} queued at ${building.name || BUILDING_TYPES[building.type].name}.`, 'good');
+  render();
+  if (ok && window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
+function focusMusterSite(buildingId) {
+  const building = state.buildings.find((item) => item.id === buildingId && item.faction === 'olundar');
+  if (!building) return;
+  selectBuilding(building.id);
+  lastTile = { x: building.x, y: building.y };
+  hoverTile = lastTile;
+  toast(`${building.name || BUILDING_TYPES[building.type].name} selected.`);
+  playAudioCue('select');
+  render();
+  if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
 }
 
 function tacticalCounselCard(selectedUnit, selectedBuilding) {
