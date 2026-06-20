@@ -3759,11 +3759,11 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
   const frontier = item.frontier || item.cost >= maxMove;
-  const rugged = (item.terrainCost > 1 || item.terrainPressure > 2.8 || item.relief > 0.45) && tileNoise(item, 887) > (compact ? 0.46 : 0.34);
-  const closeAnchor = item.cost <= 1 && tileNoise(item, 1405) > (compact ? 0.78 : 0.66);
-  const roadAnchor = item.road && (item.cost <= 1 || (frontier && tileNoise(item, 1643) > (compact ? 0.72 : 0.58)));
-  const suppliedAnchor = item.supplied && item.cost <= 1 && tileNoise(item, 1229) > (compact ? 0.74 : 0.62);
-  const frontierSurvey = frontier && tileNoise(item, 940) > (compact ? 0.86 : 0.78);
+  const rugged = item.terrainCost > 1 || item.terrainPressure > 2.8 || item.relief > 0.45;
+  const closeAnchor = item.cost <= 1 && (compact || tileNoise(item, 1405) > 0.62);
+  const roadAnchor = item.road && (compact || item.cost <= 2 || frontier);
+  const suppliedAnchor = item.supplied && (compact || item.cost <= 2 || frontier);
+  const frontierSurvey = frontier && (compact || rugged || tileNoise(item, 940) > 0.68);
   return rugged || closeAnchor || roadAnchor || suppliedAnchor || frontierSurvey;
 }
 
@@ -3853,10 +3853,11 @@ function drawTacticalMoveMarker(ctx, bounds, layout, item, options = {}) {
 function shouldShowMoveCostCartouche(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
   const frontier = item.frontier || item.cost >= maxMove;
-  const punishingTerrain = item.terrainCost > 1 && item.terrainPressure > 2.45;
-  const roadFork = item.road && item.cost <= 1 && tileNoise(item, 1649) > (compact ? 0.64 : 0.52);
-  const hardFrontier = frontier && (punishingTerrain || tileNoise(item, 1741) > (compact ? 0.88 : 0.80));
-  return roadFork || hardFrontier;
+  const punishingTerrain = item.terrainCost > 1 || item.terrainPressure > 2.45 || item.relief > 0.45;
+  const logisticMove = item.road || item.supplied;
+  const closeMove = item.cost <= 2;
+  const compactAnchor = compact && (frontier || punishingTerrain || item.road || item.cost <= 1);
+  return frontier || punishingTerrain || (logisticMove && closeMove) || compactAnchor;
 }
 
 function drawMoveIntentSigil(ctx, x, y, layout, item, prominent = false) {
