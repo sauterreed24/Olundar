@@ -6321,3 +6321,96 @@ body {
     font-size: 0.42rem;
   }
 }
+
+@media (max-width: 620px) {
+  .mobile-collapsible-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title icon"
+      "detail icon";
+    align-items: center;
+  }
+
+  .mobile-collapsible-summary::after {
+    grid-area: icon;
+  }
+
+  .mobile-collapsible-summary span {
+    grid-area: title;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-collapsible-summary small {
+    grid-area: detail;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Review-informed command pass: keep Surface and iPhone chrome quiet while the battlefield does the work. */
+.layout,
+.map-shell,
+.side,
+.panel,
+.mobile-intel-stack {
+  min-width: 0;
+}
+
+.side {
+  overflow-x: hidden;
+}
+
+.council-stats,
+.command-stats,
+.ledger-stats {
+  min-width: 0;
+}
+
+.council-stats span,
+.command-stats .stat-chip,
+.ledger-stats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.council-stats b,
+.command-stats b,
+.ledger-stats b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-shell,
+.panel,
+.mobile-command-strip,
+.map-intel,
+.map-turn-report:not([hidden]) {
+  border-color: rgba(32, 119, 128, 0.10);
+}
+
+.map-help {
+  overflow: hidden;
+}
+
+.map-help span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 620px) {
+  .map-help {
+    flex-wrap: nowrap;
+  }
+
+  .map-help span {
+    white-space: nowrap;
+  }
+}

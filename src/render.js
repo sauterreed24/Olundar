@@ -2356,6 +2356,7 @@ function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = nu
   }
   drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove);
   drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
+  drawMovementCostContours(ctx, layout, reachable, maxMove);
   drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove);
   ctx.restore();
 }
@@ -2766,6 +2767,55 @@ function drawMovementRadiusBoundary(ctx, layout, reachable, maxMove) {
     }
   }
   ctx.restore();
+}
+
+function drawMovementCostContours(ctx, layout, reachable, maxMove) {
+  if (reachable.length < 2) return;
+  const byKey = new Map(reachable.map((item) => [tileKey(item.x, item.y), item]));
+  const overlayScale = movementOverlayScale(layout);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(255, 255, 238, 0.22)';
+  ctx.shadowBlur = layout.tileSize * 0.045 * overlayScale;
+  for (const item of reachable) {
+    const itemBand = movementCostBand(item, maxMove);
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const next = byKey.get(tileKey(item.x + dx, item.y + dy));
+      if (!next) continue;
+      const nextBand = movementCostBand(next, maxMove);
+      if (itemBand === nextBand && item.road === next.road && item.supplied === next.supplied) continue;
+      const [start, end] = frontierEdgePoints(tileBounds(layout, item.x, item.y), dx, dy);
+      const premiumRoute = item.road || next.road;
+      const suppliedRoute = item.supplied || next.supplied;
+      const frontier = itemBand >= maxMove || nextBand >= maxMove;
+      const baseWidth = layout.tileSize * (frontier ? 0.030 : premiumRoute ? 0.024 : 0.018) * overlayScale;
+      ctx.strokeStyle = 'rgba(54, 40, 20, 0.22)';
+      ctx.lineWidth = Math.max(1.2, baseWidth * 1.9);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.strokeStyle = premiumRoute
+        ? 'rgba(210, 250, 255, 0.62)'
+        : suppliedRoute
+          ? 'rgba(239, 255, 187, 0.55)'
+          : frontier
+            ? 'rgba(255, 244, 154, 0.68)'
+            : 'rgba(255, 252, 224, 0.42)';
+      ctx.lineWidth = Math.max(1, baseWidth);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y - layout.tileSize * 0.010);
+      ctx.lineTo(end.x, end.y - layout.tileSize * 0.010);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function movementCostBand(item, maxMove) {
+  if (item.cost >= maxMove) return maxMove;
+  return Math.max(1, Math.ceil(item.cost));
 }
 
 function drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove = null) {
@@ -3213,7 +3263,7 @@ function drawRouteArrowheads(ctx, points, center, tileSize, color, alpha = 1) {
 
 function shouldAnnotateMove(item, maxMove, hoverMove = null, compact = false) {
   if (sameTile(item, hoverMove)) return true;
-  if (compact) return item.road || item.supplied || item.cost <= 2 || item.frontier || item.terrainCost > 1;
+  if (compact) return item.road || item.frontier || item.terrainCost > 1 || (item.supplied && item.cost <= 2) || (item.cost <= 2 && tileNoise(item, 1405) > 0.58);
   if (item.road || item.supplied || item.cost <= 2 || item.terrainCost > 1) return true;
   return item.cost >= maxMove && tileNoise(item, 940) > 0.62;
 }
