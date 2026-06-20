@@ -8125,3 +8125,173 @@ body {
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
 }
+
+.scenario-editor {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(138, 216, 255, 0.26);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(19, 35, 38, 0.82), rgba(35, 27, 18, 0.72));
+  color: var(--text);
+}
+
+.scenario-editor-head,
+.scenario-editor-roster article {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.scenario-editor-head strong {
+  display: block;
+  color: #f9e6a8;
+}
+
+.scenario-editor-head span,
+.scenario-editor-roster span {
+  display: block;
+  color: #ddd0ae;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.scenario-editor-basics,
+.scenario-editor-layout {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.scenario-editor-basics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scenario-editor-layout {
+  grid-template-columns: minmax(15rem, 1fr) minmax(16rem, 0.9fr);
+  align-items: start;
+}
+
+.scenario-editor .setup-field {
+  margin-bottom: 0;
+}
+
+.scenario-editor input,
+.scenario-editor select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 218, 128, 0.3);
+  border-radius: 8px;
+  padding: 0.48rem 0.55rem;
+  background: rgba(14, 20, 23, 0.72);
+  color: var(--text);
+  font: inherit;
+}
+
+.scenario-editor-palette {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+.scenario-editor-palette label {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+  padding: 0.42rem 0.48rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.055);
+  color: #f5dfaa;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.scenario-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.18rem;
+}
+
+.scenario-editor-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  color: #fff6dc;
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.scenario-editor-cell span {
+  pointer-events: none;
+}
+
+.terrain-plains { background: linear-gradient(180deg, #6f8f51, #48643a); }
+.terrain-forest { background: linear-gradient(180deg, #236345, #123726); }
+.terrain-hills { background: linear-gradient(180deg, #817864, #4a463f); }
+.terrain-river { background: linear-gradient(180deg, #2f7fa0, #1b4762); }
+.terrain-marsh { background: linear-gradient(180deg, #5e7443, #354527); }
+.terrain-ruins { background: linear-gradient(180deg, #6d6676, #3f3948); }
+.terrain-blight { background: linear-gradient(180deg, #665151, #37282a); }
+
+.scenario-editor-side,
+.scenario-editor-unit-form,
+.scenario-editor-victory {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scenario-editor-unit-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.scenario-editor-unit-form label,
+.scenario-editor-victory label {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: #ddd0ae;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.scenario-editor-unit-form .unit-name-field,
+.scenario-editor-unit-form button {
+  grid-column: 1 / -1;
+}
+
+.scenario-editor-roster {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.scenario-editor-roster article {
+  padding: 0.5rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.16);
+}
+
+.scenario-editor-roster strong {
+  color: #e6f6ff;
+}
+
+.scenario-editor-victory {
+  grid-template-columns: 1fr 5.5rem;
+}
+
+@media (max-width: 760px) {
+  .scenario-editor-basics,
+  .scenario-editor-layout,
+  .scenario-editor-victory {
+    grid-template-columns: 1fr;
+  }
+}

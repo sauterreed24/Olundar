@@ -155,12 +155,31 @@ export function validateContentSchema(bundle) {
 
   for (const [id, unit] of Object.entries(bundle.UNIT_TYPES || {})) {
     if (unit.id !== id) errors.push(`Unit ${id} id mismatch`);
+    if (!unit.name) errors.push(`Unit ${id} missing name`);
     if (!Number.isFinite(unit.hp) || unit.hp <= 0) errors.push(`Unit ${id} invalid hp`);
+    if (!Number.isFinite(unit.move) || unit.move <= 0) errors.push(`Unit ${id} invalid move`);
+    if (!Number.isFinite(unit.sight) || unit.sight <= 0) errors.push(`Unit ${id} invalid sight`);
+    if (!Number.isFinite(unit.range) || unit.range < 1) errors.push(`Unit ${id} invalid range`);
+    if (!Number.isFinite(unit.attack) || unit.attack < 0) errors.push(`Unit ${id} invalid attack`);
+    if (!Number.isInteger(unit.trainTurns) || unit.trainTurns <= 0) errors.push(`Unit ${id} invalid trainTurns`);
   }
 
   for (const [id, building] of Object.entries(bundle.BUILDING_TYPES || {})) {
     if (building.id !== id) errors.push(`Building ${id} id mismatch`);
+    if (!building.name) errors.push(`Building ${id} missing name`);
     if (!Number.isFinite(building.hp) || building.hp <= 0) errors.push(`Building ${id} invalid hp`);
+    if (!Number.isInteger(building.buildTurns) || building.buildTurns < 0) errors.push(`Building ${id} invalid buildTurns`);
+    if (!Array.isArray(building.trains)) errors.push(`Building ${id} trains must be an array`);
+    for (const unitType of building.trains || []) {
+      if (!bundle.UNIT_TYPES?.[unitType]) errors.push(`Building ${id} trains missing unit ${unitType}`);
+    }
+  }
+
+  for (const [id, terrain] of Object.entries(bundle.TERRAIN || {})) {
+    if (terrain.id !== id) errors.push(`Terrain ${id} id mismatch`);
+    if (!terrain.name) errors.push(`Terrain ${id} missing name`);
+    if (!Number.isFinite(terrain.move)) errors.push(`Terrain ${id} invalid move`);
+    if (typeof terrain.passable !== 'boolean') errors.push(`Terrain ${id} invalid passable flag`);
   }
 
   for (const [id, color] of Object.entries(bundle.COSMETICS?.bannerColors || {})) {

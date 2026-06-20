@@ -73,6 +73,7 @@ export function applyContentBundle(nextBundle) {
   for (const [key, value] of Object.entries(nextBundle)) {
     if (!(key in bundle)) continue;
     const target = bundle[key];
+    if (target === value) continue;
     if (Array.isArray(target) && Array.isArray(value)) {
       target.length = 0;
       target.push(...value);

@@ -1390,6 +1390,16 @@ check('scenario and difficulty presets change campaign shape', () => {
   assert(hollowNewDead > 0, 'Hollow Crown should spawn Deadwalkers immediately.');
 });
 
+check('mod menu exposes a validated visual scenario editor', () => {
+  const mainSource = readProjectFile('src/main.js');
+  const styleSource = readProjectFile('src/style.css');
+  assert(mainSource.includes('function scenarioEditorMarkup') && mainSource.includes('function scenarioEditorGridMarkup') && mainSource.includes('function scenarioEditorToScenario'), 'Mod Menu should include a visual scenario editor that emits scenario JSON.');
+  assert(mainSource.includes('data-action="paint-scenario-terrain"') && mainSource.includes('data-action="add-scenario-unit"') && mainSource.includes('data-action="remove-scenario-unit"') && mainSource.includes('customScenarioVictoryPreset'), 'Visual scenario editor should support terrain painting, unit placement, and victory setup.');
+  assert(mainSource.includes('id="modScenarioJson"') && mainSource.includes('function parseCustomScenarioFromForm') && mainSource.includes('function validateCustomScenario') && mainSource.includes('function mergeContentTable'), 'Custom scenario JSON and content patches should be parsed, merged, and validated before loading.');
+  assert(mainSource.includes('#modTerrainPatch') && mainSource.includes('TERRAIN: mergeContentTable') && mainSource.includes('applyContentBundle(nextBundle)') && mainSource.includes('renderCampaignSetup(customScenario.id'), 'Custom units, buildings, terrain, and scenarios should flow into the content bundle without code changes.');
+  assert(styleSource.includes('.scenario-editor-grid') && styleSource.includes('.scenario-editor-cell') && styleSource.includes('.scenario-editor-roster') && styleSource.includes('.terrain-blight'), 'Scenario editor needs responsive terrain, roster, and terrain-state styling.');
+});
+
 check('strategic path exists from Olundar toward the portal front', () => {
   const state = createGame('quality-path');
   const scout = state.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
@@ -1707,6 +1717,7 @@ check('JSON content validates against schema', () => {
   assert(bundle.COSMETICS.bannerColors['sun-gold'] && bundle.COSMETICS.unitVariants.classic, 'JSON bundle must include player cosmetics.');
   assert(getContentBundle().MAP_WIDTH === MAP_WIDTH, 'Content bundle must stay aligned with exported constants.');
   assert(!readProjectFile('src/main.js').includes('./engine/content-loader.js'), 'Browser entrypoint must not import the Node-only content loader.');
+  assert(readProjectFile('src/content.js').includes('if (target === value) continue'), 'Content bundle application must not wipe same-reference tables during mod merges.');
 });
 
 check('Undo stack reverses any player action without desync', () => {

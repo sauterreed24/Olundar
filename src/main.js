@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -128,6 +128,40 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
 ];
 const PACT_ACCEPTANCE_RELATION = 35;
 const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'rallyBanner', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const MOD_SCENARIO_ID = 'modScenario';
+const MOD_SCENARIO_WIDTH = 8;
+const MOD_SCENARIO_HEIGHT = 6;
+const MOD_SCENARIO_ORIGIN = { x: 4, y: 13 };
+const MOD_SCENARIO_TERRAIN = ['plains', 'forest', 'hills', 'river', 'marsh', 'ruins', 'blight'];
+const MOD_SCENARIO_TERRAIN_MARKERS = { plains: 'P', forest: 'F', hills: 'H', river: 'R', marsh: 'M', ruins: 'U', blight: 'B' };
+const MOD_SCENARIO_FACTIONS = ['olundar', 'dawn', 'veyr', 'mire', 'dead'];
+const MOD_SCENARIO_GOALS = [
+  {
+    type: 'holdPacts',
+    label: 'Coalition Pact',
+    target: 1,
+    summary: 'Win by securing living-world allies before closing the portal.'
+  },
+  {
+    type: 'destroyDeadworks',
+    label: 'Deadworks Raid',
+    target: 2,
+    summary: 'Win by cracking Deadwalker strongholds before the portal assault.'
+  },
+  {
+    type: 'contactFactions',
+    label: 'Grand Embassy',
+    target: 3,
+    summary: 'Win by finding every living faction and then breaking the portal.'
+  },
+  {
+    type: 'surviveTurn',
+    label: 'Last Light Holdout',
+    target: 20,
+    summary: 'Win by surviving a fixed turn limit with Olundar intact.'
+  }
+];
+let scenarioEditorState = createScenarioEditorState();
 const BUILD_DOCTRINE_GROUPS = [
   { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
   { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'rallyBanner', 'outpost'] },
@@ -5117,6 +5151,356 @@ function formatSavedAt(value) {
   return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function createScenarioEditorState() {
+  const terrain = Array(MOD_SCENARIO_WIDTH * MOD_SCENARIO_HEIGHT).fill('plains');
+  const defaults = [
+    { x: 0, y: 0, terrain: 'forest' },
+    { x: 1, y: 0, terrain: 'forest' },
+    { x: 6, y: 0, terrain: 'hills' },
+    { x: 7, y: 0, terrain: 'hills' },
+    { x: 7, y: 2, terrain: 'river' },
+    { x: 7, y: 3, terrain: 'river' },
+    { x: 0, y: 5, terrain: 'marsh' },
+    { x: 6, y: 5, terrain: 'ruins' },
+    { x: 7, y: 5, terrain: 'blight' }
+  ];
+  for (const patch of defaults) terrain[scenarioEditorCellIndex(patch.x, patch.y)] = patch.terrain;
+  return {
+    name: 'Player-Made Frontier',
+    seed: 'Olundar-Mod-Frontier',
+    text: 'A custom frontier carved around Olundar Prime with hand-painted terrain and a player-defined opening force.',
+    difficultyId: 'standard',
+    goalType: 'holdPacts',
+    goalTarget: 1,
+    terrain,
+    units: [
+      { type: 'engineer', faction: 'olundar', x: 5, y: 2, name: 'Frontier Surveyors' },
+      { type: 'spearGuard', faction: 'dawn', x: 2, y: 0, name: 'Dawnward Blockade' }
+    ]
+  };
+}
+
+function scenarioEditorCellIndex(x, y) {
+  return y * MOD_SCENARIO_WIDTH + x;
+}
+
+function scenarioEditorMapCoord(local, axis) {
+  const origin = axis === 'x' ? MOD_SCENARIO_ORIGIN.x : MOD_SCENARIO_ORIGIN.y;
+  return origin + local;
+}
+
+function scenarioEditorTerrainAt(x, y) {
+  return scenarioEditorState.terrain[scenarioEditorCellIndex(x, y)] || 'plains';
+}
+
+function scenarioEditorMarkup() {
+  return `
+    <section class="scenario-editor" aria-label="Visual custom scenario editor">
+      <div class="scenario-editor-head">
+        <div>
+          <strong>Visual Scenario Editor</strong>
+          <span>Paint a frontier patch, place opening units, and generate playable scenario JSON.</span>
+        </div>
+        <button type="button" data-action="reset-scenario-editor">Reset</button>
+      </div>
+      <div class="scenario-editor-basics">
+        <label class="setup-field">
+          <span>Scenario name</span>
+          <input id="customScenarioName" value="${escapeHtml(scenarioEditorState.name)}" autocomplete="off" />
+        </label>
+        <label class="setup-field">
+          <span>Scenario seed</span>
+          <input id="customScenarioSeed" value="${escapeHtml(scenarioEditorState.seed)}" autocomplete="off" />
+        </label>
+        <label class="setup-field">
+          <span>Difficulty baseline</span>
+          <select id="customScenarioDifficulty">
+            ${Object.values(DIFFICULTY_PRESETS).map((difficulty) => `<option value="${escapeHtml(difficulty.id)}" ${difficulty.id === scenarioEditorState.difficultyId ? 'selected' : ''}>${escapeHtml(difficulty.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <label class="setup-field">
+        <span>Scenario brief</span>
+        <input id="customScenarioText" value="${escapeHtml(scenarioEditorState.text)}" autocomplete="off" />
+      </label>
+      <div class="scenario-editor-layout">
+        <div>
+          <div class="scenario-editor-palette" aria-label="Terrain brush">
+            ${MOD_SCENARIO_TERRAIN.map((terrainId, index) => `
+              <label>
+                <input type="radio" name="scenarioTerrainTool" value="${escapeHtml(terrainId)}" ${index === 0 ? 'checked' : ''} />
+                <span>${escapeHtml(TERRAIN[terrainId]?.name || terrainId)}</span>
+              </label>
+            `).join('')}
+          </div>
+          <div class="scenario-editor-grid" aria-label="Scenario terrain painter">
+            ${scenarioEditorGridMarkup()}
+          </div>
+        </div>
+        <div class="scenario-editor-side">
+          <div class="scenario-editor-unit-form">
+            <label>
+              <span>Unit</span>
+              <select id="customScenarioUnitType">
+                ${Object.values(UNIT_TYPES).map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`).join('')}
+              </select>
+            </label>
+            <label>
+              <span>Faction</span>
+              <select id="customScenarioUnitFaction">
+                ${MOD_SCENARIO_FACTIONS.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(FACTIONS[id]?.name || id)}</option>`).join('')}
+              </select>
+            </label>
+            <label>
+              <span>X</span>
+              <input id="customScenarioUnitX" type="number" min="0" max="${MOD_SCENARIO_WIDTH - 1}" value="3" />
+            </label>
+            <label>
+              <span>Y</span>
+              <input id="customScenarioUnitY" type="number" min="0" max="${MOD_SCENARIO_HEIGHT - 1}" value="2" />
+            </label>
+            <label class="unit-name-field">
+              <span>Name</span>
+              <input id="customScenarioUnitName" maxlength="48" placeholder="Optional unit name" />
+            </label>
+            <button type="button" data-action="add-scenario-unit">Place Unit</button>
+          </div>
+          <div id="scenarioEditorRoster" class="scenario-editor-roster">
+            ${scenarioEditorRosterMarkup()}
+          </div>
+          <div class="scenario-editor-victory">
+            <label>
+              <span>Victory focus</span>
+              <select id="customScenarioVictoryPreset">
+                ${MOD_SCENARIO_GOALS.map((goal) => `<option value="${escapeHtml(goal.type)}" ${goal.type === scenarioEditorState.goalType ? 'selected' : ''}>${escapeHtml(goal.label)}</option>`).join('')}
+              </select>
+            </label>
+            <label>
+              <span>Target</span>
+              <input id="customScenarioVictoryTarget" type="number" min="1" max="60" value="${escapeHtml(scenarioEditorState.goalTarget)}" />
+            </label>
+          </div>
+        </div>
+      </div>
+      <label class="setup-field">
+        <span>Custom scenario JSON</span>
+        <textarea id="modScenarioJson" name="modScenarioJson" rows="9">${escapeHtml(JSON.stringify(scenarioEditorToScenario(), null, 2))}</textarea>
+      </label>
+    </section>
+  `;
+}
+
+function scenarioEditorGridMarkup() {
+  const cells = [];
+  for (let y = 0; y < MOD_SCENARIO_HEIGHT; y += 1) {
+    for (let x = 0; x < MOD_SCENARIO_WIDTH; x += 1) {
+      const terrainId = scenarioEditorTerrainAt(x, y);
+      const title = `${TERRAIN[terrainId]?.name || terrainId} at ${scenarioEditorMapCoord(x, 'x')},${scenarioEditorMapCoord(y, 'y')}`;
+      cells.push(`<button type="button" class="scenario-editor-cell terrain-${escapeHtml(terrainId)}" data-action="paint-scenario-terrain" data-x="${x}" data-y="${y}" title="${escapeHtml(title)}"><span>${escapeHtml(MOD_SCENARIO_TERRAIN_MARKERS[terrainId] || '?')}</span></button>`);
+    }
+  }
+  return cells.join('');
+}
+
+function scenarioEditorRosterMarkup() {
+  if (!scenarioEditorState.units.length) return '<p class="muted">No extra starting units placed.</p>';
+  return scenarioEditorState.units.map((unit, index) => {
+    const unitDef = UNIT_TYPES[unit.type];
+    const faction = FACTIONS[unit.faction];
+    return `
+      <article>
+        <div>
+          <strong>${escapeHtml(unit.name || unitDef?.name || unit.type)}</strong>
+          <span>${escapeHtml(faction?.name || unit.faction)} ${escapeHtml(unitDef?.role || unit.type)} at ${scenarioEditorMapCoord(unit.x, 'x')},${scenarioEditorMapCoord(unit.y, 'y')}</span>
+        </div>
+        <button type="button" data-action="remove-scenario-unit" data-unit-index="${index}" aria-label="Remove ${escapeHtml(unit.name || unitDef?.name || unit.type)}">Remove</button>
+      </article>
+    `;
+  }).join('');
+}
+
+function scenarioEditorToScenario() {
+  const goal = MOD_SCENARIO_GOALS.find((item) => item.type === scenarioEditorState.goalType) || MOD_SCENARIO_GOALS[0];
+  const target = clampInteger(scenarioEditorState.goalTarget, 1, 60, goal.target || 1);
+  const terrainPatches = [];
+  for (let y = 0; y < MOD_SCENARIO_HEIGHT; y += 1) {
+    for (let x = 0; x < MOD_SCENARIO_WIDTH; x += 1) {
+      const terrain = scenarioEditorTerrainAt(x, y);
+      if (terrain !== 'plains') terrainPatches.push({ x: scenarioEditorMapCoord(x, 'x'), y: scenarioEditorMapCoord(y, 'y'), terrain });
+    }
+  }
+  const primaryGoal = {
+    id: `${MOD_SCENARIO_ID}-${goal.type}`,
+    type: goal.type,
+    target,
+    label: goal.label,
+    text: goal.summary
+  };
+  return {
+    id: MOD_SCENARIO_ID,
+    name: cleanModText(scenarioEditorState.name, 'Player-Made Frontier', 64),
+    seed: cleanModText(scenarioEditorState.seed, 'Olundar-Mod-Frontier', 64),
+    difficultyId: DIFFICULTY_PRESETS[scenarioEditorState.difficultyId] ? scenarioEditorState.difficultyId : 'standard',
+    text: cleanModText(scenarioEditorState.text, 'A custom frontier scenario built in the Mod Menu.', 180),
+    terrainPatches,
+    units: scenarioEditorState.units.map((unit) => ({
+      type: unit.type,
+      faction: unit.faction,
+      x: scenarioEditorMapCoord(unit.x, 'x'),
+      y: scenarioEditorMapCoord(unit.y, 'y'),
+      name: unit.name || UNIT_TYPES[unit.type]?.name || unit.type
+    })),
+    victoryConditions: [
+      primaryGoal,
+      {
+        id: `${MOD_SCENARIO_ID}-portal`,
+        type: 'portal',
+        label: 'Break the custom portal',
+        text: 'Kill Vorgath and destroy the Bone Portal to end the custom campaign.'
+      }
+    ]
+  };
+}
+
+function cleanModText(value, fallback, maxLength) {
+  const text = String(value || '').trim().replace(/\s+/g, ' ');
+  return (text || fallback).slice(0, maxLength);
+}
+
+function clampInteger(value, min, max, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function syncScenarioEditorStateFromForm(form) {
+  if (!form) return;
+  scenarioEditorState.name = String(form.querySelector('#customScenarioName')?.value || scenarioEditorState.name);
+  scenarioEditorState.seed = String(form.querySelector('#customScenarioSeed')?.value || scenarioEditorState.seed);
+  scenarioEditorState.text = String(form.querySelector('#customScenarioText')?.value || scenarioEditorState.text);
+  const difficultyId = String(form.querySelector('#customScenarioDifficulty')?.value || scenarioEditorState.difficultyId);
+  scenarioEditorState.difficultyId = DIFFICULTY_PRESETS[difficultyId] ? difficultyId : 'standard';
+  const goalType = String(form.querySelector('#customScenarioVictoryPreset')?.value || scenarioEditorState.goalType);
+  scenarioEditorState.goalType = MOD_SCENARIO_GOALS.some((goal) => goal.type === goalType) ? goalType : MOD_SCENARIO_GOALS[0].type;
+  scenarioEditorState.goalTarget = clampInteger(form.querySelector('#customScenarioVictoryTarget')?.value, 1, 60, scenarioEditorState.goalTarget || 1);
+}
+
+function selectedScenarioEditorTerrain(form) {
+  const terrain = String(form.querySelector('input[name="scenarioTerrainTool"]:checked')?.value || 'plains');
+  return MOD_SCENARIO_TERRAIN.includes(terrain) ? terrain : 'plains';
+}
+
+function paintScenarioEditorTerrain(form, target) {
+  syncScenarioEditorStateFromForm(form);
+  const x = clampInteger(target.dataset.x, 0, MOD_SCENARIO_WIDTH - 1, 0);
+  const y = clampInteger(target.dataset.y, 0, MOD_SCENARIO_HEIGHT - 1, 0);
+  scenarioEditorState.terrain[scenarioEditorCellIndex(x, y)] = selectedScenarioEditorTerrain(form);
+  updateScenarioEditorGrid(form);
+  updateScenarioEditorJson(form);
+}
+
+function addScenarioEditorUnit(form) {
+  syncScenarioEditorStateFromForm(form);
+  const type = String(form.querySelector('#customScenarioUnitType')?.value || '');
+  const faction = String(form.querySelector('#customScenarioUnitFaction')?.value || '');
+  const x = clampInteger(form.querySelector('#customScenarioUnitX')?.value, 0, MOD_SCENARIO_WIDTH - 1, 0);
+  const y = clampInteger(form.querySelector('#customScenarioUnitY')?.value, 0, MOD_SCENARIO_HEIGHT - 1, 0);
+  if (!UNIT_TYPES[type] || !FACTIONS[faction]) {
+    toast('Choose a valid unit and faction before placing it.', 'bad');
+    playAudioCue('error');
+    return;
+  }
+  const name = cleanModText(form.querySelector('#customScenarioUnitName')?.value, UNIT_TYPES[type].name, 48);
+  scenarioEditorState.units.push({ type, faction, x, y, name });
+  const nameInput = form.querySelector('#customScenarioUnitName');
+  if (nameInput) nameInput.value = '';
+  updateScenarioEditorRoster(form);
+  updateScenarioEditorJson(form);
+  playAudioCue('ui');
+}
+
+function removeScenarioEditorUnit(form, target) {
+  syncScenarioEditorStateFromForm(form);
+  const index = clampInteger(target.dataset.unitIndex, 0, scenarioEditorState.units.length - 1, -1);
+  if (index < 0 || index >= scenarioEditorState.units.length) return;
+  scenarioEditorState.units.splice(index, 1);
+  updateScenarioEditorRoster(form);
+  updateScenarioEditorJson(form);
+}
+
+function updateScenarioEditorGrid(form) {
+  const grid = form.querySelector('.scenario-editor-grid');
+  if (grid) grid.innerHTML = scenarioEditorGridMarkup();
+}
+
+function updateScenarioEditorRoster(form) {
+  const roster = form.querySelector('#scenarioEditorRoster');
+  if (roster) roster.innerHTML = scenarioEditorRosterMarkup();
+}
+
+function updateScenarioEditorJson(form) {
+  const output = form.querySelector('#modScenarioJson');
+  if (output) output.value = JSON.stringify(scenarioEditorToScenario(), null, 2);
+}
+
+function resetScenarioEditorAndRender() {
+  const data = new FormData(campaignSetup);
+  const scenarioId = data.get('scenarioId') || 'founding';
+  const difficultyId = data.get('difficultyId') || SCENARIOS[scenarioId]?.difficultyId || 'standard';
+  const seed = data.get('seed') || SCENARIOS[scenarioId]?.seed || 'Olundar-Founding';
+  scenarioEditorState = createScenarioEditorState();
+  renderCampaignSetup(scenarioId, difficultyId, seed);
+}
+
+function parseModPatchTextarea(form, selector, label) {
+  const raw = String(form.querySelector(selector)?.value || '').trim();
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${label} patch must be a JSON object.`);
+  return parsed;
+}
+
+function mergeContentTable(baseTable, patch, label) {
+  const next = { ...baseTable };
+  for (const [id, entry] of Object.entries(patch || {})) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(`${label} patch ${id} must be a JSON object.`);
+    if (entry.id && entry.id !== id) throw new Error(`${label} patch ${id} id must match its object key.`);
+    next[id] = { ...(next[id] || {}), ...entry, id };
+  }
+  return next;
+}
+
+function parseCustomScenarioFromForm(form, bundle) {
+  const raw = String(form.querySelector('#modScenarioJson')?.value || '').trim();
+  if (!raw) return null;
+  const scenario = JSON.parse(raw);
+  validateCustomScenario(scenario, bundle);
+  return scenario;
+}
+
+function validateCustomScenario(scenario, bundle = getContentBundle()) {
+  if (!scenario || typeof scenario !== 'object' || Array.isArray(scenario)) throw new Error('Custom scenario must be a JSON object.');
+  if (!scenario.id || !scenario.name || !scenario.seed || !scenario.text) throw new Error('Custom scenario needs id, name, seed, and text.');
+  if (!DIFFICULTY_PRESETS[scenario.difficultyId]) throw new Error(`Custom scenario references unknown difficulty ${scenario.difficultyId}.`);
+  for (const patch of scenario.terrainPatches || []) {
+    if (!Number.isInteger(patch.x) || !Number.isInteger(patch.y) || patch.x < 0 || patch.y < 0 || patch.x >= MAP_WIDTH || patch.y >= MAP_HEIGHT) throw new Error('Custom scenario terrain patch coordinates are outside the map.');
+    if (!bundle.TERRAIN?.[patch.terrain]) throw new Error(`Custom scenario references unknown terrain ${patch.terrain}.`);
+  }
+  for (const unit of scenario.units || []) {
+    if (!bundle.UNIT_TYPES?.[unit.type]) throw new Error(`Custom scenario references unknown unit ${unit.type}.`);
+    if (!bundle.FACTIONS?.[unit.faction]) throw new Error(`Custom scenario references unknown faction ${unit.faction}.`);
+    if (!Number.isInteger(unit.x) || !Number.isInteger(unit.y) || unit.x < 0 || unit.y < 0 || unit.x >= MAP_WIDTH || unit.y >= MAP_HEIGHT) throw new Error('Custom scenario unit coordinates are outside the map.');
+  }
+  if (!Array.isArray(scenario.victoryConditions) || scenario.victoryConditions.length === 0) throw new Error('Custom scenario needs at least one victory condition.');
+  const validVictoryTypes = ['portal', 'holdPacts', 'tradeRoutes', 'destroyDeadworks', 'contactFactions', 'surviveTurn', 'maintainMorale'];
+  for (const condition of scenario.victoryConditions) {
+    if (!condition.id || !condition.type || !condition.label || !condition.text) throw new Error('Custom scenario victory conditions need id, type, label, and text.');
+    if (!validVictoryTypes.includes(condition.type)) throw new Error(`Custom scenario has unsupported victory type ${condition.type}.`);
+    if (condition.target !== undefined && (!Number.isInteger(condition.target) || condition.target <= 0)) throw new Error(`Custom scenario victory target for ${condition.id} must be a positive integer.`);
+  }
+  return true;
+}
+
 function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 'founding', selectedDifficultyId = state.campaign?.difficultyId || SCENARIOS[selectedScenarioId]?.difficultyId || 'standard', seedOverride = null) {
   const scenario = SCENARIOS[selectedScenarioId] || SCENARIOS.founding;
   const challenge = scenario.challenge ? getWeeklyChallenge() : null;
@@ -5145,8 +5529,9 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
       ${difficultyChoices.map((item) => choiceCard('difficultyId', item.id, item.name, challenge ? `${item.text} Fixed for leaderboard comparability.` : item.text, item.id === difficultyId)).join('')}
     </div>
     <details class="mod-menu-drawer">
-      <summary>Mod Menu — hot-reload JSON tweaks</summary>
-      <p class="muted">Edit stats and costs while playing. Changes apply on reload.</p>
+      <summary>Mod Menu - visual scenario editor and JSON patches</summary>
+      <p class="muted">Paint custom starts or edit content tables. Mods are validated before they become playable.</p>
+      ${scenarioEditorMarkup()}
       <label class="setup-field">
         <span>Unit stat patch (JSON)</span>
         <textarea id="modUnitsPatch" name="modUnitsPatch" rows="4" placeholder='{"scout":{"move":5}}'></textarea>
@@ -5155,7 +5540,11 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
         <span>Building stat patch (JSON)</span>
         <textarea id="modBuildingsPatch" name="modBuildingsPatch" rows="4" placeholder='{"farm":{"buildTurns":1}}'></textarea>
       </label>
-      <button type="button" data-action="apply-mods">Apply Mod Patches</button>
+      <label class="setup-field">
+        <span>Terrain type patch (JSON)</span>
+        <textarea id="modTerrainPatch" name="modTerrainPatch" rows="4" placeholder='{"crystal":{"name":"Crystal Fields","move":1,"passable":true}}'></textarea>
+      </label>
+      <button type="button" data-action="apply-mods">Validate and Apply Mods</button>
     </details>
     <div class="setup-actions">
       <button type="submit">Start Campaign</button>
@@ -5267,13 +5656,27 @@ function playCinematicIntro(onComplete) {
 
 function applyModPatchesFromForm(form) {
   try {
-    const unitsPatch = JSON.parse(String(form.querySelector('#modUnitsPatch')?.value || '{}'));
-    const buildingsPatch = JSON.parse(String(form.querySelector('#modBuildingsPatch')?.value || '{}'));
-    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch });
-    const bundle = getContentBundle();
-    validateContentSchema(bundle);
-    applyContentBundle(bundle);
-    toast('Mod patches applied.');
+    syncScenarioEditorStateFromForm(form);
+    const currentBundle = getContentBundle();
+    const unitsPatch = parseModPatchTextarea(form, '#modUnitsPatch', 'Unit');
+    const buildingsPatch = parseModPatchTextarea(form, '#modBuildingsPatch', 'Building');
+    const terrainPatch = parseModPatchTextarea(form, '#modTerrainPatch', 'Terrain');
+    const draftBundle = {
+      ...currentBundle,
+      UNIT_TYPES: mergeContentTable(currentBundle.UNIT_TYPES, unitsPatch, 'Unit'),
+      BUILDING_TYPES: mergeContentTable(currentBundle.BUILDING_TYPES, buildingsPatch, 'Building'),
+      TERRAIN: mergeContentTable(currentBundle.TERRAIN, terrainPatch, 'Terrain')
+    };
+    const customScenario = parseCustomScenarioFromForm(form, draftBundle);
+    const nextBundle = customScenario
+      ? { ...draftBundle, SCENARIOS: { ...draftBundle.SCENARIOS, [customScenario.id]: customScenario } }
+      : draftBundle;
+    validateContentSchema(nextBundle);
+    if (customScenario) validateCustomScenario(customScenario, nextBundle);
+    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch, TERRAIN: terrainPatch });
+    applyContentBundle(nextBundle);
+    if (customScenario) renderCampaignSetup(customScenario.id, customScenario.difficultyId, customScenario.seed);
+    toast(customScenario ? `${customScenario.name} added to campaign setup.` : 'Mod patches applied.');
     playAudioCue('ui');
   } catch (error) {
     toast(error.message || 'Invalid mod JSON.', 'bad');
@@ -5962,11 +6365,31 @@ setupOverlay.addEventListener('click', (event) => {
 });
 
 campaignSetup.addEventListener('click', (event) => {
-  if (event.target instanceof HTMLElement && event.target.dataset.action === 'close-setup') closeCampaignSetup();
-  if (event.target instanceof HTMLElement && event.target.dataset.action === 'apply-mods') applyModPatchesFromForm(campaignSetup);
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-action]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  const action = target.dataset.action;
+  if (action === 'close-setup') closeCampaignSetup();
+  else if (action === 'apply-mods') applyModPatchesFromForm(campaignSetup);
+  else if (action === 'paint-scenario-terrain') paintScenarioEditorTerrain(campaignSetup, target);
+  else if (action === 'add-scenario-unit') addScenarioEditorUnit(campaignSetup);
+  else if (action === 'remove-scenario-unit') removeScenarioEditorUnit(campaignSetup, target);
+  else if (action === 'reset-scenario-editor') resetScenarioEditorAndRender();
+});
+
+campaignSetup.addEventListener('input', (event) => {
+  if (!(event.target instanceof HTMLElement) || !event.target.closest('.scenario-editor') || event.target.id === 'modScenarioJson') return;
+  syncScenarioEditorStateFromForm(campaignSetup);
+  updateScenarioEditorJson(campaignSetup);
 });
 
 campaignSetup.addEventListener('change', (event) => {
+  if (event.target instanceof HTMLElement && event.target.closest('.mod-menu-drawer')) {
+    if (event.target.closest('.scenario-editor') && event.target.id !== 'modScenarioJson') {
+      syncScenarioEditorStateFromForm(campaignSetup);
+      updateScenarioEditorJson(campaignSetup);
+    }
+    return;
+  }
   const data = new FormData(campaignSetup);
   const scenarioId = data.get('scenarioId') || 'founding';
   const scenario = SCENARIOS[scenarioId] || SCENARIOS.founding;
