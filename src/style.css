@@ -4058,6 +4058,18 @@ button:hover:not(:disabled) {
     radial-gradient(circle at 0% 0%, rgba(255,255,255,0.76), transparent 10rem);
 }
 
+.map-intel.order .map-intel-stats span:last-child {
+  flex: 1 1 100%;
+}
+
+.map-intel.order .map-intel-stats span:last-child b {
+  max-width: none;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .map-intel.order .map-intel-head span,
 .map-intel.order .map-intel-head strong {
   color: #8f2418;

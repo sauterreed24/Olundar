@@ -225,6 +225,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawUnits(ctx, state, layout);
   drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
+  drawOpeningOrderForeground(ctx, state, layout, openingOrderOverlay);
   drawFog(ctx, state, layout);
   drawFogAtmosphere(ctx, state, layout);
   drawBattleImpact(ctx, state, layout, battleImpact);
@@ -2112,6 +2113,7 @@ function drawOpeningOrderRoute(ctx, state, layout, overlay) {
   const color = openingOrderColor(overlay.kind, overlay.canExecute);
   const center = (point) => tileCenter(layout, point.x, point.y);
   ctx.save();
+  if (overlay.kind === 'fortify' && target) drawOpeningHoldGroundField(ctx, state, layout, overlay, color);
   if (points.length >= 2) {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -2128,6 +2130,125 @@ function drawOpeningOrderRoute(ctx, state, layout, overlay) {
     drawOpeningRouteSparks(ctx, points, center, layout, color);
   }
   if (target) drawOpeningTargetStandard(ctx, tileBounds(layout, target.x, target.y), layout, overlay, color);
+  ctx.restore();
+}
+
+function drawOpeningHoldGroundField(ctx, state, layout, overlay, color) {
+  const target = overlay.target;
+  if (!target || !isRevealed(state, target.x, target.y)) return;
+  const bounds = tileBounds(layout, target.x, target.y);
+  const s = layout.tileSize;
+  const center = tileCenter(layout, target.x, target.y);
+  const ready = overlay.canExecute !== false;
+
+  ctx.save();
+  ctx.shadowColor = ready ? 'rgba(255, 224, 138, 0.34)' : 'rgba(132, 104, 70, 0.24)';
+  ctx.shadowBlur = s * 0.22;
+  fillTileDiamond(ctx, bounds, ready ? 'rgba(255, 224, 138, 0.18)' : 'rgba(122, 100, 66, 0.14)', 1);
+  strokeTileDiamond(ctx, bounds, 'rgba(59, 33, 14, 0.68)', Math.max(2, s * 0.075), 2);
+  strokeTileDiamond(ctx, bounds, color, Math.max(2, s * 0.042), 7);
+  ctx.shadowBlur = 0;
+
+  drawOpeningHoldShieldStuds(ctx, bounds, layout, color, ready);
+  drawOpeningHoldGroundStandard(ctx, bounds, layout, color, ready);
+
+  ctx.globalAlpha = ready ? 0.58 : 0.34;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, s * 0.026);
+  ctx.setLineDash([Math.max(5, s * 0.13), Math.max(4, s * 0.09)]);
+  ctx.beginPath();
+  ctx.ellipse(center.x, center.y + layout.halfTileHeight * 0.08, layout.halfTileWidth * 0.78, layout.halfTileHeight * 0.82, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawOpeningOrderForeground(ctx, state, layout, overlay) {
+  if (!overlay || state.status !== 'playing' || overlay.kind !== 'fortify') return;
+  const target = overlay.target && isRevealed(state, overlay.target.x, overlay.target.y)
+    ? overlay.target
+    : null;
+  if (!target) return;
+  const color = openingOrderColor(overlay.kind, overlay.canExecute);
+  const bounds = tileBounds(layout, target.x, target.y);
+  drawOpeningHoldGroundStandard(ctx, bounds, layout, color, overlay.canExecute !== false, true);
+  drawOpeningHoldShieldGlyph(ctx, bounds, layout, color, overlay.canExecute !== false);
+}
+
+function drawOpeningHoldShieldStuds(ctx, bounds, layout, color, ready) {
+  const s = layout.tileSize;
+  const studs = [
+    { x: bounds.cx, y: bounds.cy - layout.halfTileHeight * 0.78 },
+    { x: bounds.cx + bounds.halfW * 0.66, y: bounds.cy },
+    { x: bounds.cx, y: bounds.cy + layout.halfTileHeight * 0.78 },
+    { x: bounds.cx - bounds.halfW * 0.66, y: bounds.cy }
+  ];
+  ctx.save();
+  for (const stud of studs) {
+    ctx.fillStyle = 'rgba(49, 29, 13, 0.78)';
+    ctx.beginPath();
+    ctx.arc(stud.x, stud.y, Math.max(3, s * 0.085), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = ready ? color : 'rgba(157, 126, 73, 0.86)';
+    ctx.beginPath();
+    ctx.arc(stud.x, stud.y, Math.max(2, s * 0.047), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawOpeningHoldGroundStandard(ctx, bounds, layout, color, ready, foreground = false) {
+  const s = layout.tileSize;
+  const compact = !foreground && (layout.tileSize < 38 || layout.mapWidth < 560);
+  if (compact) return;
+  const w = Math.max(s * (foreground ? 0.64 : 0.72), foreground ? 40 : 46);
+  const h = Math.max(s * (foreground ? 0.20 : 0.22), foreground ? 14 : 16);
+  const x = bounds.cx - w * 0.5;
+  const y = bounds.cy - layout.halfTileHeight * (foreground ? 1.74 : 1.36);
+  ctx.save();
+  if (foreground) {
+    ctx.shadowColor = ready ? 'rgba(255, 224, 138, 0.55)' : 'rgba(132, 104, 70, 0.32)';
+    ctx.shadowBlur = s * 0.18;
+  }
+  roundRectPath(ctx, x, y, w, h, h * 0.46);
+  ctx.fillStyle = ready ? 'rgba(255, 250, 226, 0.96)' : 'rgba(234, 221, 192, 0.90)';
+  ctx.strokeStyle = ready ? 'rgba(143, 36, 24, 0.58)' : 'rgba(117, 92, 63, 0.48)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = ready ? '#8f2418' : '#745a36';
+  ctx.font = `900 ${Math.max(8, s * 0.105)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('HOLD', bounds.cx, y + h * 0.54);
+  ctx.restore();
+}
+
+function drawOpeningHoldShieldGlyph(ctx, bounds, layout, color, ready) {
+  const s = layout.tileSize;
+  if (layout.tileSize < 30) return;
+  const cx = bounds.cx + bounds.halfW * 0.62;
+  const cy = bounds.cy - layout.halfTileHeight * 0.54;
+  const r = Math.max(5, s * 0.13);
+  ctx.save();
+  ctx.shadowColor = ready ? 'rgba(255, 224, 138, 0.42)' : 'rgba(132, 104, 70, 0.24)';
+  ctx.shadowBlur = s * 0.14;
+  ctx.fillStyle = 'rgba(58, 32, 14, 0.82)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = ready ? color : 'rgba(157, 126, 73, 0.88)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 0.72);
+  ctx.quadraticCurveTo(cx + r * 0.62, cy - r * 0.40, cx + r * 0.52, cy + r * 0.18);
+  ctx.quadraticCurveTo(cx + r * 0.24, cy + r * 0.78, cx, cy + r * 0.94);
+  ctx.quadraticCurveTo(cx - r * 0.24, cy + r * 0.78, cx - r * 0.52, cy + r * 0.18);
+  ctx.quadraticCurveTo(cx - r * 0.62, cy - r * 0.40, cx, cy - r * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(58, 32, 14, 0.78)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.stroke();
   ctx.restore();
 }
 
