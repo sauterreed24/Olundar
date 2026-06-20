@@ -113,6 +113,10 @@ check('content tables are internally consistent', () => {
     assert(building.id === id, `Building ${id} has mismatched id.`);
     assert(building.hp > 0, `Building ${id} needs hp.`);
     for (const unitType of building.trains) assert(UNIT_TYPES[unitType], `Building ${id} trains missing unit ${unitType}.`);
+    if (building.rally) {
+      assert(Number.isInteger(building.rally.heal) && building.rally.heal > 0, `Building ${id} rally heal must be positive.`);
+      assert(Number.isInteger(building.rally.radius) && building.rally.radius > 0, `Building ${id} rally radius must be positive.`);
+    }
   }
   for (const [id, terrain] of Object.entries(TERRAIN)) {
     assert(terrain.id === id, `Terrain ${id} has mismatched id.`);
@@ -1395,17 +1399,31 @@ check('wounded living units rally near friendly havens', () => {
   haven.hp = 4;
   const clamp = addUnit(state, 'spearGuard', 'olundar', city.x - 1, city.y, { name: 'Clamp Guard' });
   clamp.hp = clamp.maxHp - 1;
-  const exposed = addUnit(state, 'legionary', 'olundar', 12, 16, { name: 'Exposed Legion' });
+  const exposed = addUnit(state, 'legionary', 'olundar', 22, 22, { name: 'Exposed Legion' });
   exposed.hp = 4;
   const exposedBefore = exposed.hp;
+  const banner = addBuilding(state, 'rallyBanner', 'olundar', 15, 16, { complete: true, name: 'Forward Rally Banner' });
+  const bannerGuard = addUnit(state, 'spearGuard', 'olundar', banner.x + BUILDING_TYPES.rallyBanner.rally.radius, banner.y, { name: 'Banner Guard' });
+  bannerGuard.hp = 4;
+  const outsideBanner = addUnit(state, 'spearGuard', 'olundar', banner.x + BUILDING_TYPES.rallyBanner.rally.radius + 1, banner.y, { name: 'Outer Guard' });
+  outsideBanner.hp = 4;
+  const unfinishedBanner = addBuilding(state, 'rallyBanner', 'olundar', 12, 20, { name: 'Unfinished Rally Banner' });
+  const unfinishedGuard = addUnit(state, 'spearGuard', 'olundar', unfinishedBanner.x + BUILDING_TYPES.rallyBanner.rally.radius, unfinishedBanner.y, { name: 'Unfinished Guard' });
+  unfinishedGuard.hp = 4;
   endTurn(state);
   const havenAfter = state.units.find((u) => u.id === haven.id);
   const clampAfter = state.units.find((u) => u.id === clamp.id);
   const exposedAfter = state.units.find((u) => u.id === exposed.id);
+  const bannerGuardAfter = state.units.find((u) => u.id === bannerGuard.id);
+  const outsideBannerAfter = state.units.find((u) => u.id === outsideBanner.id);
+  const unfinishedGuardAfter = state.units.find((u) => u.id === unfinishedGuard.id);
   assert(havenAfter && havenAfter.hp > 4, 'A wounded unit beside the capital should rally and heal.');
   assert(havenAfter.hp <= havenAfter.maxHp, 'Rally healing must never exceed max HP.');
   assert(clampAfter && clampAfter.hp === clampAfter.maxHp, 'Rally healing should clamp exactly to max HP.');
   assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'A unit resting far from any haven should not passively heal.');
+  assert(bannerGuardAfter && bannerGuardAfter.hp > 4, 'A completed Rally Banner should heal wounded Olundaran units in its frontier radius.');
+  assert(outsideBannerAfter && outsideBannerAfter.hp === 4, 'Rally Banner healing should not leak outside its radius.');
+  assert(unfinishedGuardAfter && unfinishedGuardAfter.hp === 4, 'Rally Banner healing should wait until construction is complete.');
 });
 
 check('24-turn simulation remains stable', () => {

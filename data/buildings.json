@@ -244,6 +244,29 @@
     },
     "text": "Boosts influence and morale. Living units nearby resist grave-blight attrition."
   },
+  "rallyBanner": {
+    "id": "rallyBanner",
+    "name": "Rally Banner",
+    "glyph": "R",
+    "hp": 22,
+    "vision": 2,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 16,
+      "food": 8,
+      "influence": 1
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {},
+    "rally": {
+      "heal": 2,
+      "radius": 3
+    },
+    "text": "Forward standard for frontier troops. Wounded Olundaran units within three tiles can rally and heal between Deadwalker pushes."
+  },
   "outpost": {
     "id": "outpost",
     "name": "Frontier Outpost",

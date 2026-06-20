@@ -124,10 +124,10 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
   { id: 'summary', label: 'Summary' }
 ];
 const PACT_ACCEPTANCE_RELATION = 35;
-const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'rallyBanner', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
 const BUILD_DOCTRINE_GROUPS = [
   { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
-  { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'outpost'] },
+  { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'rallyBanner', 'outpost'] },
   { label: 'Muster halls', meta: 'Infantry, bows, cavalry, siege', types: ['barracks', 'archeryYard', 'stable', 'workshop'] },
   { label: 'Imperial civic works', meta: 'Morale and influence', types: ['shrine'] }
 ];
@@ -2227,6 +2227,7 @@ function buildingIncomeCounsel(building, tile) {
   if (building.type === 'lumberCamp') return tile?.terrain === 'forest' ? 'Forest wood accelerates expansion and archery.' : 'This camp needs forest adjacency to justify itself.';
   if (building.type === 'mine') return tile?.terrain === 'hills' ? 'Hill iron feeds legionaries, spear guards, and siege.' : 'Ruin mines lean toward gold and relic value.';
   if (building.type === 'watchtower') return tile?.terrain === 'hills' ? 'Hill towers convert terrain into early warning.' : 'Watchtowers push fog back before diplomacy or raids.';
+  if (building.type === 'rallyBanner') return 'Frontline troops can rotate here to rally and heal before the next march hits.';
   if (building.type === 'city') return 'Capital output is broad; use queues to avoid idle turns.';
   if (BUILDING_TYPES[building.type]?.trains?.length) return 'Muster halls should match terrain: bows on hills, infantry on roads, cavalry on open lanes.';
   return BUILDING_TYPES[building.type]?.text || 'This work supports the long campaign.';
@@ -2336,6 +2337,7 @@ function buildDoctrineRecommendations(builder) {
     !has('mine') ? { type: 'mine', label: 'Claim iron hill', meta: 'Iron for legions and siege' } : null,
     !has('archeryYard') ? { type: 'archeryYard', label: 'Raise archery yard', meta: 'Ranged kill zone' } : null,
     !has('shrine') && state.factions.olundar.resources.influence <= 3 ? { type: 'shrine', label: 'Consecrate Sun Shrine', meta: 'Influence and morale' } : null,
+    !has('rallyBanner') && (state.flags.firstDeadwalkerSeen || state.turn >= 4 || has('outpost')) ? { type: 'rallyBanner', label: 'Plant Rally Banner', meta: 'Forward healing radius' } : null,
     !has('outpost') && mappedPercent() >= 12 ? { type: 'outpost', label: 'Plant frontier outpost', meta: 'Forward sight and muster' } : null,
     !has('wall') ? { type: 'wall', label: 'Close a kill gate', meta: 'Chokepoint defense' } : null
   ].filter(Boolean);
@@ -5029,6 +5031,14 @@ function buildingPortraitSvg(building) {
         <path class="portrait-roof" d="M19 22l13-11 13 11z"/>
         <path class="portrait-window" d="M29 30h7v7h-7z"/>
         <path class="portrait-banner" d="M36 14h13l-4 4 4 4H36z"/>
+      `);
+    case 'rallyBanner':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 51c12-7 24-8 50-4v10H7z"/>
+        <path class="portrait-tower" d="M30 18h5v35h-5z"/>
+        <path class="portrait-banner" d="M35 18h18l-5 6 5 6H35z"/>
+        <path class="portrait-weapon-rack" d="M18 53l7-16M47 53l-7-16M22 43h21"/>
+        <path class="portrait-window" d="M27 32h11v7H27z"/>
       `);
     case 'wall':
       return portraitSvg(`

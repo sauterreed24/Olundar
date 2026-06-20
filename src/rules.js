@@ -2961,9 +2961,23 @@ function processOlundarRecovery(state) {
 function rallyHealAmount(state, unit) {
   let rally = 0;
   if (nearFriendlyHaven(state, unit.x, unit.y)) rally += 2;
+  rally += nearbyBuildingRallyHeal(state, unit.x, unit.y);
   if (nearBuilding(state, unit.x, unit.y, 'shrine', 'olundar', 2)) rally += 1;
   if (rally > 0 && unit.fortified > 0) rally += 1;
   return rally;
+}
+
+function nearbyBuildingRallyHeal(state, x, y) {
+  let heal = 0;
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0) continue;
+    const rally = getBuildingDef(building).rally;
+    if (!rally) continue;
+    const radius = (Number(rally.radius) || 0) + (building.upgraded || 0);
+    if (radius <= 0 || manhattan(building.x, building.y, x, y) > radius) continue;
+    heal = Math.max(heal, Number(rally.heal) || 0);
+  }
+  return heal;
 }
 
 function nearFriendlyHaven(state, x, y) {
