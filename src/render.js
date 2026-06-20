@@ -268,6 +268,10 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
 
 function drawBattleImpact(ctx, state, layout, impact) {
   if (!impact || !isVisible(state, impact.x, impact.y)) return;
+  if (impact.type === 'strategic') {
+    drawStrategicImpact(ctx, layout, impact);
+    return;
+  }
   const bounds = tileBounds(layout, impact.x, impact.y);
   const { x, y, s } = bounds;
   const color = impact.tone === 'bad' ? '#ff8a8a' : impact.tone === 'good' ? '#baf58c' : '#f0c866';
@@ -291,6 +295,92 @@ function drawBattleImpact(ctx, state, layout, impact) {
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x + s * 0.5, y + s * 0.16);
   ctx.restore();
+}
+
+function drawStrategicImpact(ctx, layout, impact) {
+  const bounds = tileBounds(layout, impact.x, impact.y);
+  const { x, y, s } = bounds;
+  const accent = impact.color || '#2d93aa';
+  const label = impact.label || 'PACT';
+  const title = impact.title || 'Survival Pact';
+  const isOrder = impact.strategicType === 'fieldOrder';
+
+  ctx.save();
+  ctx.shadowColor = isOrder ? 'rgba(39, 139, 118, 0.34)' : 'rgba(37, 132, 166, 0.34)';
+  ctx.shadowBlur = Math.max(5, s * 0.15);
+  fillTileDiamond(ctx, bounds, isOrder ? 'rgba(191, 246, 210, 0.30)' : 'rgba(185, 237, 255, 0.32)', s * 0.08);
+  ctx.shadowBlur = 0;
+  strokeTileDiamond(ctx, bounds, 'rgba(255, 255, 248, 0.88)', Math.max(2, s * 0.070), s * 0.02);
+  strokeTileDiamond(ctx, bounds, accent, Math.max(2, s * 0.048), s * 0.11);
+  drawStrategicImpactRings(ctx, bounds, s, accent, isOrder);
+  drawStrategicImpactStandard(ctx, x, y, s, accent, label, title, isOrder);
+  ctx.restore();
+}
+
+function drawStrategicImpactRings(ctx, bounds, s, accent, isOrder) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < 3; i += 1) {
+    const scale = 1 + i * 0.17;
+    const alpha = isOrder ? 0.30 - i * 0.06 : 0.34 - i * 0.07;
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = i === 0 ? accent : 'rgba(255, 255, 245, 0.86)';
+    ctx.lineWidth = Math.max(1.2, s * (0.026 - i * 0.003));
+    ctx.beginPath();
+    ctx.moveTo(bounds.cx, bounds.cy - bounds.halfH * scale);
+    ctx.lineTo(bounds.cx + bounds.halfW * scale, bounds.cy);
+    ctx.lineTo(bounds.cx, bounds.cy + bounds.halfH * scale);
+    ctx.lineTo(bounds.cx - bounds.halfW * scale, bounds.cy);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.78;
+  ctx.strokeStyle = isOrder ? 'rgba(58, 126, 67, 0.56)' : 'rgba(35, 119, 129, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.beginPath();
+  ctx.ellipse(bounds.cx, bounds.cy + bounds.halfH * 0.32, s * 0.58, s * 0.18, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawStrategicImpactStandard(ctx, x, y, s, accent, label, title, isOrder) {
+  const w = Math.max(76, Math.min(s * 2.1, title.length * s * 0.092));
+  const h = Math.max(24, s * 0.34);
+  const px = x + s * 0.22;
+  const py = y - s * 0.42;
+  ctx.save();
+  ctx.shadowColor = 'rgba(42, 76, 62, 0.24)';
+  ctx.shadowBlur = Math.max(4, s * 0.09);
+  ctx.shadowOffsetY = Math.max(1, s * 0.025);
+  roundRectPath(ctx, px, py, w, h, h * 0.30);
+  const fill = ctx.createLinearGradient(px, py, px + w, py + h);
+  fill.addColorStop(0, 'rgba(255, 255, 250, 0.97)');
+  fill.addColorStop(0.52, isOrder ? 'rgba(233, 251, 220, 0.94)' : 'rgba(229, 249, 255, 0.94)');
+  fill.addColorStop(1, colorMix(accent, '#ffffff', 0.78));
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = colorMix(accent, '#ffffff', 0.22);
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  ctx.stroke();
+  ctx.fillStyle = accent;
+  roundRectPath(ctx, px + 2, py + 2, Math.max(8, h * 0.38), h - 4, h * 0.18);
+  ctx.fill();
+  ctx.fillStyle = '#17331f';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${Math.max(6.5, h * 0.24)}px system-ui, sans-serif`;
+  ctx.fillText(label, px + h * 0.55, py + h * 0.33, w - h * 0.70);
+  ctx.fillStyle = isOrder ? '#225f3f' : '#155b72';
+  ctx.font = `900 ${Math.max(8, h * 0.31)}px system-ui, sans-serif`;
+  ctx.fillText(fitStrategicImpactTitle(title), px + h * 0.55, py + h * 0.68, w - h * 0.66);
+  ctx.restore();
+}
+
+function fitStrategicImpactTitle(title) {
+  const clean = String(title || '').replace(/\s+/g, ' ').trim();
+  return clean.length > 22 ? `${clean.slice(0, 21).trim()}...` : clean;
 }
 
 function drawMissionFocus(ctx, state, layout, overlay) {
