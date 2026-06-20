@@ -1,0 +1,35 @@
+{
+  "pact": {
+    "name": "Offer Survival Pact",
+    "cost": {
+      "influence": 2
+    },
+    "relation": 18,
+    "text": "Spend influence to create shared vision and occasional military aid."
+  },
+  "trade": {
+    "name": "Open Trade",
+    "cost": {
+      "influence": 1,
+      "gold": 12
+    },
+    "relation": 10,
+    "text": "Gain steady gold and improve relations."
+  },
+  "aid": {
+    "name": "Request War Aid",
+    "cost": {
+      "influence": 1
+    },
+    "relation": -4,
+    "text": "Ask a discovered civilization for units or supplies."
+  },
+  "pressure": {
+    "name": "Pressure Them",
+    "cost": {
+      "morale": 1
+    },
+    "relation": -18,
+    "text": "Try to extract resources quickly at a diplomatic cost."
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Olundar content tables",
+  "type": "object",
+  "properties": {
+    "UNIT_TYPES": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "name", "hp", "attack", "range", "move", "sight", "trainTurns"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "hp": { "type": "number", "minimum": 1 },
+          "attack": { "type": "number", "minimum": 0 },
+          "range": { "type": "number", "minimum": 1 },
+          "move": { "type": "number", "minimum": 1 },
+          "sight": { "type": "number", "minimum": 1 },
+          "trainTurns": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "BUILDING_TYPES": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "name", "hp"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "hp": { "type": "number", "minimum": 1 }
+        }
+      }
+    },
+    "FACTIONS": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "name", "color"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "color": { "type": "string" }
+        }
+      }
+    },
+    "TERRAIN": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "name", "move", "passable"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "move": { "type": "number" },
+          "passable": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

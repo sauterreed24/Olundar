@@ -1,0 +1,132 @@
+{
+  "refugeeCaravan": {
+    "id": "refugeeCaravan",
+    "name": "Refugee Caravan",
+    "tone": "info",
+    "text": "Families from contested borderlands ask Olundar for shelter before the undead close the roads.",
+    "choices": [
+      {
+        "id": "shelter",
+        "name": "Shelter Them",
+        "cost": {
+          "food": 16,
+          "gold": 8
+        },
+        "text": "Spend stores now for population, morale, and influence."
+      },
+      {
+        "id": "escort",
+        "name": "Escort to Allies",
+        "cost": {
+          "influence": 1
+        },
+        "text": "Send them through friendly routes to improve living-faction relations."
+      },
+      {
+        "id": "levy",
+        "name": "Emergency Levy",
+        "cost": {
+          "morale": 1
+        },
+        "text": "Arm the able-bodied quickly, gaining a spear guard at a morale cost."
+      }
+    ]
+  },
+  "famineStores": {
+    "id": "famineStores",
+    "name": "Thin Granaries",
+    "tone": "danger",
+    "text": "Food stores are running low enough that the next campaign season could turn hunger into panic.",
+    "choices": [
+      {
+        "id": "ration",
+        "name": "Strict Rations",
+        "cost": {},
+        "text": "Recover food by rationing, but morale suffers."
+      },
+      {
+        "id": "buyGrain",
+        "name": "Buy Grain",
+        "cost": {
+          "gold": 14,
+          "influence": 1
+        },
+        "text": "Spend coin and favors to refill stores without hurting morale."
+      },
+      {
+        "id": "frontierForage",
+        "name": "Frontier Forage",
+        "cost": {
+          "wood": 8
+        },
+        "text": "Send teams into nearby wilds for modest food and a scouting party."
+      }
+    ]
+  },
+  "cityRaid": {
+    "id": "cityRaid",
+    "name": "Night Raid Warning",
+    "tone": "danger",
+    "text": "Scouts report undead raiders or opportunists testing roads near Olundar holdings after dusk.",
+    "choices": [
+      {
+        "id": "nightWatch",
+        "name": "Raise Night Watch",
+        "cost": {
+          "wood": 12,
+          "gold": 6
+        },
+        "text": "Reinforce city and outpost defenses before the raid lands."
+      },
+      {
+        "id": "evacuate",
+        "name": "Evacuate Outskirts",
+        "cost": {},
+        "text": "Pull civilians inward, saving morale and food but losing population."
+      },
+      {
+        "id": "counterRaid",
+        "name": "Counter-Raid",
+        "cost": {
+          "iron": 8,
+          "gold": 8
+        },
+        "text": "Muster a spear guard and seize the initiative."
+      }
+    ]
+  },
+  "emergencyCouncil": {
+    "id": "emergencyCouncil",
+    "name": "Emergency Council",
+    "tone": "good",
+    "text": "Envoys, captains, priests, and quartermasters demand a ruling before the living front fractures.",
+    "choices": [
+      {
+        "id": "coalitionEnvoys",
+        "name": "Send Envoys",
+        "cost": {
+          "influence": 2,
+          "gold": 12
+        },
+        "text": "Improve relations with discovered civilizations and steady morale."
+      },
+      {
+        "id": "warLevy",
+        "name": "War Levy",
+        "cost": {
+          "morale": 1
+        },
+        "text": "Raise a legionary quickly, accepting strain at home."
+      },
+      {
+        "id": "fortifyGates",
+        "name": "Fortify Gates",
+        "cost": {
+          "wood": 18,
+          "stone": 12
+        },
+        "text": "Harden city, walls, and watchtowers for the coming siege."
+      }
+    ]
+  }
+}

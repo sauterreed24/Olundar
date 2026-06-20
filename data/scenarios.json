@@ -1,0 +1,55 @@
+{
+  "founding": {
+    "id": "founding",
+    "name": "Founding of Olundar",
+    "seed": "Olundar-Founding",
+    "difficultyId": "standard",
+    "text": "Balanced start with the capital, a scout, an engineer, and enough time to choose your first frontier."
+  },
+  "dawnroad": {
+    "id": "dawnroad",
+    "name": "Dawnward Road Compact",
+    "seed": "Dawnward-Road-Compact",
+    "difficultyId": "standard",
+    "text": "A northern road campaign with extra influence and a sworn spear for early alliance play.",
+    "resourceDelta": {
+      "influence": 2,
+      "stone": 8,
+      "gold": -6
+    },
+    "units": [
+      {
+        "type": "spearGuard",
+        "faction": "olundar",
+        "x": 9,
+        "y": 16,
+        "name": "Road Oath-Spear"
+      }
+    ]
+  },
+  "marketCrown": {
+    "id": "marketCrown",
+    "name": "Veyr Market Crown",
+    "seed": "Veyr-Market-Crown",
+    "difficultyId": "standard",
+    "text": "A coin-rich start that can rush trade, cavalry, or mercantile pressure at a morale cost.",
+    "resourceDelta": {
+      "gold": 36,
+      "food": -8,
+      "influence": -1,
+      "morale": -1
+    }
+  },
+  "ashgate": {
+    "id": "ashgate",
+    "name": "Ash Gate Frontier",
+    "seed": "Ash-Gate-Frontier",
+    "difficultyId": "legion",
+    "text": "A harder siege-forward start with more iron and stone, less morale, and faster eastern pressure.",
+    "resourceDelta": {
+      "iron": 12,
+      "stone": 12,
+      "morale": -1
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "defendRoads": {
+    "id": "defendRoads",
+    "name": "Defend Roads",
+    "text": "Patrol Olundar roads, outposts, and city approaches before pursuing distant targets."
+  },
+  "reinforceCapital": {
+    "id": "reinforceCapital",
+    "name": "Reinforce Capital",
+    "text": "Muster pact aid near Olundar Prime when possible."
+  },
+  "harassDeadworks": {
+    "id": "harassDeadworks",
+    "name": "Harass Deadworks",
+    "text": "Push toward revealed Deadwalker structures and pressure their expansion."
+  }
+}
