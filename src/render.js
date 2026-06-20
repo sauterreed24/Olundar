@@ -251,6 +251,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
+  drawUnitIdentityStandards(ctx, state, layout);
   drawFieldCommandBanners(ctx, state, layout);
   drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
@@ -4541,6 +4542,172 @@ function drawUnits(ctx, state, layout) {
     const { x, y, s } = tileBounds(layout, unit.x, unit.y);
     drawUnitSprite(ctx, unit, x, y, s, state);
   }
+}
+
+function drawUnitIdentityStandards(ctx, state, layout) {
+  const budget = renderBudget(layout);
+  const compact = budget.compact || layout.mapWidth < 620 || layout.tileSize < 44;
+  const window = cameraTileWindow(layout, 1);
+  const entries = state.units
+    .filter((unit) => unit.id !== state.selectedUnitId && isVisible(state, unit.x, unit.y) && isInTileWindow(unit, window))
+    .map((unit) => unitIdentityStandardEntry(state, unit, compact))
+    .filter(Boolean)
+    .sort((a, b) => b.priority - a.priority || (a.unit.x + a.unit.y) - (b.unit.x + b.unit.y));
+  const limit = compact ? 5 : 9;
+  const placed = [];
+  ctx.save();
+  for (const entry of entries) {
+    if (placed.length >= limit) break;
+    const rect = drawUnitIdentityStandard(ctx, entry, layout, compact, placed);
+    if (rect) placed.push(rect);
+  }
+  ctx.restore();
+}
+
+function unitIdentityStandardEntry(state, unit, compact) {
+  const def = UNIT_TYPES[unit.type];
+  if (!def) return null;
+  const hostile = unit.faction !== 'olundar' && isEnemy(state, 'olundar', unit.faction);
+  const ally = unit.faction !== 'olundar' && Boolean(state.factions.olundar.pacts?.[unit.faction]);
+  const ready = unit.faction === 'olundar' && !unit.hasActed;
+  const label = unitIdentityCode(unit, compact);
+  const faction = FACTIONS[unit.faction];
+  const color = FACTION_COLORS[unit.faction] || '#f0c866';
+  return {
+    unit,
+    def,
+    label,
+    color,
+    tone: hostile ? 'threat' : ally ? 'ally' : ready ? 'ready' : unit.faction === 'olundar' ? 'spent' : 'neutral',
+    kicker: hostile ? 'HOSTILE' : ally ? 'ALLY' : ready ? 'READY' : faction?.adjective?.toUpperCase() || 'UNIT',
+    priority: hostile ? 96 : ready ? 82 : ally ? 76 : unit.faction === 'olundar' ? 66 : 58
+  };
+}
+
+function unitIdentityCode(unit, compact) {
+  const labels = {
+    scout: compact ? 'SCOUT' : 'SCOUT',
+    engineer: compact ? 'ENG' : 'ENGINEER',
+    archer: compact ? 'BOW' : 'ARCHER',
+    legionary: compact ? 'LEG' : 'LEGION',
+    spearGuard: compact ? 'SPEAR' : 'SPEAR',
+    cavalry: compact ? 'CAV' : 'CAVALRY',
+    onager: compact ? 'SIEGE' : 'ONAGER',
+    boneThrall: compact ? 'BONE' : 'THRALL',
+    corpseArcher: compact ? 'BONE BOW' : 'CORPSE BOW',
+    graveKnight: compact ? 'GRAVE' : 'GRAVE KNIGHT',
+    lichBoss: compact ? 'VORGATH' : 'VORGATH'
+  };
+  return labels[unit.type] || unitMapLabel(unit);
+}
+
+function drawUnitIdentityStandard(ctx, entry, layout, compact, placed) {
+  const bounds = tileBounds(layout, entry.unit.x, entry.unit.y);
+  const s = layout.tileSize;
+  const h = Math.max(compact ? 14 : 17, s * (compact ? 0.22 : 0.25));
+  const emblemW = h * 1.05;
+  const textW = Math.min(compact ? s * 0.96 : s * 1.28, Math.max(compact ? 31 : 42, entry.label.length * h * 0.44));
+  const w = emblemW + textW + h * 0.30;
+  const y = bounds.cy - s * (compact ? 0.72 : 0.82);
+  const x = clamp(bounds.cx - w * 0.5, layout.frameX + 4, layout.frameX + layout.mapWidth - w - 4);
+  const rect = { x: x - 2, y: y - h * 0.5 - 2, w: w + 4, h: h + 4, priority: entry.priority };
+  if (placed.some((other) => fieldBannerOverlaps(rect, other))) return null;
+
+  const threat = entry.tone === 'threat';
+  const ready = entry.tone === 'ready';
+  const spent = entry.tone === 'spent';
+  const fillA = threat ? 'rgba(42, 45, 34, 0.94)' : ready ? 'rgba(255, 252, 226, 0.96)' : 'rgba(245, 249, 235, 0.90)';
+  const fillB = threat ? 'rgba(23, 34, 25, 0.90)' : ready ? 'rgba(232, 253, 214, 0.92)' : 'rgba(231, 239, 222, 0.84)';
+  const stroke = threat ? 'rgba(156, 243, 138, 0.72)' : ready ? colorMix(entry.color, '#fff4a8', 0.34) : colorMix(entry.color, '#ffffff', 0.50);
+  ctx.save();
+  ctx.shadowColor = threat ? 'rgba(44, 82, 35, 0.30)' : ready ? 'rgba(255, 218, 108, 0.25)' : 'rgba(47, 73, 50, 0.18)';
+  ctx.shadowBlur = Math.max(4, s * 0.055);
+  ctx.shadowOffsetY = Math.max(1, s * 0.018);
+  roundRectPath(ctx, x, y - h * 0.5, w, h, h * 0.32);
+  const fill = ctx.createLinearGradient(x, y - h * 0.5, x + w, y + h * 0.5);
+  fill.addColorStop(0, fillA);
+  fill.addColorStop(1, fillB);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(1, s * 0.010);
+  ctx.stroke();
+
+  drawUnitIdentityEmblem(ctx, entry, x + h * 0.52, y, h * 0.34, threat, spent);
+  ctx.fillStyle = threat ? '#caffad' : ready ? '#244f38' : '#4b5d42';
+  ctx.font = `900 ${Math.max(7.5, h * 0.48)}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(entry.label, x + emblemW + h * 0.08, y + h * 0.04, w - emblemW - h * 0.16);
+  drawUnitIdentityNeedle(ctx, bounds, x + w * 0.5, y + h * 0.5, entry, layout);
+  ctx.restore();
+  return rect;
+}
+
+function drawUnitIdentityEmblem(ctx, entry, cx, cy, r, threat, spent) {
+  ctx.save();
+  ctx.globalAlpha = spent ? 0.62 : 1;
+  ctx.fillStyle = threat ? 'rgba(12, 22, 15, 0.95)' : entry.color;
+  ctx.strokeStyle = threat ? 'rgba(156, 243, 138, 0.86)' : 'rgba(72, 45, 20, 0.64)';
+  ctx.lineWidth = Math.max(1, r * 0.18);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = threat ? '#9cf38a' : '#fff4bd';
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = Math.max(1, r * 0.22);
+  if (entry.def.tags.includes('ranged')) {
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.08, cy, r * 0.50, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + r * 0.28, cy - r * 0.52);
+    ctx.lineTo(cx + r * 0.28, cy + r * 0.52);
+    ctx.stroke();
+  } else if (entry.def.tags.includes('builder') || entry.def.tags.includes('siege')) {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.48, cy + r * 0.38);
+    ctx.lineTo(cx + r * 0.42, cy - r * 0.42);
+    ctx.moveTo(cx - r * 0.08, cy - r * 0.48);
+    ctx.lineTo(cx + r * 0.48, cy + r * 0.08);
+    ctx.stroke();
+  } else if (entry.def.tags.includes('mounted')) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.12, r * 0.60, r * 0.28, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + r * 0.50, cy - r * 0.18, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (entry.def.tags.includes('undead')) {
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.12, r * 0.36, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.38, cy + r * 0.36);
+    ctx.lineTo(cx + r * 0.38, cy + r * 0.36);
+    ctx.stroke();
+  } else {
+    drawLegionShield(ctx, cx, cy + r * 0.06, r * 1.55, '#fff3c9', entry.color);
+  }
+  ctx.restore();
+}
+
+function drawUnitIdentityNeedle(ctx, bounds, x, y, entry, layout) {
+  ctx.save();
+  ctx.globalAlpha = entry.tone === 'spent' ? 0.42 : 0.70;
+  ctx.strokeStyle = entry.tone === 'threat' ? 'rgba(156, 243, 138, 0.58)' : 'rgba(96, 74, 34, 0.38)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.012);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(bounds.cx, bounds.cy - bounds.halfH * 0.18);
+  ctx.stroke();
+  ctx.fillStyle = entry.tone === 'threat' ? '#9cf38a' : colorMix(entry.color, '#fff6b5', 0.42);
+  ctx.beginPath();
+  ctx.arc(bounds.cx, bounds.cy - bounds.halfH * 0.18, Math.max(2, layout.tileSize * 0.028), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawFieldCommandBanners(ctx, state, layout) {
