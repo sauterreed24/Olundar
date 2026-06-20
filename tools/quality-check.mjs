@@ -34,6 +34,7 @@ import {
   getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
+  getMarchInterceptStatus,
   getObjectiveProgress,
   getReadyOlundarUnits,
   getSiegeOperations,
@@ -912,6 +913,31 @@ check('pact field orders steer allied AI', () => {
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
 });
 
+check('allied field orders intercept marching dead columns', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-intercept' });
+  state.factions.dawn.discovered = true;
+  state.factions.olundar.pacts.dawn = true;
+  state.factions.dawn.pacts.olundar = true;
+  state.factions.olundar.relations.dawn = 45;
+  state.factions.dawn.relations.olundar = 45;
+  const order = setFieldOrder(state, 'dawn', 'defendRoads');
+  assert(order.ok, order.reason || 'Defend Roads field order setup failed.');
+  const spear = state.units.find((unit) => unit.faction === 'dawn' && unit.type === 'spearGuard');
+  assert(spear, 'Dawn should start with a spear guard for intercept tests.');
+  const marcher = addUnit(state, 'boneThrall', 'dead', spear.x - 3, spear.y, { march: true });
+  const marcherX = marcher.x;
+  const marcherY = marcher.y;
+  const beforeSpearDistance = Math.abs(spear.x - marcherX) + Math.abs(spear.y - marcherY);
+  const interceptBefore = getMarchInterceptStatus(state);
+  assert(interceptBefore.canIntercept, 'Pact allies with defend orders should be able to intercept marches.');
+  endTurn(state);
+  const afterSpear = state.units.find((unit) => unit.id === spear.id);
+  const afterSpearDistance = Math.abs(afterSpear.x - marcherX) + Math.abs(afterSpear.y - marcherY);
+  assert(afterSpearDistance < beforeSpearDistance, 'Defend Roads should steer allies toward marching dead columns.');
+  const interceptAfter = getMarchInterceptStatus(state);
+  assert(interceptAfter.alliedUnitsNearMarch >= interceptBefore.alliedUnitsNearMarch, 'Intercept status should reflect allies closing on marchers.');
+});
+
 check('living faction war aims guide pre-pact behavior', () => {
   const ledgerState = createGame('quality-war-aim-ledger');
   for (const id of ['dawn', 'veyr', 'mire']) ledgerState.factions[id].discovered = true;
@@ -1406,6 +1432,19 @@ check('wounded living units rally near friendly havens', () => {
   assert(havenAfter.hp <= havenAfter.maxHp, 'Rally healing must never exceed max HP.');
   assert(clampAfter && clampAfter.hp === clampAfter.maxHp, 'Rally healing should clamp exactly to max HP.');
   assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'A unit resting far from any haven should not passively heal.');
+});
+
+check('rally banner extends frontier healing', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-rally-banner' });
+  assert(BUILDING_TYPES.rallyBanner, 'Rally banner building should exist in content.');
+  const banner = addBuilding(state, 'rallyBanner', 'olundar', 20, 16, { complete: true });
+  const wounded = addUnit(state, 'legionary', 'olundar', 20, 17, { name: 'Frontier Legion' });
+  wounded.hp = 4;
+  endTurn(state);
+  const after = state.units.find((unit) => unit.id === wounded.id);
+  assert(after && after.hp > 4, 'A wounded unit beside a rally banner should heal.');
+  assert(after.hp <= after.maxHp, 'Rally banner healing must never exceed max HP.');
+  assert(banner && banner.type === 'rallyBanner', 'Rally banner should remain on the map as a frontier haven.');
 });
 
 check('24-turn simulation remains stable', () => {

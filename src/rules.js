@@ -316,6 +316,7 @@ export function addUnit(state, type, faction, x, y, extra = {}) {
     fortified: 0,
     stance: extra.stance || 'ready'
   };
+  if (extra.march) unit.march = true;
   state.units.push(unit);
   return unit;
 }
@@ -611,6 +612,15 @@ export function getWarCouncil(state) {
     if (!hasOperationalBuilding(state, 'mine')) priorities.push({ tone: 'info', text: 'Secure iron with a Hill Mine. Legionaries, spears, and siege all depend on it.' });
     if (!hasOperationalBuilding(state, 'archeryYard')) priorities.push({ tone: 'info', text: 'Build an Archery Yard before the first major Deadwalker push reaches your roads.' });
     if (discoveredLiving > 0 && !Object.values(faction.pacts).some(Boolean)) priorities.push({ tone: 'info', text: 'Turn first contact into a Survival Pact for shared vision and emergency aid.' });
+    const campaign = getDeadwalkerCampaign(state);
+    if (campaign.marchingCount > 0 && !Object.values(faction.pacts).some(Boolean)) {
+      priorities.push({ tone: 'danger', text: 'Hollow Crown columns are marching on Olundar. Sign Survival Pacts so allies can intercept them in the field.' });
+    } else if (campaign.canIntercept && campaign.alliedUnitsEngagingMarch === 0) {
+      priorities.push({ tone: 'warning', text: 'Assign Defend Roads or Reinforce Capital field orders so pact allies blunt incoming marches.' });
+    }
+    if (knownDead && !hasOperationalBuilding(state, 'rallyBanner') && state.units.some((unit) => unit.faction === 'olundar' && unit.hp < unit.maxHp)) {
+      priorities.push({ tone: 'info', text: 'Build a Rally Banner on the frontier so wounded legions can heal without retreating to the capital.' });
+    }
     if (knownDead && !hasOperationalBuilding(state, 'workshop')) priorities.push({ tone: 'danger', text: 'Deadwalker infrastructure is known. Prepare a Siege Workshop and onagers before entering blight.' });
     if ((faction.resources.morale || 0) <= 3) priorities.push({ tone: 'danger', text: 'Morale is close to collapse. Build a Sun Shrine or stabilize food and upkeep.' });
     if (!priorities.length) priorities.push({ tone: 'good', text: 'Olundar is stable. Expand roads and towers toward the portal while training a balanced army.' });
@@ -1865,6 +1875,7 @@ export function getDeadwalkerCampaign(state) {
   const summary = camp.marchesSent
     ? `${camp.marchesSent} march${camp.marchesSent === 1 ? '' : 'es'} sent. ${marchers.length} dead now hunt Olundar Prime.`
     : `The Hollow Crown is gathering its first march on Olundar (about turn ${camp.nextMarchTurn}).`;
+  const intercept = getMarchInterceptStatus(state);
   return {
     menace: camp.menace,
     stage,
@@ -1876,7 +1887,41 @@ export function getDeadwalkerCampaign(state) {
     marchingCount: marchers.length,
     revealedMarchingCount: visibleMarchers.length,
     closest: closest ? { name: closest.unit.name, distance: closest.distance, x: closest.unit.x, y: closest.unit.y } : null,
-    summary
+    summary,
+    ...intercept
+  };
+}
+
+export function getMarchInterceptStatus(state) {
+  normalizeCampaignState(state);
+  const capital = olundarCapital(state);
+  const marchers = state.units.filter((unit) => unit.faction === 'dead' && unit.march);
+  const revealedMarchers = marchers.filter((unit) => isRevealed(state, unit.x, unit.y));
+  const pactAllies = ['dawn', 'veyr', 'mire'].filter((factionId) => {
+    const order = activeFieldOrder(state, factionId);
+    return order && ['defendRoads', 'reinforceCapital'].includes(order);
+  });
+  const alliedUnitsNearMarch = state.units.filter((unit) => (
+    pactAllies.includes(unit.faction)
+    && marchers.some((marcher) => manhattan(unit.x, unit.y, marcher.x, marcher.y) <= 3)
+  ));
+  const alliedUnitsEngagingMarch = state.units.filter((unit) => (
+    pactAllies.includes(unit.faction)
+    && marchers.some((marcher) => manhattan(unit.x, unit.y, marcher.x, marcher.y) <= 1)
+  ));
+  const closestRevealedMarch = capital
+    ? revealedMarchers
+      .map((unit) => ({ unit, distance: manhattan(unit.x, unit.y, capital.x, capital.y) }))
+      .sort((a, b) => a.distance - b.distance)[0]
+    : null;
+  return {
+    canIntercept: pactAllies.length > 0 && marchers.length > 0,
+    pactInterceptors: pactAllies.length,
+    alliedUnitsNearMarch: alliedUnitsNearMarch.length,
+    alliedUnitsEngagingMarch: alliedUnitsEngagingMarch.length,
+    closestRevealedMarch: closestRevealedMarch
+      ? { name: closestRevealedMarch.unit.name, distance: closestRevealedMarch.distance, x: closestRevealedMarch.unit.x, y: closestRevealedMarch.unit.y }
+      : null
   };
 }
 
@@ -2970,7 +3015,7 @@ function nearFriendlyHaven(state, x, y) {
   return state.buildings.some((b) => (
     b.faction === 'olundar'
     && b.turnsLeft <= 0
-    && ['city', 'outpost'].includes(b.type)
+    && ['city', 'outpost', 'rallyBanner'].includes(b.type)
     && manhattan(b.x, b.y, x, y) <= 1 + (b.upgraded || 0)
   ));
 }
@@ -3194,7 +3239,12 @@ function runLivingAiTurn(state, factionId) {
     const orderTarget = fieldOrderTarget(state, unit, fieldOrder);
     if (orderTarget) {
       aiMoveToward(state, unit, orderTarget.x, orderTarget.y);
-      if (fieldOrder === 'harassDeadworks') {
+      const interceptingMarch = orderTarget.ref?.march;
+      if (interceptingMarch && fieldOrder === 'defendRoads') {
+        recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'March Intercepted', `${faction.name} steered toward a Hollow Crown column under pact orders.`, 2);
+      } else if (interceptingMarch && fieldOrder === 'reinforceCapital') {
+        recordFieldOrderFulfillment(state, factionId, 'reinforceCapital', 'March Blunted', `${faction.name} moved to blunt a march on Olundar Prime.`, 2);
+      } else if (fieldOrder === 'harassDeadworks') {
         recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
       } else if (fieldOrder === 'defendRoads') {
         recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
@@ -3274,12 +3324,31 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
   }
   if (orderId === 'reinforceCapital') {
-    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost']);
+    return nearestMarchingDeadTarget(state, unit.x, unit.y, 28)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9)
+      || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost', 'rallyBanner']);
   }
   if (orderId === 'defendRoads') {
-    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
+    return nearestMarchingDeadTarget(state, unit.x, unit.y, 22)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8)
+      || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city', 'rallyBanner']);
   }
   return null;
+}
+
+function nearestMarchingDeadTarget(state, x, y, maxDistance = 24) {
+  const capital = olundarCapital(state);
+  return state.units
+    .filter((unit) => unit.faction === 'dead' && unit.march && (!capital || manhattan(unit.x, unit.y, capital.x, capital.y) > 2))
+    .map((unit) => ({
+      ref: unit,
+      x: unit.x,
+      y: unit.y,
+      dist: manhattan(x, y, unit.x, unit.y),
+      capitalDist: capital ? manhattan(unit.x, unit.y, capital.x, capital.y) : 0
+    }))
+    .filter((target) => target.dist <= maxDistance)
+    .sort((a, b) => (a.dist + a.capitalDist * 0.12) - (b.dist + b.capitalDist * 0.12))[0] || null;
 }
 
 function easternScoutTarget(state, x, y) {

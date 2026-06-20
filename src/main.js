@@ -1833,6 +1833,14 @@ function currentDeadwalkerIntent() {
     { kicker: 'Pressure', text: pressureLabel, tone: nearest ? 'danger' : 'warning' }
   ];
   if (nearest?.intent) lines.push({ kicker: 'Intent', text: nearest.intent, tone: nearest.canAttack ? 'danger' : 'info' });
+  if (campaign.canIntercept && campaign.marchingCount > 0) {
+    const interceptText = campaign.alliedUnitsEngagingMarch > 0
+      ? `${campaign.alliedUnitsEngagingMarch} allied unit${campaign.alliedUnitsEngagingMarch === 1 ? '' : 's'} are blunting Hollow Crown columns in the field.`
+      : campaign.alliedUnitsNearMarch > 0
+        ? `${campaign.alliedUnitsNearMarch} allied unit${campaign.alliedUnitsNearMarch === 1 ? '' : 's'} are steering toward marching dead.`
+        : `${campaign.pactInterceptors} pact force${campaign.pactInterceptors === 1 ? '' : 's'} can intercept marches before they reach Olundar.`;
+    lines.push({ kicker: 'Coalition', text: interceptText, tone: campaign.alliedUnitsEngagingMarch > 0 ? 'good' : 'warning' });
+  }
   return {
     next,
     nearest,
@@ -1851,7 +1859,17 @@ function deadwalkerMarchLabel(campaign) {
     const closest = campaign.closest
       ? ` Nearest column ${campaign.closest.distance} sector${campaign.closest.distance === 1 ? '' : 's'} out.`
       : ' Columns still beyond sight.';
-    return { text: `${campaign.marchingCount} dead march on Olundar Prime.${closest}`, tone: 'danger' };
+    let intercept = '';
+    if (campaign.canIntercept) {
+      if (campaign.alliedUnitsEngagingMarch > 0) {
+        intercept = ` Coalition allies are engaging ${campaign.alliedUnitsEngagingMarch} marcher${campaign.alliedUnitsEngagingMarch === 1 ? '' : 's'}.`;
+      } else if (campaign.alliedUnitsNearMarch > 0) {
+        intercept = ` Pact forces are closing on ${campaign.alliedUnitsNearMarch} column${campaign.alliedUnitsNearMarch === 1 ? '' : 's'}.`;
+      } else {
+        intercept = ` ${campaign.pactInterceptors} pact force${campaign.pactInterceptors === 1 ? '' : 's'} can intercept incoming columns.`;
+      }
+    }
+    return { text: `${campaign.marchingCount} dead march on Olundar Prime.${closest}${intercept}`, tone: 'danger' };
   }
   if (campaign.imminent) {
     return { text: `A march of ~${campaign.nextSize} dead forms against Olundar next turn.`, tone: 'danger' };

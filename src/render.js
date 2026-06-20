@@ -5332,6 +5332,8 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     drawWorkshopYard(ctx, x, y, s, color);
   } else if (building.type === 'shrine') {
     drawShrine(ctx, x, y, s, color);
+  } else if (building.type === 'rallyBanner') {
+    drawRallyBanner(ctx, x, y, s, color);
   } else if (building.type === 'outpost') {
     drawOutpost(ctx, x, y, s, color);
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
@@ -5703,6 +5705,34 @@ function drawShrine(ctx, x, y, s, color) {
   ctx.fill();
 }
 
+function drawRallyBanner(ctx, x, y, s, color) {
+  ctx.fillStyle = '#6e482c';
+  ctx.fillRect(x + s * 0.44, y + s * 0.34, s * 0.12, s * 0.42);
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(1, s * 0.028);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.22, y + s * 0.74);
+  ctx.lineTo(x + s * 0.78, y + s * 0.74);
+  ctx.stroke();
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillStyle = i % 2 ? '#8d623c' : '#6e482c';
+    ctx.fillRect(x + s * (0.20 + i * 0.15), y + s * 0.74, s * 0.08, s * 0.12);
+  }
+  drawBannerPennon(ctx, x + s * 0.50, y + s * 0.10, s * 0.34, color);
+  ctx.strokeStyle = 'rgba(255, 245, 190, 0.72)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.28, y + s * 0.58);
+  ctx.lineTo(x + s * 0.72, y + s * 0.58);
+  ctx.moveTo(x + s * 0.34, y + s * 0.50);
+  ctx.lineTo(x + s * 0.66, y + s * 0.50);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 232, 150, 0.42)';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.50, y + s * 0.66, s * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function drawOutpost(ctx, x, y, s, color) {
   ctx.fillStyle = '#6e482c';
   ctx.fillRect(x + s * 0.41, y + s * 0.32, s * 0.18, s * 0.45);
@@ -5780,7 +5810,34 @@ function drawUnitSprite(ctx, unit, x, y, s, state) {
   if (unit.fortified) {
     drawFortifiedChevron(ctx, x, y, s);
   }
+  if (unit.march) {
+    drawMarchCrownMarker(ctx, x, y, s);
+  }
   drawHealthBar(ctx, x + s * 0.18, y + s * 0.89, s * 0.64, s * 0.065, unit.hp / unit.maxHp, { gold: unit.faction === 'olundar' && !unit.hasActed });
+  ctx.restore();
+}
+
+function drawMarchCrownMarker(ctx, x, y, s) {
+  const cx = x + s * 0.82;
+  const cy = y + s * 0.10;
+  const r = s * 0.11;
+  ctx.save();
+  ctx.shadowColor = 'rgba(156, 243, 138, 0.55)';
+  ctx.shadowBlur = s * 0.06;
+  ctx.strokeStyle = 'rgba(156, 243, 138, 0.92)';
+  ctx.fillStyle = 'rgba(8, 15, 11, 0.78)';
+  ctx.lineWidth = Math.max(1, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy + r * 0.35);
+  ctx.lineTo(cx - r * 0.72, cy - r * 0.45);
+  ctx.lineTo(cx - r * 0.28, cy - r * 0.05);
+  ctx.lineTo(cx, cy - r * 0.62);
+  ctx.lineTo(cx + r * 0.28, cy - r * 0.05);
+  ctx.lineTo(cx + r * 0.72, cy - r * 0.45);
+  ctx.lineTo(cx + r, cy + r * 0.35);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -7062,7 +7119,7 @@ function deadwalkerPressureTelegraphData(state, layout) {
       kind: 'known',
       threat: known,
       target: livingTarget,
-      label: known.canAttack ? 'ATTACK' : 'MARCH',
+      label: known.entity?.march ? 'MARCH' : known.canAttack ? 'ATTACK' : 'MARCH',
       detail: known.name
     };
   }
@@ -7108,7 +7165,7 @@ function knownDeadwalkerMapThreats(state, fallbackTarget) {
       visible: isVisible(state, entity.x, entity.y),
       distance,
       canAttack: distance <= range,
-      priority: distance <= range ? 12 : building ? 8 : 6
+      priority: entity.march ? (distance <= range ? 14 : 11) : distance <= range ? 12 : building ? 8 : 6
     };
   }).filter(Boolean);
 }
