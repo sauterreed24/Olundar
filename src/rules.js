@@ -2161,6 +2161,8 @@ export function moveUnit(state, unitId, x, y) {
   const def = getUnitDef(unit);
   const path = findPath(state, unit, x, y, def.move);
   if (!path) return { ok: false, reason: 'No valid path within this unit’s movement.' };
+  const fromX = unit.x;
+  const fromY = unit.y;
   unit.x = x;
   unit.y = y;
   unit.hasActed = true;
@@ -2168,7 +2170,7 @@ export function moveUnit(state, unitId, x, y) {
   maybeSurveyRuin(state, unit);
   updateVisibility(state);
   updateAftermathMissions(state);
-  return { ok: true, reason: `${unit.name} moved.` };
+  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, pathTiles: path.tiles };
 }
 
 function maybeSurveyRuin(state, unit) {

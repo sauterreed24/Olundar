@@ -51,11 +51,15 @@ import {
   createAttackBuildingCommand,
   createAttackUnitCommand,
   createBuildCommand,
+  createCallableCommand,
   createCommandHistory,
   createCrisisCommand,
   createDiplomacyCommand,
+  createDiplomaticPromiseCommand,
   createFieldOrderCommand,
+  createFortifyCommand,
   createMoveCommand,
+  createPromiseDemandCommand,
   createTrainCommand,
   createUpgradeCommand,
   executePlayerCommand,
@@ -67,7 +71,8 @@ import {
   resetRendererFx,
   spawnCombatImpact,
   spawnConstructionComplete,
-  triggerScreenShake
+  triggerScreenShake,
+  tweenUnitMove
 } from './engine/pixi-renderer.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
@@ -569,7 +574,7 @@ function renderCrisisCouncil() {
       for (const choice of event.choices) {
         const row = document.createElement('div');
         row.className = 'crisis-choice';
-        const choiceButton = button(`${choice.name} - ${choice.costText}`, () => runAction(() => resolveCrisis(state, event.id, choice.id), 'ui'), choice.disabled, choice.disabledReason);
+        const choiceButton = button(`${choice.name} - ${choice.costText}`, () => runPlayerCommand(createCrisisCommand(event.id, choice.id), 'ui'), choice.disabled, choice.disabledReason);
         row.appendChild(choiceButton);
         const detail = document.createElement('small');
         detail.textContent = `${choice.text} ${choice.preview}`;
@@ -1377,7 +1382,7 @@ function renderActions() {
     }
     const unitSection = mobileCollapsibleActionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
     const unitActions = commandActions('primary-orders');
-    unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runAction(() => fortifyUnit(state, selectedUnit.id), 'select'), {
+    unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runPlayerCommand(createFortifyCommand(selectedUnit.id), 'select'), {
       disabled: selectedUnit.hasActed || selectedUnit.faction !== 'olundar',
       tone: 'primary'
     }));
@@ -1399,7 +1404,7 @@ function renderActions() {
         const uDef = UNIT_TYPES[unitType];
         const turns = trainingTurnsFor(selectedBuilding, unitType);
         const disabled = selectedBuilding.queue.length >= trainingQueueLimit(selectedBuilding) || !canAfford(state.factions.olundar.resources, uDef.cost);
-        grid.appendChild(orderButton(uDef.name, `${formatCost(uDef.cost)} | ${turns} turns`, () => runAction(() => startTraining(state, selectedBuilding.id, unitType), 'train'), { disabled, tone: 'primary' }));
+        grid.appendChild(orderButton(uDef.name, `${formatCost(uDef.cost)} | ${turns} turns`, () => runPlayerCommand(createTrainCommand(selectedBuilding.id, unitType), 'train'), { disabled, tone: 'primary' }));
       }
       trainSection.appendChild(grid);
       actionPanel.appendChild(trainSection);
@@ -1408,7 +1413,7 @@ function renderActions() {
       const cost = upgradeCostFor(selectedBuilding);
       const upgradeSection = actionSection('Upgrade works', 'Invest in durability, vision, and stronger strategic output.', 'upgrade-orders');
       const upgradeActions = commandActions('primary-orders');
-      upgradeActions.appendChild(orderButton(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2}`, formatCost(cost), () => runAction(() => upgradeBuilding(state, selectedBuilding.id), 'build'), {
+      upgradeActions.appendChild(orderButton(`Upgrade to tier ${(selectedBuilding.upgraded || 0) + 2}`, formatCost(cost), () => runPlayerCommand(createUpgradeCommand(selectedBuilding.id), 'build'), {
         disabled: !canAfford(state.factions.olundar.resources, cost),
         tone: 'primary'
       }));
@@ -1675,12 +1680,11 @@ function executeTacticalMove(unitId, order) {
     playAudioCue('warning');
     return;
   }
-  const result = moveUnit(state, unit.id, order.x, order.y);
-  if (result.ok) result.reason = `${unit.name} ${order.success}`;
-  handleResult(result, 'move');
-  lastTile = { x: order.x, y: order.y };
-  hoverTile = lastTile;
-  render();
+  const ok = runPlayerCommand(createMoveCommand(unit.id, order.x, order.y), 'move');
+  if (ok) {
+    lastTile = { x: order.x, y: order.y };
+    hoverTile = lastTile;
+  }
   if (window.innerWidth <= 980) scrollBattlefieldIntoView();
 }
 
@@ -1766,9 +1770,8 @@ function queueMusterOrder(buildingId, unitType) {
   selectBuilding(building.id);
   lastTile = { x: building.x, y: building.y };
   hoverTile = lastTile;
-  const ok = handleResult(startTraining(state, building.id, unitType), 'train');
+  const ok = runPlayerCommand(createTrainCommand(building.id, unitType), 'train');
   if (ok) toast(`${unitDef.name} queued at ${building.name || BUILDING_TYPES[building.type].name}.`, 'good');
-  render();
   if (ok && window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
 }
 
@@ -2324,15 +2327,15 @@ function buildPlacementCandidates(builder, buildingType) {
 function commitBuildPlacement(candidate) {
   if (state.mode.type !== 'build' || !candidate.ok) return;
   const buildingType = state.mode.buildingType;
-  const result = startConstruction(state, state.mode.builderId, buildingType, candidate.x, candidate.y);
-  if (result.ok) {
-    state.mode = { type: 'select' };
-    if (result.building?.id) selectBuilding(result.building.id);
+  const builderId = state.mode.builderId;
+  state.mode = { type: 'select' };
+  const ok = runPlayerCommand(createBuildCommand(builderId, buildingType, candidate.x, candidate.y), 'build');
+  if (ok) {
+    const placed = buildingAt(state, candidate.x, candidate.y);
+    if (placed) selectBuilding(placed.id);
     lastTile = { x: candidate.x, y: candidate.y };
     hoverTile = lastTile;
   }
-  handleResult(result, 'build');
-  render();
 }
 
 function buildDoctrineRecommendations(builder) {
@@ -2459,8 +2462,8 @@ function renderDiplomacy() {
           `;
           const actions = document.createElement('div');
           actions.className = 'button-grid demand-actions';
-          actions.appendChild(button(`Answer - ${demand.cost}`, () => runAction(() => resolvePromiseDemand(state, entry.id, demand.id, 'answer'), 'diplomacy'), demand.disabled, demand.disabledReason || demand.preview));
-          actions.appendChild(button('Ignore demand', () => runAction(() => resolvePromiseDemand(state, entry.id, demand.id, 'ignore'), 'diplomacy'), false, 'Record a grievance and cool relations without spending resources.'));
+          actions.appendChild(button(`Answer - ${demand.cost}`, () => runPlayerCommand(createPromiseDemandCommand(entry.id, promise.id, demand.id, 'answer'), 'diplomacy'), demand.disabled, demand.disabledReason || demand.preview));
+          actions.appendChild(button('Ignore demand', () => runPlayerCommand(createPromiseDemandCommand(entry.id, promise.id, demand.id, 'ignore'), 'diplomacy'), false, 'Record a grievance and cool relations without spending resources.'));
           item.appendChild(actions);
           demandBlock.appendChild(item);
         }
@@ -2473,7 +2476,7 @@ function renderDiplomacy() {
         const orderRow = document.createElement('div');
         orderRow.className = 'field-order-buttons';
         for (const order of entry.fieldOrders) {
-          orderRow.appendChild(button(order.active ? `${order.name} active` : order.name, () => runAction(() => setFieldOrder(state, entry.id, order.id), 'diplomacy'), order.disabled || order.active, order.disabledReason || order.text));
+          orderRow.appendChild(button(order.active ? `${order.name} active` : order.name, () => runPlayerCommand(createFieldOrderCommand(entry.id, order.id), 'diplomacy'), order.disabled || order.active, order.disabledReason || order.text));
         }
         orderBlock.appendChild(orderRow);
         card.appendChild(orderBlock);
@@ -2485,7 +2488,7 @@ function renderDiplomacy() {
         const promiseRow = document.createElement('div');
         promiseRow.className = 'button-grid promise-actions';
         for (const promise of entry.commitments) {
-          promiseRow.appendChild(button(promise.fulfilled ? `${promise.name} kept` : `${promise.name} - ${promise.cost}`, () => runAction(() => makeDiplomaticPromise(state, entry.id, promise.id), 'diplomacy'), promise.disabled, promise.disabledReason || promise.preview));
+          promiseRow.appendChild(button(promise.fulfilled ? `${promise.name} kept` : `${promise.name} - ${promise.cost}`, () => runPlayerCommand(createDiplomaticPromiseCommand(entry.id, promise.id), 'diplomacy'), promise.disabled, promise.disabledReason || promise.preview));
         }
         promiseBlock.appendChild(promiseRow);
         card.appendChild(promiseBlock);
@@ -2493,7 +2496,7 @@ function renderDiplomacy() {
       const row = document.createElement('div');
       row.className = 'button-grid diplo-actions';
       for (const action of entry.actions) {
-        row.appendChild(button(`${action.name} - ${action.cost}`, () => runAction(() => performDiplomacy(state, entry.id, action.id), 'diplomacy'), action.disabled, action.disabledReason || action.note));
+        row.appendChild(button(`${action.name} - ${action.cost}`, () => runPlayerCommand(createDiplomacyCommand(entry.id, action.id), 'diplomacy'), action.disabled, action.disabledReason || action.note));
       }
       card.appendChild(row);
     }
@@ -2521,7 +2524,7 @@ function renderLegacyDiplomacy() {
     row.className = 'button-grid';
     for (const actionId of Object.keys(DIPLOMACY_ACTIONS)) {
       const action = DIPLOMACY_ACTIONS[actionId];
-      row.appendChild(button(`${action.name} · ${formatCost(action.cost)}`, () => runAction(() => performDiplomacy(state, id, actionId), 'diplomacy'), !canAfford(state.factions.olundar.resources, action.cost)));
+      row.appendChild(button(`${action.name} · ${formatCost(action.cost)}`, () => runPlayerCommand(createDiplomacyCommand(id, actionId), 'diplomacy'), !canAfford(state.factions.olundar.resources, action.cost)));
     }
     card.appendChild(row);
     diplomacyPanel.appendChild(card);
@@ -2955,10 +2958,10 @@ function canvasClicked(event) {
   if (state.status !== 'playing') return;
 
   if (state.mode.type === 'build') {
-    const result = startConstruction(state, state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
+    const buildingType = state.mode.buildingType;
+    const builderId = state.mode.builderId;
     state.mode = { type: 'select' };
-    handleResult(result, 'build');
-    render();
+    runPlayerCommand(createBuildCommand(builderId, buildingType, tile.x, tile.y), 'build');
     return;
   }
 
@@ -2985,8 +2988,7 @@ function canvasClicked(event) {
   }
 
   if (selectedUnit && visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
-    handleResult(attackBuilding(state, selectedUnit.id, visibleBuilding.id), 'attack');
-    render();
+    runPlayerCommand(createAttackBuildingCommand(selectedUnit.id, visibleBuilding.id), 'attack');
     return;
   }
 
@@ -3031,7 +3033,8 @@ function selectBuilding(id) {
 }
 
 function runAction(action, successCue = 'ui', command = null) {
-  const result = command ? executePlayerCommand(commandHistory, state, command) : action();
+  const cmd = command || createCallableCommand(action, successCue);
+  const result = executePlayerCommand(commandHistory, state, cmd);
   const ok = handleResult(result, successCue);
   render();
   if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
@@ -3067,7 +3070,12 @@ function handleResult(result, successCue = null) {
   if (successCue === 'build' && result.building) {
     spawnConstructionComplete(canvas.width * 0.5, canvas.height * 0.45);
   }
-  if (successCue === 'move') setCombatMusicActive(false);
+  if (successCue === 'move') {
+    setCombatMusicActive(false);
+    if (result.pathTiles?.length) {
+      tweenUnitMove(result.unitId, result.pathTiles, null, null);
+    }
+  }
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   return true;
@@ -4194,25 +4202,21 @@ function executeOpeningDirective(action) {
     selectUnit(action.unitId);
     lastTile = { x: action.x, y: action.y };
     hoverTile = lastTile;
-    const result = moveUnit(state, action.unitId, action.x, action.y);
-    const ok = handleResult(result, 'move');
+    const ok = runPlayerCommand(createMoveCommand(action.unitId, action.x, action.y), 'move');
     if (ok) {
       toast(action.successToast || `${action.label} to ${action.x},${action.y}.`, 'good');
       focusOpeningFollowThrough(previousStepId);
     }
-    render();
     if (ok) scrollOpeningFollowThroughRail(previousStepId);
     return;
   }
   if (action.kind === 'train') {
     selectBuilding(action.buildingId);
-    const result = startTraining(state, action.buildingId, action.unitType);
-    const ok = handleResult(result, 'train');
+    const ok = runPlayerCommand(createTrainCommand(action.buildingId, action.unitType), 'train');
     if (ok) {
       toast(`${UNIT_TYPES[action.unitType].name} queued.`, 'good');
       focusOpeningFollowThrough(previousStepId);
     }
-    render();
     if (ok) scrollOpeningFollowThroughRail(previousStepId);
     return;
   }
@@ -4220,18 +4224,15 @@ function executeOpeningDirective(action) {
     selectUnit(action.unitId);
     lastTile = { x: action.x, y: action.y };
     hoverTile = lastTile;
-    const result = startConstruction(state, action.unitId, action.buildingType, action.x, action.y);
-    const ok = handleResult(result, 'build');
+    const ok = runPlayerCommand(createBuildCommand(action.unitId, action.buildingType, action.x, action.y), 'build');
     if (ok) {
-      if (result.building?.id) selectBuilding(result.building.id);
-      lastTile = { x: action.x, y: action.y };
-      hoverTile = lastTile;
+      const placed = buildingAt(state, action.x, action.y);
+      if (placed) selectBuilding(placed.id);
       toast(action.successToast || `${BUILDING_TYPES[action.buildingType].name} started.`, 'good');
       focusOpeningFollowThrough(previousStepId);
     } else {
       state.mode = { type: 'build', buildingType: action.buildingType, builderId: action.unitId };
     }
-    render();
     if (window.innerWidth <= 980) scrollBattlefieldIntoView();
     return;
   }
@@ -4242,13 +4243,11 @@ function executeOpeningDirective(action) {
       lastTile = { x: unit.x, y: unit.y };
       hoverTile = lastTile;
     }
-    const result = fortifyUnit(state, action.unitId);
-    const ok = handleResult(result, 'ui');
+    const ok = runPlayerCommand(createFortifyCommand(action.unitId), 'ui');
     if (ok) {
       toast(action.successToast || `${unit?.name || 'Unit'} fortified.`, 'good');
       focusOpeningFollowThrough(previousStepId);
     }
-    render();
     if (window.innerWidth <= 980) scrollBattlefieldIntoView();
     return;
   }
@@ -5182,13 +5181,24 @@ function inMap(x, y) {
 
 function canvasCursorForTile(tile) {
   if (!tile || !inMap(tile.x, tile.y)) return '';
-  if (openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile)) return 'pointer';
+  if (state.mode.type === 'build') {
+    const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
+    return result.ok ? 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext y=\'18\' font-size=\'18\'%3E🔨%3C/text%3E%3C/svg%3E") 4 20, pointer' : 'not-allowed';
+  }
+  if (diplomacyOpportunityForTile(tile)) {
+    return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext y=\'18\' font-size=\'18\'%3E💬%3C/text%3E%3C/svg%3E") 4 20, pointer';
+  }
+  if (openingDirectiveForTile(tile)) return 'pointer';
   const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar' && !unit.hasActed);
   if (!selectedUnit || state.mode.type !== 'select') return '';
   const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
-  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) return 'pointer';
+  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
+    return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext y=\'18\' font-size=\'18\'%3E⚔%3C/text%3E%3C/svg%3E") 4 20, crosshair';
+  }
   const visibleBuilding = isVisible(state, tile.x, tile.y) ? buildingAt(state, tile.x, tile.y) : null;
-  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) return 'pointer';
+  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
+    return 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Ctext y=\'18\' font-size=\'18\'%3E⚔%3C/text%3E%3C/svg%3E") 4 20, crosshair';
+  }
   const def = UNIT_TYPES[selectedUnit.type];
   return findPath(state, selectedUnit, tile.x, tile.y, def.move) ? 'pointer' : '';
 }

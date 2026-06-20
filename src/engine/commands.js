@@ -5,9 +5,12 @@
 import {
   attackBuilding,
   attackUnit,
+  fortifyUnit,
+  makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
   resolveCrisis,
+  resolvePromiseDemand,
   setFieldOrder,
   startConstruction,
   startTraining,
@@ -74,6 +77,34 @@ export function redoCommand(history, state) {
   Object.assign(state, deserializeState(serializeState(entry.after)));
   history.undoStack.push(entry);
   return { ok: true, message: `Redid ${entry.label}.` };
+}
+
+export function createCallableCommand(actionFn, label = 'action') {
+  return new Command((state) => actionFn(state), () => ({ ok: true }), label);
+}
+
+export function createFortifyCommand(unitId) {
+  return new Command(
+    (state) => fortifyUnit(state, unitId),
+    () => ({ ok: true }),
+    'fortify'
+  );
+}
+
+export function createPromiseDemandCommand(factionId, promiseId, demandId, choice) {
+  return new Command(
+    (state) => resolvePromiseDemand(state, factionId, promiseId, demandId, choice),
+    () => ({ ok: true }),
+    'diplomacy demand'
+  );
+}
+
+export function createDiplomaticPromiseCommand(factionId, promiseId) {
+  return new Command(
+    (state) => makeDiplomaticPromise(state, factionId, promiseId),
+    () => ({ ok: true }),
+    'diplomatic promise'
+  );
 }
 
 export function createMoveCommand(unitId, x, y) {
