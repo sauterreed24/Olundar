@@ -143,18 +143,26 @@ focusFirstReadyUnit();
 
 function resizeCanvas() {
   const compactViewport = window.innerWidth <= 620;
-  const dprCap = compactViewport ? 1.35 : 1.75;
-  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   const parent = canvas.parentElement;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
   const idealHeight = width * (compactViewport ? 1.02 : 0.8);
   const maxHeight = Math.max(mapScale.maxHeightFloor, window.innerHeight - mapScale.maxHeightOffset);
   const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
+  const dprCap = mapCanvasDprCap(width, height, compactViewport);
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
   canvas.style.height = `${height}px`;
   render();
+}
+
+function mapCanvasDprCap(width, height, compactViewport) {
+  const cssPixels = width * height;
+  if (compactViewport) return 1.25;
+  if (cssPixels >= 760000) return 1.25;
+  if (cssPixels >= 560000 || window.innerWidth <= 1180) return 1.35;
+  return 1.5;
 }
 
 function render() {
@@ -2749,6 +2757,8 @@ function openingBlockedInfrastructureAction(action) {
 
 function blockedBuilderRecovery(builder, blockedLabel, nextLabel = blockedLabel) {
   const readyUnits = getReadyOlundarUnits(state).filter((unit) => unit.id !== builder.id);
+  const recoveryText = `${blockedLabel} ${nextLabel}`;
+  const ironRecovery = /hill mine|iron/i.test(recoveryText);
   const scout = readyUnits.find((unit) => UNIT_TYPES[unit.type].tags.includes('recon'));
   const scoutDestination = scout ? bestScoutAdvance(scout) : null;
   if (scout && scoutDestination) {
@@ -2773,13 +2783,17 @@ function blockedBuilderRecovery(builder, blockedLabel, nextLabel = blockedLabel)
       kind: 'fortify',
       unitId: guard.id,
       canExecute: true,
-      label: `Fortify ${guard.name}`,
-      meta: `${blockedLabel} needs a fresh engineer next turn`,
+      label: ironRecovery ? 'Hold for iron claim' : 'Hold while engineer readies',
+      meta: ironRecovery ? `${blockedLabel} after engineer refresh` : `${blockedLabel} needs a fresh engineer next turn`,
       executeLabel: 'Do order',
-      executeMeta: 'Hold the line before ending turn',
+      executeMeta: 'Fortify, then end turn',
       previewMeta: `Focus ${guard.name}`,
-      previewToast: `${guard.name} can fortify now while the engineer prepares the iron claim.`,
-      successToast: `${guard.name} fortified.`
+      previewToast: ironRecovery
+        ? `${guard.name} can anchor the iron approach while the engineer refreshes.`
+        : `${guard.name} can anchor the line while the engineer prepares ${nextLabel}.`,
+      successToast: ironRecovery
+        ? `${guard.name} holds the iron approach while the engineer refreshes.`
+        : `${guard.name} holds while the engineer refreshes.`
     };
   }
   return {
@@ -2973,11 +2987,10 @@ function recommendedIronOrder() {
   if (!engineer) return null;
   const mine = recommendedMineBuild(engineer);
   if (mine) return openingBlockedInfrastructureAction(mine);
-  const target = bestIronMineTarget(engineer);
   if (engineer.hasActed) {
-    const label = target ? `Hill Mine ${target.x},${target.y}` : 'Hill Mine route';
-    return blockedBuilderRecovery(engineer, label, label);
+    return blockedBuilderRecovery(engineer, 'Hill Mine route', 'Claim iron');
   }
+  const target = bestIronMineTarget(engineer);
   if (!target) {
     return {
       kind: 'focus',

@@ -2652,12 +2652,15 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const reachable = collectReachableTiles(state, unit, def.move);
   const attackTiles = collectAttackTiles(state, unit, def.range);
   const hoverMove = reachable.find((item) => sameTile(item, hoverTile)) || null;
+  const streamlinedOverlay = shouldStreamlineMovementOverlay(layout, reachable, hoverMove);
   ctx.save();
-  drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove);
+  drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove, streamlinedOverlay);
   drawCommandRangeFrontier(ctx, layout, reachable, def.move);
-  drawMovementBlockedApproaches(ctx, state, layout, reachable);
-  drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
-  drawCommandSurveyVectors(ctx, state, layout, unit, reachable, def.move, hoverMove);
+  if (!streamlinedOverlay) {
+    drawMovementBlockedApproaches(ctx, state, layout, reachable);
+    drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
+    drawCommandSurveyVectors(ctx, state, layout, unit, reachable, def.move, hoverMove);
+  }
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
     drawMoveReachTile(ctx, bounds, layout, item, def.move, hoverMove);
@@ -2667,6 +2670,11 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
     drawAttackReachTile(ctx, tileBounds(layout, item.x, item.y), layout, item.target);
   }
   ctx.restore();
+}
+
+function shouldStreamlineMovementOverlay(layout, reachable, hoverMove) {
+  if (hoverMove || reachable.length <= 4) return false;
+  return layout.canvasWidth * layout.canvasHeight >= 1100000;
 }
 
 function collectReachableTiles(state, unit, move) {
@@ -2738,20 +2746,22 @@ function reconstructReachablePath(previous, startKey, targetKey) {
   return path;
 }
 
-function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = null) {
+function drawMovementRadiusField(ctx, layout, reachable, maxMove, hoverMove = null, streamlined = false) {
   if (!reachable.length) return;
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  drawMovementRadiusStrategicPlate(ctx, layout, reachable, maxMove, hoverMove);
-  drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hoverMove);
-  drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove);
+  if (!streamlined) {
+    drawMovementRadiusStrategicPlate(ctx, layout, reachable, maxMove, hoverMove);
+    drawMovementRadiusCommandSurface(ctx, layout, reachable, maxMove, hoverMove);
+    drawMovementCommandCanopy(ctx, layout, reachable, maxMove, hoverMove);
+  }
   for (const item of reachable) {
     drawMovementReachWash(ctx, tileBounds(layout, item.x, item.y), layout, item, maxMove, sameTile(item, hoverMove));
   }
-  drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove);
+  if (!streamlined) drawMovementInteriorPips(ctx, layout, reachable, maxMove, hoverMove);
   drawMovementRadiusBoundary(ctx, layout, reachable, maxMove);
-  drawMovementCostContours(ctx, layout, reachable, maxMove);
+  if (!streamlined) drawMovementCostContours(ctx, layout, reachable, maxMove);
   drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove);
   ctx.restore();
 }
