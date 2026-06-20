@@ -17,6 +17,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
 - **The March of the Hollow Crown:** the Deadwalkers gather menace and periodically dispatch escalating, telegraphed marches directed at Olundar Prime, conscripting their eastern horde and reinforcing from the nearest deadwork so ignoring the war is fatal and harder difficulties bite sooner.
 - **Rally healing:** wounded living units recover when resting beside friendly cities and outposts (and faster near a Sun Shrine), so attrition becomes a rotate-and-heal rhythm instead of a one-way death spiral.
+- **Rally banners:** engineers can raise forward rally posts that extend haven healing to frontier kill-boxes without the full outpost cost.
 - Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources, Deadwalker spawn cadence, and the timing, size, and growth of marches on Olundar.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - A Deadwalker Intent panel that telegraphs the next spawn surge, the countdown and size of the next march on Olundar, and how many dead are already marching on the capital.
@@ -59,7 +60,7 @@ npm start
 
 Then open the local URL printed by the server, usually `http://localhost:4173`.
 
-No package install is required because this prototype has no third-party runtime dependencies.
+Run `npm install` once so PixiJS effects and the offline service-worker cache resolve correctly.
 Browsers that support installation will expose an **Install** button after the app is eligible; the service worker keeps the app shell available for offline reloads after the first visit.
 
 ## Controls

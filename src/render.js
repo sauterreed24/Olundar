@@ -5334,6 +5334,8 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     drawShrine(ctx, x, y, s, color);
   } else if (building.type === 'outpost') {
     drawOutpost(ctx, x, y, s, color);
+  } else if (building.type === 'rallyBanner') {
+    drawRallyBanner(ctx, x, y, s, color);
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
     drawNecroStructure(ctx, building, x, y, s);
   } else {
@@ -5723,6 +5725,26 @@ function drawOutpost(ctx, x, y, s, color) {
     ctx.fillRect(x + s * (0.13 + i * 0.16), y + s * 0.70, s * 0.06, s * 0.15);
   }
   drawBannerPennon(ctx, x + s * 0.64, y + s * 0.16, s * 0.24, color);
+}
+
+function drawRallyBanner(ctx, x, y, s, color) {
+  ctx.fillStyle = '#6e482c';
+  ctx.fillRect(x + s * 0.44, y + s * 0.58, s * 0.12, s * 0.22);
+  ctx.fillStyle = '#e8d099';
+  ctx.fillRect(x + s * 0.30, y + s * 0.72, s * 0.40, s * 0.08);
+  drawBannerPennon(ctx, x + s * 0.50, y + s * 0.10, s * 0.34, color);
+  ctx.fillStyle = '#c94b3d';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.50, y + s * 0.66, s * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff2bd';
+  ctx.lineWidth = Math.max(1, s * 0.02);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.46, y + s * 0.66);
+  ctx.lineTo(x + s * 0.54, y + s * 0.66);
+  ctx.moveTo(x + s * 0.50, y + s * 0.62);
+  ctx.lineTo(x + s * 0.50, y + s * 0.70);
+  ctx.stroke();
 }
 
 function drawBannerPennon(ctx, x, y, h, color) {

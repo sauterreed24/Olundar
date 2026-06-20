@@ -125,10 +125,10 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
   { id: 'summary', label: 'Summary' }
 ];
 const PACT_ACCEPTANCE_RELATION = 35;
-const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'rallyBanner', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
 const BUILD_DOCTRINE_GROUPS = [
   { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
-  { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'outpost'] },
+  { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'rallyBanner', 'outpost'] },
   { label: 'Muster halls', meta: 'Infantry, bows, cavalry, siege', types: ['barracks', 'archeryYard', 'stable', 'workshop'] },
   { label: 'Imperial civic works', meta: 'Morale and influence', types: ['shrine'] }
 ];
@@ -167,7 +167,6 @@ function getCanvas() {
 initAudioPreference();
 applyPlayerSettings(playerSettings);
 registerPwa();
-initPixiRenderer(canvas);
 focusFirstReadyUnit();
 
 function resizeCanvas() {
@@ -687,6 +686,7 @@ function missionArchiveSearchMarkup(search) {
       <input name="archiveSearch" value="${escapeHtml(search)}" maxlength="40" placeholder="Search archive" autocomplete="off" />
       <button type="submit">Find</button>
       <button type="button" data-action="clear-mission-archive-search" ${search ? '' : 'disabled'}>Clear</button>
+      <button type="button" data-action="export-mission-archive" title="Copy the filtered archive review to the clipboard">Export chronicle</button>
     </form>
   `;
 }
@@ -895,6 +895,80 @@ function missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode, det
     groupMode !== 'flat' ? `Grouped: ${missionArchiveGroupLabel(groupMode)}` : '',
     groupMode !== 'flat' ? `Detail: ${missionArchiveDetailLabel(detailMode)}` : ''
   ].filter(Boolean).join('; ');
+}
+
+function currentMissionArchiveReview() {
+  const missions = getAftermathMissions(state);
+  const typeFilter = selectedMissionArchiveType();
+  const search = normalizedMissionArchiveSearch();
+  const sortOrder = selectedMissionArchiveSortOrder();
+  const groupMode = selectedMissionArchiveGroupMode();
+  const detailMode = selectedMissionArchiveDetailMode();
+  const archive = sortedArchiveMissions(filteredArchiveMissions(missions.archive, typeFilter, search), sortOrder);
+  return { missions, typeFilter, search, sortOrder, groupMode, detailMode, archive };
+}
+
+function buildMissionArchiveChronicle(review) {
+  const { missions, typeFilter, search, sortOrder, groupMode, detailMode, archive } = review;
+  const campaign = state.campaign?.name || 'Olundar Campaign';
+  const lines = [
+    `${campaign} — Aftermath Chronicle`,
+    `Turn ${state.turn} | ${missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode, detailMode)}`,
+    `Showing ${archive.length} of ${missions.archiveCount} archived field tasks.`,
+    ''
+  ];
+  if (!archive.length) {
+    lines.push('No archived missions match the current filter.');
+    return lines.join('\n');
+  }
+  if (groupMode === 'flat') {
+    for (const mission of archive) lines.push(missionArchiveChronicleLine(mission, detailMode));
+    return lines.join('\n');
+  }
+  for (const group of missionArchiveGroups(archive)) {
+    lines.push(group.title);
+    if (groupMode === 'rulings') {
+      const summary = missionArchiveGroupRewardSummary(group.records);
+      lines.push(`  Rewards: ${summary.rewardSummary} | Follow-ups: ${summary.followUpCount}`);
+    }
+    if (detailMode === 'summary') {
+      lines.push(`  ${group.records.length} completed task${group.records.length === 1 ? '' : 's'}.`);
+    } else {
+      for (const mission of group.records) lines.push(`  ${missionArchiveChronicleLine(mission, 'details')}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trimEnd();
+}
+
+function missionArchiveChronicleLine(mission, detailMode = 'details') {
+  const base = `T${mission.completedTurn} ${mission.name}`;
+  if (detailMode === 'summary') return base;
+  const parts = [
+    base,
+    mission.context,
+    mission.reward,
+    mission.originLabel ? `Ruling: ${mission.originLabel}` : '',
+    mission.completedBy ? `By ${mission.completedBy}` : '',
+    mission.site ? `Site: ${mission.site}` : ''
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+async function exportMissionArchiveChronicle() {
+  const review = currentMissionArchiveReview();
+  const chronicle = buildMissionArchiveChronicle(review);
+  if (!review.archive.length) {
+    toast('No archived missions match the current filter.', 'bad');
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(chronicle);
+    toast(`Copied ${review.archive.length} archived mission${review.archive.length === 1 ? '' : 's'} to the clipboard.`, 'good');
+    playAudioCue('ui');
+  } catch {
+    toast('Could not copy the chronicle. Select and copy from the mission panel instead.', 'bad');
+  }
 }
 
 function clearFocusedArchivedMissionIfFilteredOut() {
@@ -2339,6 +2413,7 @@ function buildDoctrineRecommendations(builder) {
     !has('archeryYard') ? { type: 'archeryYard', label: 'Raise archery yard', meta: 'Ranged kill zone' } : null,
     !has('shrine') && state.factions.olundar.resources.influence <= 3 ? { type: 'shrine', label: 'Consecrate Sun Shrine', meta: 'Influence and morale' } : null,
     !has('outpost') && mappedPercent() >= 12 ? { type: 'outpost', label: 'Plant frontier outpost', meta: 'Forward sight and muster' } : null,
+    !has('rallyBanner') && mappedPercent() >= 8 ? { type: 'rallyBanner', label: 'Raise rally banner', meta: 'Frontier rally healing' } : null,
     !has('wall') ? { type: 'wall', label: 'Close a kill gate', meta: 'Chokepoint defense' } : null
   ].filter(Boolean);
   const actionable = candidates.filter((item) => {
@@ -3552,10 +3627,19 @@ function currentPactFieldCommand() {
 }
 
 function recommendedPactFieldOrderId(entry) {
+  if (pactCommandMarchThreat()) return 'interceptMarches';
   if (pactCommandCapitalThreat()) return 'reinforceCapital';
   if (pactCommandKnownDeadPressure()) return 'harassDeadworks';
   if (entry.id === 'dawn') return 'defendRoads';
   return state.turn <= 8 ? 'defendRoads' : 'reinforceCapital';
+}
+
+function pactCommandMarchThreat() {
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  if (!capital) return false;
+  return state.units.some((unit) => unit.faction === 'dead' && unit.march
+    && (isVisible(state, unit.x, unit.y) || isRevealedTile(unit.x, unit.y))
+    && Math.abs(unit.x - capital.x) + Math.abs(unit.y - capital.y) <= 20);
 }
 
 function pactCommandKnownDeadPressure() {
@@ -5402,6 +5486,9 @@ missionPanel.addEventListener('click', (event) => {
   else if (target.dataset.action === 'clear-mission-archive-search') {
     missionArchiveSearch = '';
     render();
+  }
+  else if (target.dataset.action === 'export-mission-archive') {
+    exportMissionArchiveChronicle();
   }
   else if (target.dataset.action === 'close-mission-result') {
     missionResultBanner = null;

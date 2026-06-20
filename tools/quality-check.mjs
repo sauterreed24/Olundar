@@ -452,6 +452,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionHistoryFilter') && mainSource.includes('data-action="set-mission-history"'), 'Completed mission outcomes should have a recent/archive filter.');
   assert(mainSource.includes('missionArchiveTypeFilter') && mainSource.includes('data-action="set-mission-archive-type"'), 'Archived mission outcomes should be filterable by site type.');
   assert(mainSource.includes('missionArchiveSearch') && mainSource.includes('data-action="search-mission-archive"'), 'Archived mission outcomes should support compact text search.');
+  assert(mainSource.includes('data-action="export-mission-archive"') && mainSource.includes('function buildMissionArchiveChronicle') && mainSource.includes('function exportMissionArchiveChronicle'), 'Archived mission outcomes should export a filtered campaign chronicle.');
   assert(mainSource.includes('missionArchiveSortOrder') && mainSource.includes('data-action="set-mission-archive-sort"'), 'Archived mission outcomes should support newest/oldest sort controls.');
   assert(mainSource.includes('missionArchiveGroupMode') && mainSource.includes('data-action="set-mission-archive-group"') && mainSource.includes("{ id: 'rulings', label: 'Rulings' }"), 'Archived mission outcomes should support route-chain and ruling-origin grouping controls.');
   assert(mainSource.includes('missionArchiveGroupRewardSummary') && mainSource.includes('missionArchiveFollowUpCount'), 'Ruling-grouped mission archives should summarize rewards and spawned follow-up markers.');
@@ -460,7 +461,9 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(mainSource.includes('missionSiteFocusOverlay') && mainSource.includes('focusedArchivedMissionId'), 'Archived mission site focus should preserve a canvas overlay target.');
   assert(mainSource.includes('missionSiteReceiptMarkup') && mainSource.includes('Field Receipt'), 'Focused archived mission sites should show a tile-panel receipt.');
   assert(mainSource.includes('focusedMissionRouteOverlay') && mainSource.includes('focusedMissionId = mission.id'), 'Mission focus should preserve a route overlay target.');
-  assert(rulesSource.includes('routeName: mission.routeName') && rulesSource.includes('chainTag: mission.chainTag'), 'Mission views should expose route-chain metadata for archive grouping.');
+  assert(rulesSource.includes('function nearestMarchingThreat') && rulesSource.includes("orderId === 'interceptMarches'"), 'Allied field orders should be able to intercept marching dead.');
+  assert(BUILDING_TYPES.rallyBanner && rulesSource.includes("'rallyBanner'"), 'Rally banners should extend frontier rally healing.');
+  assert(renderSource.includes('function drawRallyBanner') && renderSource.includes("building.type === 'rallyBanner'"), 'Rally banners should have dedicated map art.');
   assert(rulesSource.includes('missionOriginFromRuling') && rulesSource.includes('originLabel: config.originLabel'), 'Aftermath missions should preserve their originating ruling labels.');
   assert(renderSource.includes('function drawMissionRoute') && renderSource.includes('routeOverlay.path'), 'Focused mission routes should draw on the canvas.');
   assert(renderSource.includes('function drawMissionFocus') && renderSource.includes('missionFocusOverlay'), 'Focused completed mission sites should draw a dedicated map overlay.');
@@ -912,6 +915,27 @@ check('pact field orders steer allied AI', () => {
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
 });
 
+check('intercept marches field order steers allies toward marching dead', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-intercept' });
+  state.factions.dawn.discovered = true;
+  state.factions.olundar.pacts.dawn = true;
+  state.factions.dawn.pacts.olundar = true;
+  state.factions.olundar.relations.dawn = 45;
+  state.factions.dawn.relations.olundar = 45;
+  const spear = state.units.find((unit) => unit.faction === 'dawn' && unit.type === 'spearGuard');
+  const marcher = addUnit(state, 'boneThrall', 'dead', spear.x - 2, spear.y, { name: 'March Thrall' });
+  marcher.march = true;
+  const order = setFieldOrder(state, 'dawn', 'interceptMarches');
+  assert(order.ok, order.reason || 'Intercept order setup failed.');
+  assert(FIELD_ORDERS.interceptMarches, 'Intercept Marches field order should exist in content.');
+  const beforeDistance = Math.abs(spear.x - marcher.x) + Math.abs(spear.y - marcher.y);
+  endTurn(state);
+  const afterSpear = state.units.find((unit) => unit.id === spear.id);
+  const afterMarcher = state.units.find((unit) => unit.id === marcher.id);
+  const afterDistance = Math.abs(afterSpear.x - afterMarcher.x) + Math.abs(afterSpear.y - afterMarcher.y);
+  assert(afterDistance < beforeDistance, 'Intercept Marches should move allied units toward marching dead.');
+});
+
 check('living faction war aims guide pre-pact behavior', () => {
   const ledgerState = createGame('quality-war-aim-ledger');
   for (const id of ['dawn', 'veyr', 'mire']) ledgerState.factions[id].discovered = true;
@@ -1127,7 +1151,7 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(mainSource.includes('function diplomacyOpportunityCard') && mainSource.includes('function currentDiplomacyOpportunity') && mainSource.includes('Seal Survival Pact') && mainSource.includes('function executeDiplomacyOpportunity') && mainSource.includes('function diplomacyOpportunityOverlay') && mainSource.includes('function diplomacyOpportunityForTile') && mainSource.includes('state.cameraFocusTile = { x: targetTile.x, y: targetTile.y };') && normalizedMainSource.includes('scrollBattlefieldIntoView();\n    return;') && styleSource.includes('.diplomacy-doctrine'), 'Pact-ready first contacts should surface as a direct envoy order in the command rail and as a clickable battlefield target, not only in the long diplomacy ledger.');
   assert(renderSource.includes('function drawDiplomacyOpportunityRoute') && renderSource.includes('function drawDiplomacyOpportunityForeground') && renderSource.includes('function drawDiplomacyOathStandard') && renderSource.includes('function drawDiplomacyOathSeal') && renderSource.includes('state.cameraFocusTile'), 'Pact-ready diplomacy should render an in-world envoy route and oath standard on the battlefield, with ally-lens camera focus.');
   assert(mainSource.includes('compactTitle') && mainSource.includes('compactDetail') && mainSource.includes('compact-envoy-doctrine') && styleSource.includes('.compact-envoy-doctrine') && styleSource.includes('.compact-envoy-doctrine .envoy-actions'), 'Pact-ready envoy opportunities should collapse into a compact command chip on phone and Surface rails instead of reopening the long diplomacy ledger in the order stack.');
-  assert(mainSource.includes('function pactFieldCommandCard') && mainSource.includes('function currentPactFieldCommand') && mainSource.includes('function executePactFieldOrder') && mainSource.includes('recommendedPactFieldOrderId') && styleSource.includes('.pact-command'), 'Active Survival Pacts should expose field-order AI controls directly in the command rail.');
+  assert(mainSource.includes('function pactFieldCommandCard') && mainSource.includes('function currentPactFieldCommand') && mainSource.includes('function executePactFieldOrder') && mainSource.includes('recommendedPactFieldOrderId') && mainSource.includes('function pactCommandMarchThreat') && styleSource.includes('.pact-command'), 'Active Survival Pacts should expose field-order AI controls directly in the command rail.');
   assert(mainSource.includes('function compactPactCommandDetail') && mainSource.includes('function compactPactFieldActions') && mainSource.includes('function pactRetaskDrawer') && mainSource.includes('pact-active-chip') && mainSource.includes('pact-retask-drawer') && mainSource.includes('Retask stays available, but the front order remains primary.') && styleSource.includes('.compact-pact-command') && styleSource.includes('.compact-pact-command .pact-actions') && styleSource.includes('.compact-pact-primary-actions') && styleSource.includes('.pact-retask-drawer') && styleSource.includes('.pact-active-chip'), 'Active pact field commands should collapse into compact status-first controls with retasking behind a drawer on phone and Surface rails instead of competing with the current front order.');
   assert(mainSource.includes('function captureStrategicImpact') && mainSource.includes("type: 'strategic'") && mainSource.includes("label: 'PACT'") && mainSource.includes("label: 'ORDER'") && mainSource.includes("successCue === 'diplomacy' && window.innerWidth <= 980") && mainSource.includes("battleImpact?.type === 'strategic'") && mainSource.includes("kicker: strategicImpact.strategicType === 'fieldOrder' ? 'Pact order' : 'Survival pact'") && renderSource.includes('function drawStrategicImpact') && renderSource.includes('function drawStrategicImpactStandard') && styleSource.includes('Treaty theater pass') && styleSource.includes('.battle-impact.strategy'), 'Survival pacts and pact field orders should create a lightweight in-world strategic impact, refocus the battlefield, and show treaty-specific field intel instead of feeling like quiet ledger updates.');
   assert(renderSource.includes('function drawMovementCommandGrid') && renderSource.includes('function drawMovementCommandCornerPins') && renderSource.includes('function drawMovementCostContours') && renderSource.includes('function movementCostBand') && renderSource.includes('drawMovementCostContours(ctx, layout, reachable, maxMove);') && renderSource.includes('drawMovementCommandGrid(ctx, layout, reachable, maxMove, hoverMove);'), 'Selected units should show a crisp legal-move grid, cost-contour seams, and pinned terrain-cost frontier instead of vague hover-only movement feedback.');
@@ -1406,6 +1430,15 @@ check('wounded living units rally near friendly havens', () => {
   assert(havenAfter.hp <= havenAfter.maxHp, 'Rally healing must never exceed max HP.');
   assert(clampAfter && clampAfter.hp === clampAfter.maxHp, 'Rally healing should clamp exactly to max HP.');
   assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'A unit resting far from any haven should not passively heal.');
+
+  const bannerState = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-rally-banner' });
+  const bannerCity = bannerState.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const banner = addBuilding(bannerState, 'rallyBanner', 'olundar', bannerCity.x + 2, bannerCity.y, { complete: true });
+  const frontier = addUnit(bannerState, 'legionary', 'olundar', banner.x, banner.y + 1, { name: 'Frontier Legion' });
+  frontier.hp = 5;
+  endTurn(bannerState);
+  const frontierAfter = bannerState.units.find((u) => u.id === frontier.id);
+  assert(frontierAfter && frontierAfter.hp > 5, 'A wounded unit beside a rally banner should rally and heal.');
 });
 
 check('24-turn simulation remains stable', () => {

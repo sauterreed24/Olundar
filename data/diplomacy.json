@@ -129,6 +129,11 @@
       "id": "harassDeadworks",
       "name": "Harass Deadworks",
       "text": "Push toward revealed Deadwalker structures and pressure their expansion."
+    },
+    "interceptMarches": {
+      "id": "interceptMarches",
+      "name": "Intercept Marches",
+      "text": "Hunt Hollow Crown columns marching on Olundar Prime before they reach the capital."
     }
   }
 }

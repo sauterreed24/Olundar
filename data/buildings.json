@@ -244,6 +244,27 @@
     },
     "text": "Boosts influence and morale. Living units nearby resist grave-blight attrition."
   },
+  "rallyBanner": {
+    "id": "rallyBanner",
+    "name": "Rally Banner",
+    "glyph": "⚑",
+    "hp": 22,
+    "vision": 3,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 16,
+      "stone": 4,
+      "gold": 6
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {
+      "gold": 1
+    },
+    "text": "Forward rally post. Wounded units beside it recover HP like at an outpost without the full muster cost."
+  },
   "outpost": {
     "id": "outpost",
     "name": "Frontier Outpost",

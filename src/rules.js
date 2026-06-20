@@ -2970,7 +2970,7 @@ function nearFriendlyHaven(state, x, y) {
   return state.buildings.some((b) => (
     b.faction === 'olundar'
     && b.turnsLeft <= 0
-    && ['city', 'outpost'].includes(b.type)
+    && ['city', 'outpost', 'rallyBanner'].includes(b.type)
     && manhattan(b.x, b.y, x, y) <= 1 + (b.upgraded || 0)
   ));
 }
@@ -3198,6 +3198,8 @@ function runLivingAiTurn(state, factionId) {
         recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
       } else if (fieldOrder === 'defendRoads') {
         recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
+      } else if (fieldOrder === 'interceptMarches') {
+        recordFieldOrderFulfillment(state, factionId, 'interceptMarches', 'March Intercepted', `${faction.name} engaged a Hollow Crown column under pact orders.`, 2);
       }
       aiTryAttack(state, unit);
       continue;
@@ -3273,13 +3275,37 @@ function fieldOrderTarget(state, unit, orderId) {
   if (orderId === 'harassDeadworks') {
     return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
   }
+  if (orderId === 'interceptMarches') {
+    return nearestMarchingThreat(state, unit.x, unit.y, 28)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 10)
+      || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost', 'rallyBanner']);
+  }
   if (orderId === 'reinforceCapital') {
-    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost']);
+    return nearestMarchingThreat(state, unit.x, unit.y, 24)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 9)
+      || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['city', 'outpost']);
   }
   if (orderId === 'defendRoads') {
-    return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
+    return nearestMarchingThreat(state, unit.x, unit.y, 18)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8)
+      || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'rallyBanner', 'city']);
   }
   return null;
+}
+
+function nearestMarchingThreat(state, x, y, maxDistance = 24) {
+  const capital = olundarCapital(state);
+  return state.units
+    .filter((unit) => unit.faction === 'dead' && unit.march)
+    .map((unit) => ({
+      ref: unit,
+      x: unit.x,
+      y: unit.y,
+      dist: manhattan(x, y, unit.x, unit.y),
+      capitalDist: capital ? manhattan(unit.x, unit.y, capital.x, capital.y) : 999
+    }))
+    .filter((target) => target.dist <= maxDistance)
+    .sort((a, b) => a.capitalDist - b.capitalDist || a.dist - b.dist)[0] || null;
 }
 
 function easternScoutTarget(state, x, y) {
