@@ -114,7 +114,11 @@ function getCameraBounds(state) {
       if (isRevealed(state, x, y)) revealed.push({ x, y });
     }
   }
-  const selected = state.units.find((unit) => unit.id === state.selectedUnitId)
+  const focusTile = state.cameraFocusTile && isRevealed(state, state.cameraFocusTile.x, state.cameraFocusTile.y)
+    ? state.cameraFocusTile
+    : null;
+  const selected = focusTile
+    || state.units.find((unit) => unit.id === state.selectedUnitId)
     || state.buildings.find((building) => building.id === state.selectedBuildingId)
     || state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
     || state.units.find((unit) => unit.faction === 'olundar');
@@ -202,7 +206,7 @@ export function pointToTile(canvas, clientX, clientY) {
   return candidates[0] ? { x: candidates[0].x, y: candidates[0].y } : { x: -1, y: -1 };
 }
 
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null) {
+export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
   canvas.__olundarState = state;
   const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
@@ -216,6 +220,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
+  drawDiplomacyOpportunityRoute(ctx, state, layout, diplomacyOverlay);
   drawOpeningOrderRoute(ctx, state, layout, openingOrderOverlay);
   drawMissionRoute(ctx, state, layout, routeOverlay);
   drawMissionFocus(ctx, state, layout, missionFocusOverlay);
@@ -226,6 +231,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawOpeningOrderForeground(ctx, state, layout, openingOrderOverlay);
+  drawDiplomacyOpportunityForeground(ctx, state, layout, diplomacyOverlay);
   drawFog(ctx, state, layout);
   drawFogAtmosphere(ctx, state, layout);
   drawBattleImpact(ctx, state, layout, battleImpact);
@@ -2097,6 +2103,161 @@ function drawMissionRoute(ctx, state, layout, routeOverlay) {
   }
   drawRouteEndpoint(ctx, center(points[0]), layout.tileSize, color, false);
   drawRouteEndpoint(ctx, center(points[points.length - 1]), layout.tileSize, color, true);
+  ctx.restore();
+}
+
+function drawDiplomacyOpportunityRoute(ctx, state, layout, overlay) {
+  if (!overlay || state.status !== 'playing') return;
+  const target = overlay.target && isRevealed(state, overlay.target.x, overlay.target.y)
+    ? overlay.target
+    : null;
+  if (!target) return;
+  const points = Array.isArray(overlay.path)
+    ? overlay.path.filter((point) => point && isRevealed(state, point.x, point.y))
+    : [];
+  const color = '#8ad8ff';
+  const center = (point) => tileCenter(layout, point.x, point.y);
+  ctx.save();
+  if (points.length >= 2) {
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(104, 197, 232, 0.28)';
+    ctx.shadowBlur = layout.tileSize * 0.20;
+    ctx.setLineDash([Math.max(8, layout.tileSize * 0.34), Math.max(4, layout.tileSize * 0.15)]);
+    ctx.lineWidth = Math.max(5, layout.tileSize * 0.19);
+    ctx.strokeStyle = 'rgba(26, 52, 60, 0.68)';
+    drawRouteStroke(ctx, points, center);
+    ctx.lineWidth = Math.max(2, layout.tileSize * 0.078);
+    ctx.strokeStyle = color;
+    drawRouteStroke(ctx, points, center);
+    ctx.setLineDash([]);
+    drawDiplomacyRouteSeals(ctx, points, center, layout, color);
+  }
+  drawDiplomacyOathField(ctx, tileBounds(layout, target.x, target.y), layout, overlay, color);
+  ctx.restore();
+}
+
+function drawDiplomacyRouteSeals(ctx, points, center, layout, color) {
+  ctx.save();
+  for (let i = 1; i < points.length - 1; i += 2) {
+    const p = center(points[i]);
+    ctx.fillStyle = 'rgba(255, 252, 230, 0.82)';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(3, layout.tileSize * 0.085), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDiplomacyOathField(ctx, bounds, layout, overlay, color) {
+  const s = layout.tileSize;
+  ctx.save();
+  ctx.shadowColor = 'rgba(104, 197, 232, 0.38)';
+  ctx.shadowBlur = s * 0.22;
+  fillTileDiamond(ctx, bounds, 'rgba(138, 216, 255, 0.18)', 1);
+  strokeTileDiamond(ctx, bounds, 'rgba(22, 62, 74, 0.60)', Math.max(2, s * 0.070), 2);
+  strokeTileDiamond(ctx, bounds, color, Math.max(2, s * 0.036), 7);
+  ctx.shadowBlur = 0;
+
+  const ringY = bounds.cy + layout.halfTileHeight * 0.10;
+  ctx.globalAlpha = 0.62;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, s * 0.026);
+  ctx.setLineDash([Math.max(5, s * 0.13), Math.max(4, s * 0.09)]);
+  ctx.beginPath();
+  ctx.ellipse(bounds.cx, ringY, layout.halfTileWidth * 0.82, layout.halfTileHeight * 0.78, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  drawDiplomacyOathSeal(ctx, bounds.cx, ringY, layout, color);
+  ctx.restore();
+}
+
+function drawDiplomacyOpportunityForeground(ctx, state, layout, overlay) {
+  if (!overlay || state.status !== 'playing') return;
+  const target = overlay.target && isRevealed(state, overlay.target.x, overlay.target.y)
+    ? overlay.target
+    : null;
+  if (!target) return;
+  const bounds = tileBounds(layout, target.x, target.y);
+  const color = '#8ad8ff';
+  drawDiplomacyOathStandard(ctx, bounds, layout, overlay, color);
+}
+
+function drawDiplomacyOathStandard(ctx, bounds, layout, overlay, color) {
+  const s = layout.tileSize;
+  const compact = layout.tileSize < 31;
+  const poleX = bounds.cx - s * 0.16;
+  const baseY = bounds.cy + layout.halfTileHeight * 0.42;
+  const topY = bounds.cy - layout.halfTileHeight * (compact ? 1.10 : 1.34);
+  ctx.save();
+  ctx.shadowColor = 'rgba(104, 197, 232, 0.46)';
+  ctx.shadowBlur = s * 0.16;
+  ctx.strokeStyle = 'rgba(22, 45, 54, 0.82)';
+  ctx.lineWidth = Math.max(1.2, s * 0.022);
+  ctx.beginPath();
+  ctx.moveTo(poleX, topY);
+  ctx.lineTo(poleX, baseY);
+  ctx.stroke();
+
+  const bannerW = Math.max(14, s * (compact ? 0.30 : 0.40));
+  const bannerH = Math.max(9, s * (compact ? 0.16 : 0.22));
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(22, 45, 54, 0.82)';
+  ctx.lineWidth = Math.max(1, s * 0.015);
+  ctx.beginPath();
+  ctx.moveTo(poleX, topY + s * 0.06);
+  ctx.lineTo(poleX + bannerW, topY + s * 0.10);
+  ctx.lineTo(poleX + bannerW * 0.74, topY + s * 0.10 + bannerH * 0.48);
+  ctx.lineTo(poleX + bannerW, topY + s * 0.10 + bannerH);
+  ctx.lineTo(poleX, topY + s * 0.08 + bannerH * 0.82);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  if (!compact) {
+    const label = 'PACT';
+    const w = Math.max(42, s * 0.64);
+    const h = Math.max(15, s * 0.21);
+    const x = bounds.cx - w * 0.5;
+    const y = topY - h * 1.05;
+    roundRectPath(ctx, x, y, w, h, h * 0.46);
+    ctx.fillStyle = 'rgba(239, 250, 251, 0.96)';
+    ctx.strokeStyle = 'rgba(34, 115, 127, 0.48)';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#174a60';
+    ctx.font = `900 ${Math.max(8, s * 0.105)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bounds.cx, y + h * 0.54);
+  }
+
+  drawDiplomacyOathSeal(ctx, poleX + s * 0.08, topY + s * 0.07, layout, color);
+  ctx.restore();
+}
+
+function drawDiplomacyOathSeal(ctx, cx, cy, layout, color) {
+  const r = Math.max(4, layout.tileSize * 0.09);
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 252, 230, 0.92)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(22, 74, 96, 0.82)';
+  ctx.lineWidth = Math.max(1, r * 0.18);
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.48, cy + r * 0.05);
+  ctx.quadraticCurveTo(cx - r * 0.12, cy - r * 0.46, cx, cy - r * 0.04);
+  ctx.quadraticCurveTo(cx + r * 0.12, cy - r * 0.46, cx + r * 0.48, cy + r * 0.05);
+  ctx.moveTo(cx - r * 0.36, cy + r * 0.36);
+  ctx.lineTo(cx + r * 0.36, cy + r * 0.36);
+  ctx.stroke();
   ctx.restore();
 }
 

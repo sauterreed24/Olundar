@@ -158,7 +158,7 @@ function resizeCanvas() {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
+  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
   renderTopBar();
   renderMapLensBar();
   renderMapHelp();
@@ -743,6 +743,7 @@ function focusMissionTarget(missionId) {
   focusedArchivedMissionId = null;
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
+  state.cameraFocusTile = { x: mission.x, y: mission.y };
   toast(`${mission.name} target ${mission.target}.`, 'info');
   render();
   scrollBattlefieldIntoView();
@@ -758,6 +759,7 @@ function focusMissionUnit(missionId) {
   state.selectedUnitId = unit.id;
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
+  state.cameraFocusTile = null;
   focusedMissionId = mission.id;
   focusedArchivedMissionId = null;
   hoverTile = { x: unit.x, y: unit.y };
@@ -817,6 +819,7 @@ function focusCompletedMissionSite(missionId) {
   state.mode = { type: 'select' };
   hoverTile = { x: mission.x, y: mission.y };
   lastTile = hoverTile;
+  state.cameraFocusTile = { x: mission.x, y: mission.y };
   toast(`${mission.name} completed site ${mission.target}.`, 'info');
   render();
   scrollBattlefieldIntoView();
@@ -946,6 +949,68 @@ function openingDirectiveForTile(tile) {
   if (!action || action.canExecute === false || action.disabled) return null;
   const orderTarget = openingActionTarget(action);
   return orderTarget?.target.x === tile.x && orderTarget.target.y === tile.y ? action : null;
+}
+
+function diplomacyOpportunityOverlay() {
+  const opportunity = currentDiplomacyOpportunity();
+  if (!opportunity || state.status !== 'playing') return null;
+  const target = diplomacyOpportunityTarget(opportunity.entry.id);
+  if (!target) return null;
+  const source = diplomacyEnvoySource();
+  const path = source ? diplomacyEnvoyPath(source, target) : [];
+  return {
+    kind: 'pact',
+    factionId: opportunity.entry.id,
+    factionName: opportunity.entry.name,
+    banner: opportunity.entry.banner,
+    title: opportunity.compactTitle || opportunity.title,
+    target,
+    source,
+    path,
+    relation: opportunity.entry.relation,
+    cost: opportunity.cost,
+    canExecute: !opportunity.action.disabled
+  };
+}
+
+function diplomacyOpportunityTarget(factionId) {
+  const candidates = [
+    ...state.buildings.filter((item) => item.faction === factionId),
+    ...state.units.filter((item) => item.faction === factionId)
+  ].filter((item) => isRevealedTile(item.x, item.y));
+  candidates.sort((a, b) => diplomacyTargetScore(a) - diplomacyTargetScore(b));
+  const target = candidates[0];
+  return target ? { x: target.x, y: target.y, name: target.name || state.factions[factionId]?.name || factionId, type: target.type } : null;
+}
+
+function diplomacyTargetScore(item) {
+  const kindScore = item.type === 'city' ? 0 : item.type === 'watchtower' || item.type === 'outpost' ? 1 : item.hp ? 2 : 3;
+  return kindScore * 100 + Math.abs(item.x - 7) + Math.abs(item.y - 16);
+}
+
+function diplomacyEnvoySource() {
+  return state.buildings.find((item) => item.faction === 'olundar' && item.type === 'city' && item.turnsLeft <= 0)
+    || state.units.find((item) => item.faction === 'olundar')
+    || null;
+}
+
+function diplomacyEnvoyPath(source, target) {
+  const envoy = { id: 'envoy-route', type: 'scout', faction: 'olundar', x: source.x, y: source.y };
+  const route = findPath(state, envoy, target.x, target.y, Infinity);
+  if (route?.path?.length) return [{ x: source.x, y: source.y }, ...route.path.map(pathKeyToTile)];
+  return [{ x: source.x, y: source.y }, { x: target.x, y: target.y }];
+}
+
+function diplomacyOpportunityForTile(tile) {
+  if (state.status !== 'playing' || state.mode.type !== 'select') return null;
+  const opportunity = currentDiplomacyOpportunity();
+  if (!opportunity || opportunity.action.disabled) return null;
+  const target = diplomacyOpportunityTarget(opportunity.entry.id);
+  return target?.x === tile.x && target.y === tile.y ? opportunity : null;
+}
+
+function isRevealedTile(x, y) {
+  return Boolean(state.revealed?.[y * MAP_WIDTH + x]);
 }
 
 function pathKeyToTile(key) {
@@ -1870,6 +1935,22 @@ function mapIntelState(tile) {
     };
   }
 
+  const diplomacyAction = diplomacyOpportunityForTile(tile);
+  if (diplomacyAction) {
+    return {
+      tone: 'order diplomacy',
+      kicker: 'Envoy target',
+      title: diplomacyAction.compactTitle || diplomacyAction.title,
+      detail: `Click to seal the Survival Pact with ${diplomacyAction.entry.name}. Shared sight and field orders unlock immediately.`,
+      stats: [
+        ...baseStats,
+        { value: `${diplomacyAction.entry.relation}`, label: 'trust' },
+        { value: diplomacyAction.cost, label: 'cost' },
+        { value: 'pact', label: 'command' }
+      ]
+    };
+  }
+
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
     const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
@@ -2108,6 +2189,12 @@ function canvasClicked(event) {
     return;
   }
 
+  const diplomacyAction = diplomacyOpportunityForTile(tile);
+  if (diplomacyAction) {
+    runAction(() => executeDiplomacyOpportunity(diplomacyAction), 'diplomacy');
+    return;
+  }
+
   const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
   const visibleBuilding = isVisible(state, tile.x, tile.y) ? buildingAt(state, tile.x, tile.y) : null;
   const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
@@ -2146,6 +2233,7 @@ function canvasClicked(event) {
 
   state.selectedUnitId = null;
   state.selectedBuildingId = null;
+  state.cameraFocusTile = null;
   render();
 }
 
@@ -2153,12 +2241,14 @@ function selectUnit(id) {
   state.selectedUnitId = id;
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
+  state.cameraFocusTile = null;
 }
 
 function selectBuilding(id) {
   state.selectedBuildingId = id;
   state.selectedUnitId = null;
   state.mode = { type: 'select' };
+  state.cameraFocusTile = null;
 }
 
 function runAction(action, successCue = 'ui') {
@@ -2458,7 +2548,17 @@ function executeDiplomacyOpportunity(opportunity) {
 
 function focusDiplomacyOpportunity(factionId) {
   activeMapLens = 'alliance';
+  const targetTile = diplomacyOpportunityTarget(factionId);
+  if (targetTile) {
+    lastTile = { x: targetTile.x, y: targetTile.y };
+    hoverTile = lastTile;
+    state.cameraFocusTile = { x: targetTile.x, y: targetTile.y };
+  }
   render();
+  if (targetTile) {
+    scrollBattlefieldIntoView();
+    return;
+  }
   const card = diplomacyPanel.querySelector(`.diplo-card.known`);
   const target = [...diplomacyPanel.querySelectorAll('.diplo-card.known')].find((item) => item.textContent.includes(state.factions[factionId]?.name || '')) || card;
   target?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
@@ -3241,6 +3341,7 @@ function focusFirstReadyUnit() {
   state.selectedUnitId = unit.id;
   state.selectedBuildingId = null;
   state.mode = { type: 'select' };
+  state.cameraFocusTile = null;
   lastTile = { x: unit.x, y: unit.y };
   hoverTile = null;
 }
@@ -4035,7 +4136,7 @@ function inMap(x, y) {
 
 function canvasCursorForTile(tile) {
   if (!tile || !inMap(tile.x, tile.y)) return '';
-  return openingDirectiveForTile(tile) ? 'pointer' : '';
+  return openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile) ? 'pointer' : '';
 }
 
 canvas.addEventListener('click', canvasClicked);
@@ -4066,7 +4167,7 @@ function scheduleHoverRender() {
     pendingHoverFrame = null;
     renderTilePanel();
     renderMapIntel();
-    drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
+    drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
   });
 }
 
