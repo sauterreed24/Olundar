@@ -1,8 +1,10 @@
 export {
   AUDIO_STORAGE_KEY,
   DEFAULT_AUDIO_VOLUME,
+  MUSIC_CROSSFADE_SECONDS,
   AUDIO_CUES,
   validateAudioCueRegistry,
+  musicLayerTargetsForMode,
   initAudioPreference,
   audioIsEnabled,
   getAudioVolume,

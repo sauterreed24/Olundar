@@ -24,6 +24,14 @@ export const AUDIO_CUES = {
 
 const BUS_IDS = ['master', 'sfx', 'ambient', 'music', 'ui'];
 const DEFAULT_BUS_VOLUMES = { master: 58, sfx: 72, ambient: 45, music: 55, ui: 68 };
+const MUSIC_LAYER_FLOOR = 0.0001;
+export const MUSIC_CROSSFADE_SECONDS = 1.35;
+const MUSIC_LAYER_LEVELS = { exploration: 0.014, tension: 0.008, combat: 0.01 };
+const MUSIC_MODE_MIXES = {
+  exploration: { exploration: 1, tension: 0, combat: 0 },
+  tension: { exploration: 0.42, tension: 1, combat: 0 },
+  combat: { exploration: 0.18, tension: 0.55, combat: 1 }
+};
 
 let audioContext = null;
 let buses = {};
@@ -65,6 +73,18 @@ export function validateAudioCueRegistry(registry = AUDIO_CUES) {
   }
 
   return { count: ids.length, ids, totalDuration: Number(totalDuration.toFixed(3)) };
+}
+
+export function musicLayerTargetsForMode(mode = 'exploration', levels = MUSIC_LAYER_LEVELS) {
+  const mix = MUSIC_MODE_MIXES[mode] || MUSIC_MODE_MIXES.exploration;
+  const targets = {};
+
+  for (const key of Object.keys(MUSIC_LAYER_LEVELS)) {
+    const level = Number.isFinite(levels[key]) ? levels[key] : MUSIC_LAYER_LEVELS[key];
+    targets[key] = Math.max(MUSIC_LAYER_FLOOR, level * (mix[key] || 0));
+  }
+
+  return targets;
 }
 
 export function initAudioPreference(storage = null) {
@@ -203,9 +223,9 @@ function startMusicLayers() {
   const context = ensureMixer();
   if (!context || musicLayers.exploration) return;
 
-  musicLayers.exploration = createMusicBed(context, 65.41, 98, 0.014);
-  musicLayers.tension = createMusicBed(context, 73.42, 110, 0.008, true);
-  musicLayers.combat = createPercussionBed(context, 0.01);
+  musicLayers.exploration = createMusicBed(context, 65.41, 98, MUSIC_LAYER_LEVELS.exploration);
+  musicLayers.tension = createMusicBed(context, 73.42, 110, MUSIC_LAYER_LEVELS.tension, true);
+  musicLayers.combat = createPercussionBed(context, MUSIC_LAYER_LEVELS.combat);
   crossfadeMusicLayers(activeMusicMode);
 }
 
@@ -226,7 +246,8 @@ function stopMusicLayers() {
 
 function createMusicBed(context, lowFreq, highFreq, gainLevel, muted = true) {
   const gain = context.createGain();
-  gain.gain.value = muted ? 0.0001 : gainLevel;
+  const startingGain = muted ? MUSIC_LAYER_FLOOR : gainLevel;
+  gain.gain.value = startingGain;
   gain.connect(buses.ambient);
 
   const low = context.createOscillator();
@@ -240,12 +261,12 @@ function createMusicBed(context, lowFreq, highFreq, gainLevel, muted = true) {
   low.start();
   high.start();
 
-  return { gain, nodes: [low, high, gain], level: gainLevel };
+  return { gain, nodes: [low, high, gain], level: gainLevel, target: startingGain };
 }
 
 function createPercussionBed(context, gainLevel) {
   const gain = context.createGain();
-  gain.gain.value = 0.0001;
+  gain.gain.value = MUSIC_LAYER_FLOOR;
   gain.connect(buses.music);
 
   const pulse = context.createOscillator();
@@ -257,21 +278,46 @@ function createPercussionBed(context, gainLevel) {
   pulseGain.connect(gain);
   pulse.start();
 
-  return { gain, nodes: [pulse, pulseGain, gain], level: gainLevel };
+  return { gain, nodes: [pulse, pulseGain, gain], level: gainLevel, target: MUSIC_LAYER_FLOOR };
 }
 
 function crossfadeMusicLayers(mode) {
   const context = audioContext;
   if (!context) return;
   const now = context.currentTime;
-  const targets = { exploration: 0.0001, tension: 0.0001, combat: 0.0001 };
-  if (mode === 'exploration') targets.exploration = musicLayers.exploration?.level || 0.014;
-  if (mode === 'tension') targets.tension = musicLayers.tension?.level || 0.008;
-  if (mode === 'combat') targets.combat = musicLayers.combat?.level || 0.01;
+  const targets = musicLayerTargetsForMode(mode, currentMusicLayerLevels());
 
   for (const [key, layer] of Object.entries(musicLayers)) {
     if (!layer?.gain) continue;
-    layer.gain.gain.setTargetAtTime(targets[key], now, 0.4);
+    scheduleLayerCrossfade(layer, targets[key], now);
+  }
+}
+
+function currentMusicLayerLevels() {
+  const levels = { ...MUSIC_LAYER_LEVELS };
+  for (const [key, layer] of Object.entries(musicLayers)) {
+    if (Number.isFinite(layer?.level)) levels[key] = layer.level;
+  }
+  return levels;
+}
+
+function scheduleLayerCrossfade(layer, target, now) {
+  const gainParam = layer.gain.gain;
+  const safeTarget = Math.max(MUSIC_LAYER_FLOOR, target);
+
+  try {
+    if (typeof gainParam.cancelAndHoldAtTime === 'function') {
+      gainParam.cancelAndHoldAtTime(now);
+    } else {
+      const current = Number.isFinite(gainParam.value) ? gainParam.value : layer.target;
+      gainParam.cancelScheduledValues(now);
+      gainParam.setValueAtTime(Math.max(MUSIC_LAYER_FLOOR, current || MUSIC_LAYER_FLOOR), now);
+    }
+    gainParam.linearRampToValueAtTime(safeTarget, now + MUSIC_CROSSFADE_SECONDS);
+    layer.target = safeTarget;
+  } catch {
+    gainParam.setTargetAtTime(safeTarget, now, MUSIC_CROSSFADE_SECONDS / 3);
+    layer.target = safeTarget;
   }
 }
 
