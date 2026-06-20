@@ -1137,9 +1137,10 @@ function renderActions() {
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
   const readyForcesCard = activeReadyForcesCard(selectedUnit);
   const musterCard = musterReadyCard(selectedBuilding);
+  const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, doctrineCard, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -1466,6 +1467,64 @@ function focusMusterSite(buildingId) {
   playAudioCue('select');
   render();
   if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
+function endTurnReviewCard() {
+  if (state.status !== 'playing' || state.pendingEndTurn !== state.turn) return null;
+  const warnings = getEndTurnWarnings(state);
+  if (!warnings.length) return null;
+  const readyUnits = getReadyOlundarUnits(state);
+  const hasBuildOrder = state.mode.type === 'build';
+  const card = actionSection('Before End Turn', `${warnings.length} unresolved order${warnings.length === 1 ? '' : 's'} before turn ${state.turn + 1}.`, 'end-turn-review-card');
+  const warningList = document.createElement('div');
+  warningList.className = 'end-turn-review-warnings';
+  warningList.innerHTML = warnings.slice(0, 3).map((warning, index) => `
+    <span>
+      <b>${index + 1}</b>
+      <small>${escapeHtml(warning)}</small>
+    </span>
+  `).join('');
+  if (warnings.length > 3) {
+    warningList.innerHTML += `
+      <span>
+        <b>+</b>
+        <small>${warnings.length - 3} more council warning${warnings.length - 3 === 1 ? '' : 's'} remain.</small>
+      </span>
+    `;
+  }
+  card.appendChild(warningList);
+
+  const actions = commandActions('end-turn-review-actions');
+  if (readyUnits.length) {
+    actions.appendChild(orderButton('Review ready forces', `${readyUnits.length} command${readyUnits.length === 1 ? '' : 's'} can still act`, () => selectNextReadyUnit(), {
+      tone: 'primary'
+    }));
+  }
+  if (hasBuildOrder) {
+    actions.appendChild(orderButton('Place build order', 'Complete the highlighted construction site', () => focusUnplacedBuildOrder(), {
+      tone: 'primary'
+    }));
+  }
+  actions.appendChild(orderButton('Confirm end turn', `Advance to turn ${state.turn + 1}`, () => requestEndTurn(true), {
+    tone: 'danger'
+  }));
+  actions.appendChild(orderButton('Cancel review', 'Keep planning this turn', () => cancelEndTurnReview()));
+  card.appendChild(actions);
+  return card;
+}
+
+function focusUnplacedBuildOrder() {
+  toast('Place the highlighted build site on the map, or press Escape to cancel it.');
+  playAudioCue('select');
+  render();
+  scrollBattlefieldIntoView();
+}
+
+function cancelEndTurnReview() {
+  state.pendingEndTurn = null;
+  toast('End turn held.');
+  playAudioCue('select');
+  render();
 }
 
 function tacticalCounselCard(selectedUnit, selectedBuilding) {
@@ -2487,6 +2546,7 @@ function handleResult(result, successCue = null) {
     return false;
   }
   turnReport = null;
+  state.pendingEndTurn = null;
   if (successCue === 'attack') captureBattleImpact(result);
   if (successCue === 'diplomacy') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
@@ -3656,6 +3716,15 @@ function focusTurnReportOnMobile() {
   scrollBattlefieldIntoView();
 }
 
+function focusEndTurnReviewInCompactRail() {
+  if (!isCompactCommandRailMode()) return;
+  const review = actionPanel.querySelector('.end-turn-review-card');
+  (review || actionPanel).scrollIntoView({
+    block: 'center',
+    behavior: 'auto'
+  });
+}
+
 function requestEndTurn(force = false) {
   const previousStepId = currentOpeningDirective()?.current?.id || null;
   if (!force && state.pendingEndTurn === state.turn) force = true;
@@ -3665,6 +3734,7 @@ function requestEndTurn(force = false) {
     playAudioCue('warning');
     state.pendingEndTurn = state.turn;
     render();
+    focusEndTurnReviewInCompactRail();
     return;
   }
   state.pendingEndTurn = null;
