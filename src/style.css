@@ -1344,6 +1344,16 @@ button:disabled {
   font-size: 0.62rem;
 }
 
+.mission-archive-export {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.mission-archive-export button {
+  font-size: 0.78rem;
+}
+
 .mission-archive-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

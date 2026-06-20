@@ -4974,7 +4974,7 @@ function fieldCommandBannerMeta(state, item, kind) {
     const kicker = item.faction === 'olundar' ? 'CAPITAL' : ally ? 'PACT CITY' : hostile ? 'ENEMY CITY' : 'CITY';
     return { tone: item.faction === 'olundar' ? 'ready' : ally ? 'ally' : hostile ? 'threat' : 'neutral', kicker, title: fieldCommandBannerTitle(item), color, priority: item.faction === 'olundar' ? 92 : 84 };
   }
-  if (ally && ['watchtower', 'barracks', 'outpost'].includes(item.type)) return { tone: 'ally', kicker: 'ALLY HOLD', title: fieldCommandBannerTitle(item), color, priority: 70 };
+  if (ally && ['watchtower', 'barracks', 'outpost', 'rallyBanner'].includes(item.type)) return { tone: 'ally', kicker: 'ALLY HOLD', title: fieldCommandBannerTitle(item), color, priority: 70 };
   return null;
 }
 
@@ -5332,6 +5332,8 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     drawWorkshopYard(ctx, x, y, s, color);
   } else if (building.type === 'shrine') {
     drawShrine(ctx, x, y, s, color);
+  } else if (building.type === 'rallyBanner') {
+    drawRallyBanner(ctx, x, y, s, color);
   } else if (building.type === 'outpost') {
     drawOutpost(ctx, x, y, s, color);
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
@@ -5701,6 +5703,34 @@ function drawShrine(ctx, x, y, s, color) {
   ctx.beginPath();
   ctx.arc(x + s * 0.50, y + s * 0.27, s * 0.055, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawRallyBanner(ctx, x, y, s, color) {
+  const glow = ctx.createRadialGradient(x + s * 0.5, y + s * 0.55, s * 0.04, x + s * 0.5, y + s * 0.55, s * 0.36);
+  glow.addColorStop(0, 'rgba(196, 92, 72, 0.28)');
+  glow.addColorStop(1, 'rgba(196, 92, 72, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + s * 0.08, y + s * 0.18, s * 0.84, s * 0.72);
+  ctx.fillStyle = '#d8c7a0';
+  ctx.fillRect(x + s * 0.24, y + s * 0.62, s * 0.52, s * 0.18);
+  ctx.fillStyle = '#f4ead0';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.24, y + s * 0.62);
+  ctx.lineTo(x + s * 0.50, y + s * 0.44);
+  ctx.lineTo(x + s * 0.76, y + s * 0.62);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#8d3327';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.42, y + s * 0.50);
+  ctx.lineTo(x + s * 0.58, y + s * 0.50);
+  ctx.moveTo(x + s * 0.50, y + s * 0.44);
+  ctx.lineTo(x + s * 0.50, y + s * 0.58);
+  ctx.stroke();
+  drawBannerPennon(ctx, x + s * 0.50, y + s * 0.10, s * 0.42, color);
+  ctx.fillStyle = '#5b3a24';
+  ctx.fillRect(x + s * 0.47, y + s * 0.52, s * 0.06, s * 0.28);
 }
 
 function drawOutpost(ctx, x, y, s, color) {

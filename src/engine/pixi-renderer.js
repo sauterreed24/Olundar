@@ -17,7 +17,8 @@ const IMPERIAL_PALETTE = {
   lapis: 0x2d5f8f,
   jade: 0x3d8b6e,
   deadGlow: 0x9cf38a,
-  shrineGlow: 0xf0c866
+  shrineGlow: 0xf0c866,
+  rallyGlow: 0xc45c48
 };
 
 let app = null;
@@ -243,6 +244,10 @@ function drawStructureGlow(g, state, layout) {
     if (building.type === 'shrine') {
       g.circle(x, y, s * 1.4);
       g.fill({ color: IMPERIAL_PALETTE.shrineGlow, alpha: 0.12 + Math.sin(performance.now() * 0.003) * 0.04 });
+    }
+    if (building.type === 'rallyBanner') {
+      g.circle(x, y, s * 1.2);
+      g.fill({ color: IMPERIAL_PALETTE.rallyGlow, alpha: 0.1 + Math.sin(performance.now() * 0.0035 + building.y) * 0.03 });
     }
     if (['portal', 'bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
       g.circle(x, y, s * 1.6);

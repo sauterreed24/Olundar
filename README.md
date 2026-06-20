@@ -16,7 +16,8 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
 - **The March of the Hollow Crown:** the Deadwalkers gather menace and periodically dispatch escalating, telegraphed marches directed at Olundar Prime, conscripting their eastern horde and reinforcing from the nearest deadwork so ignoring the war is fatal and harder difficulties bite sooner.
-- **Rally healing:** wounded living units recover when resting beside friendly cities and outposts (and faster near a Sun Shrine), so attrition becomes a rotate-and-heal rhythm instead of a one-way death spiral.
+- **Rally healing:** wounded living units recover when resting beside friendly cities, outposts, and rally banners (and faster near a Sun Shrine), so attrition becomes a rotate-and-heal rhythm instead of a one-way death spiral.
+- **Rally banners:** engineers can raise forward rally points that extend haven healing to frontier kill-boxes without a full outpost retreat.
 - Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources, Deadwalker spawn cadence, and the timing, size, and growth of marches on Olundar.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
 - A Deadwalker Intent panel that telegraphs the next spawn surge, the countdown and size of the next march on Olundar, and how many dead are already marching on the capital.
@@ -30,7 +31,7 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Diplomatic Memory that tracks promises, grievances, and fulfilled pact commitments so long wars have political continuity.
 - Faction-specific promises for Dawnward wall guards, Veyr war caravans, and Mireclan marsh routes, each with distinct costs, effects, and delayed follow-through demands.
 - Living-faction war aims that make Dawnward, Veyr, and Mireclan behavior visible before any Survival Pact.
-- Pact-based allied field orders for defending Olundar roads, reinforcing the capital, or harassing Deadwalker structures.
+- Pact-based allied field orders for defending Olundar roads, reinforcing the capital, harassing Deadwalker structures, or intercepting Hollow Crown marches.
 - Compact strategic map lenses for blight, roads, supply reach, Survival Pact vision, and aftermath mission targets.
 - Fog of war with visible and previously revealed states.
 - Procedural topography: plains, forests, hills, mountains, rivers, marshes, ruins, roads, and grave-blight.
@@ -59,7 +60,7 @@ npm start
 
 Then open the local URL printed by the server, usually `http://localhost:4173`.
 
-No package install is required because this prototype has no third-party runtime dependencies.
+Run `npm install` once to fetch PixiJS for the premium rendering overlay. After that, `npm run quality:check` and `npm start` are enough for local play.
 Browsers that support installation will expose an **Install** button after the app is eligible; the service worker keeps the app shell available for offline reloads after the first visit.
 
 ## Controls
@@ -71,7 +72,7 @@ Browsers that support installation will expose an **Install** button after the a
 - Select an engineer and choose a building order, then click the engineer’s tile or an adjacent valid tile.
 - Select a city or military building to train units.
 - Select an Olundaran building to upgrade it when resources allow.
-- Pull wounded units back beside a city or outpost (a Sun Shrine heals faster) and hold them clear of the enemy to rally and recover HP between turns.
+- Pull wounded units back beside a city, outpost, or rally banner (a Sun Shrine heals faster) and hold them clear of the enemy to rally and recover HP between turns.
 - Watch the **Deadwalker Intent** panel for the countdown and size of the next march on Olundar Prime, then position walls, towers, and reserves before it lands.
 - Press `N` or click **Next Unit** to cycle to the next ready unit.
 - Press `E` to end the turn; if units are idle, press `E` again or use `Shift + E` to confirm.
@@ -82,12 +83,12 @@ Browsers that support installation will expose an **Install** button after the a
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
 - Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, alliance vision, and active aftermath missions.
 - When the **Crisis Council** appears, choose one ruling per event; some rulings create delayed aftermath cards a few turns later, unaffordable choices are disabled, and recent rulings stay visible for a few turns.
-- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; completed dispatches show a compact result banner with the reward and follow-up marker when one opens; the completed list can switch between recent outcomes and older archived outcomes, archive outcomes can be filtered by repair, escort, raid, or accord site type, searched by text/turn/reward, sorted newest-first or oldest-first, and grouped by route chain or origin ruling; grouped archives can switch between full details and summary-only review, ruling groups keep compact reward and follow-up marker totals visible, **Site** refocuses a completed outcome on the Missions lens, and the tile panel shows the completed-site receipt; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
+- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; completed dispatches show a compact result banner with the reward and follow-up marker when one opens; the completed list can switch between recent outcomes and older archived outcomes, archive outcomes can be filtered by repair, escort, raid, or accord site type, searched by text/turn/reward, sorted newest-first or oldest-first, grouped by route chain or origin ruling, and copied to clipboard as a campaign chronicle; grouped archives can switch between full details and summary-only review, ruling groups keep compact reward and follow-up marker totals visible, **Site** refocuses a completed outcome on the Missions lens, and the tile panel shows the completed-site receipt; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
 - Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
 - Promise Demands can appear a few turns after a faction promise; answer them to deepen trust and gain practical help, or ignore them to save resources and accept a recorded grievance.
-- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement.
+- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement, including intercepting Hollow Crown marches before they reach Olundar Prime.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
@@ -165,12 +166,12 @@ olundar_game/
 - Combat damages units and enforces the boss-before-portal rule.
 - Deadwalker marches dispatch on schedule, tag the horde to hunt Olundar Prime, respect their difficulty size cap, and deliver real pressure to the capital.
 - Deadwalker pressure scales coherently with difficulty: marches arrive sooner on harder presets, and a neglected capital falls sooner on Hollow Crown than on Chronicle.
-- Wounded living units rally and heal near friendly havens, clamp exactly to max HP, and gain nothing from resting in the open.
+- Wounded living units rally and heal near friendly havens and rally banners, clamp exactly to max HP, and gain nothing from resting in the open.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.
 
 ## Suggested next production steps
 
-1. Let allied field orders intercept incoming marches so a coalition can physically blunt the Hollow Crown's columns before they reach Olundar.
-2. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
-3. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
+1. Let intercept marches create visible coalition battle reports when allied units destroy marching columns before they reach Olundar.
+2. Add rally-banner upgrade tiers that project a wider healing radius or a one-turn emergency triage burst after a crisis ruling.
+3. Add chronicle export presets for ruling-group summaries and route-chain war diaries.

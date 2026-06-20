@@ -910,6 +910,24 @@ check('pact field orders steer allied AI', () => {
   const afterSpear = harass.units.find((unit) => unit.id === spear.id);
   const afterDistance = Math.abs(afterSpear.x - bonePit.x) + Math.abs(afterSpear.y - bonePit.y);
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
+
+  const intercept = createGame('quality-field-order-intercept');
+  intercept.factions.dawn.discovered = true;
+  intercept.factions.olundar.pacts.dawn = true;
+  intercept.factions.dawn.pacts.olundar = true;
+  intercept.factions.olundar.relations.dawn = 45;
+  intercept.factions.dawn.relations.olundar = 45;
+  const marcher = addUnit(intercept, 'boneThrall', 'dead', 20, 16, { name: 'March Thrall' });
+  marcher.march = true;
+  const interceptSpear = intercept.units.find((unit) => unit.faction === 'dawn' && unit.type === 'spearGuard');
+  const interceptBefore = Math.abs(interceptSpear.x - marcher.x) + Math.abs(interceptSpear.y - marcher.y);
+  const interceptOrder = setFieldOrder(intercept, 'dawn', 'interceptMarches');
+  assert(interceptOrder.ok, interceptOrder.reason || 'Intercept order setup failed.');
+  assert(FIELD_ORDERS.interceptMarches?.name === 'Intercept Marches', 'Intercept Marches field order must exist in content.');
+  endTurn(intercept);
+  const interceptAfter = intercept.units.find((unit) => unit.id === interceptSpear.id);
+  const interceptDistance = Math.abs(interceptAfter.x - marcher.x) + Math.abs(interceptAfter.y - marcher.y);
+  assert(interceptDistance < interceptBefore, 'Intercept Marches should move allied units toward marching dead.');
 });
 
 check('living faction war aims guide pre-pact behavior', () => {
@@ -1406,6 +1424,30 @@ check('wounded living units rally near friendly havens', () => {
   assert(havenAfter.hp <= havenAfter.maxHp, 'Rally healing must never exceed max HP.');
   assert(clampAfter && clampAfter.hp === clampAfter.maxHp, 'Rally healing should clamp exactly to max HP.');
   assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'A unit resting far from any haven should not passively heal.');
+});
+
+check('rally banners extend frontier rally healing', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-rally-banner' });
+  const banner = addBuilding(state, 'rallyBanner', 'olundar', 18, 16, { complete: true });
+  const wounded = addUnit(state, 'legionary', 'olundar', banner.x, banner.y + 1, { name: 'Frontier Legion' });
+  wounded.hp = 4;
+  const exposed = addUnit(state, 'legionary', 'olundar', 12, 12, { name: 'Open Field Legion' });
+  exposed.hp = 4;
+  const exposedBefore = exposed.hp;
+  endTurn(state);
+  const woundedAfter = state.units.find((u) => u.id === wounded.id);
+  const exposedAfter = state.units.find((u) => u.id === exposed.id);
+  assert(BUILDING_TYPES.rallyBanner?.name === 'Rally Banner', 'Rally Banner building must exist in content.');
+  assert(woundedAfter && woundedAfter.hp > 4, 'A wounded unit beside a rally banner should heal.');
+  assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'Open-field units should not heal at a distant rally banner.');
+});
+
+check('mission archive chronicle export is wired in the UI', () => {
+  const mainSource = readProjectFile('src/main.js');
+  assert(mainSource.includes('function missionArchiveChronicleText'), 'Mission archive chronicle builder must exist.');
+  assert(mainSource.includes('data-action="export-mission-archive-chronicle"'), 'Archive chronicle export button must exist.');
+  assert(mainSource.includes('function exportMissionArchiveChronicle'), 'Archive chronicle export handler must exist.');
+  assert(mainSource.includes('Olundar Campaign Chronicle'), 'Archive chronicle export must include a campaign heading.');
 });
 
 check('24-turn simulation remains stable', () => {

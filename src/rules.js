@@ -2962,15 +2962,25 @@ function rallyHealAmount(state, unit) {
   let rally = 0;
   if (nearFriendlyHaven(state, unit.x, unit.y)) rally += 2;
   if (nearBuilding(state, unit.x, unit.y, 'shrine', 'olundar', 2)) rally += 1;
+  if (nearBuilding(state, unit.x, unit.y, 'rallyBanner', 'olundar', 1 + (rallyBannerAt(state, unit.x, unit.y)?.upgraded || 0))) rally += 1;
   if (rally > 0 && unit.fortified > 0) rally += 1;
   return rally;
+}
+
+function rallyBannerAt(state, x, y) {
+  return state.buildings.find((b) => (
+    b.faction === 'olundar'
+    && b.type === 'rallyBanner'
+    && b.turnsLeft <= 0
+    && manhattan(b.x, b.y, x, y) <= 1 + (b.upgraded || 0)
+  )) || null;
 }
 
 function nearFriendlyHaven(state, x, y) {
   return state.buildings.some((b) => (
     b.faction === 'olundar'
     && b.turnsLeft <= 0
-    && ['city', 'outpost'].includes(b.type)
+    && ['city', 'outpost', 'rallyBanner'].includes(b.type)
     && manhattan(b.x, b.y, x, y) <= 1 + (b.upgraded || 0)
   ));
 }
@@ -3196,6 +3206,8 @@ function runLivingAiTurn(state, factionId) {
       aiMoveToward(state, unit, orderTarget.x, orderTarget.y);
       if (fieldOrder === 'harassDeadworks') {
         recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
+      } else if (fieldOrder === 'interceptMarches') {
+        recordFieldOrderFulfillment(state, factionId, 'interceptMarches', 'March Intercepted', `${faction.name} engaged a Hollow Crown column under pact orders.`, 2);
       } else if (fieldOrder === 'defendRoads') {
         recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
       }
@@ -3270,6 +3282,11 @@ function factionWarAimTarget(state, unit, factionId, aimId) {
 
 function fieldOrderTarget(state, unit, orderId) {
   if (!orderId) return null;
+  if (orderId === 'interceptMarches') {
+    return nearestMarchingDead(state, unit.x, unit.y, 44)
+      || nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 12)
+      || nearestTargetFaction(state, unit.x, unit.y, 'dead', 24);
+  }
   if (orderId === 'harassDeadworks') {
     return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
   }
@@ -3280,6 +3297,14 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
   }
   return null;
+}
+
+function nearestMarchingDead(state, x, y, maxDistance = Infinity) {
+  return state.units
+    .filter((unit) => unit.faction === 'dead' && unit.march)
+    .map((unit) => ({ kind: 'unit', ref: unit, x: unit.x, y: unit.y, dist: manhattan(x, y, unit.x, unit.y) }))
+    .filter((target) => target.dist <= maxDistance)
+    .sort((a, b) => a.dist - b.dist)[0] || null;
 }
 
 function easternScoutTarget(state, x, y) {

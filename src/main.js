@@ -125,11 +125,12 @@ const MISSION_ARCHIVE_DETAIL_MODES = [
   { id: 'summary', label: 'Summary' }
 ];
 const PACT_ACCEPTANCE_RELATION = 35;
-const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'rallyBanner', 'outpost'];
 const BUILD_DOCTRINE_GROUPS = [
   { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
   { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'outpost'] },
   { label: 'Muster halls', meta: 'Infantry, bows, cavalry, siege', types: ['barracks', 'archeryYard', 'stable', 'workshop'] },
+  { label: 'Frontier support', meta: 'Rally healing on the siege line', types: ['rallyBanner'] },
   { label: 'Imperial civic works', meta: 'Morale and influence', types: ['shrine'] }
 ];
 
@@ -663,6 +664,7 @@ function missionHistoryMarkup(missions) {
       ${filter === 'archive' ? missionArchiveSortMarkup(sortOrder) : ''}
       ${filter === 'archive' ? missionArchiveGroupMarkup(groupMode) : ''}
       ${filter === 'archive' && groupMode !== 'flat' ? missionArchiveDetailMarkup(detailMode) : ''}
+      ${filter === 'archive' && archive.length ? missionArchiveExportMarkup() : ''}
       ${history.length ? historyMarkup : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
     </div>
@@ -679,6 +681,86 @@ function missionArchiveTypeFilterMarkup(archive, selected) {
       }).join('')}
     </div>
   `;
+}
+
+function missionArchiveExportMarkup() {
+  return `
+    <div class="mission-archive-export">
+      <button type="button" data-action="export-mission-archive-chronicle" title="Copy the filtered archive review as campaign chronicle text">Copy chronicle</button>
+    </div>
+  `;
+}
+
+function missionArchiveChronicleText(missions, typeFilter, search, sortOrder, groupMode, detailMode) {
+  const archive = sortedArchiveMissions(filteredArchiveMissions(missions.archive, typeFilter, search), sortOrder);
+  const lines = [
+    `Olundar Campaign Chronicle — Turn ${state.turn}`,
+    missionArchiveStatusLabel(typeFilter, search, sortOrder, groupMode, detailMode),
+    `${archive.length} archived field task${archive.length === 1 ? '' : 's'}`
+  ];
+  if (!archive.length) {
+    lines.push('No completed field tasks match the current archive filter.');
+    return lines.join('\n');
+  }
+  if (groupMode === 'flat') {
+    for (const mission of archive) lines.push(missionArchiveChronicleLine(mission));
+    return lines.join('\n');
+  }
+  for (const group of missionArchiveGroups(archive)) {
+    lines.push('');
+    lines.push(group.title);
+    if (groupMode === 'rulings') {
+      const summary = missionArchiveGroupRewardSummary(group.records);
+      lines.push(`Rewards: ${summary.rewards}; Follow-ups: ${summary.followUps}`);
+    }
+    if (detailMode === 'summary') {
+      lines.push(`${group.records.length} completed task${group.records.length === 1 ? '' : 's'}.`);
+      continue;
+    }
+    for (const mission of group.records) lines.push(missionArchiveChronicleLine(mission));
+  }
+  return lines.join('\n');
+}
+
+function missionArchiveChronicleLine(mission) {
+  const parts = [
+    `T${mission.completedTurn} ${mission.name}`,
+    mission.context,
+    mission.reward,
+    mission.originLabel ? `Ruling: ${mission.originLabel}` : '',
+    mission.completedBy ? `By ${mission.completedBy}` : '',
+    mission.site ? `Site ${mission.site}` : ''
+  ].filter(Boolean);
+  return `- ${parts.join(' — ')}`;
+}
+
+async function exportMissionArchiveChronicle() {
+  const missions = getAftermathMissions(state);
+  const text = missionArchiveChronicleText(
+    missions,
+    selectedMissionArchiveType(),
+    normalizedMissionArchiveSearch(),
+    selectedMissionArchiveSortOrder(),
+    selectedMissionArchiveGroupMode(),
+    selectedMissionArchiveDetailMode()
+  );
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      toast('Campaign chronicle copied to clipboard.');
+      return;
+    }
+  } catch {
+    // Fall through to download fallback.
+  }
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `olundar-chronicle-turn-${state.turn}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+  toast('Campaign chronicle downloaded.');
 }
 
 function missionArchiveSearchMarkup(search) {
@@ -1811,8 +1893,24 @@ function deadwalkerIntentCard() {
       tone: 'primary'
     }));
   }
+  const pactIntercept = recommendedPactInterceptCommand();
+  if (pactIntercept) {
+    actions.appendChild(orderButton('Intercept march', `${pactIntercept.entry.name}: ${pactIntercept.order.name}`, () => runAction(() => executePactFieldOrder(pactIntercept.entry, pactIntercept.order), 'diplomacy'), {
+      tone: 'primary'
+    }));
+  }
   card.appendChild(actions);
   return card;
+}
+
+function recommendedPactInterceptCommand() {
+  if (!pactCommandMarchThreat()) return null;
+  const entry = getDiplomacyLedger(state).entries.find((item) => (
+    item.discovered && item.pact && !item.atWar && item.fieldOrders.some((order) => order.id === 'interceptMarches' && !order.active)
+  ));
+  if (!entry) return null;
+  const order = entry.fieldOrders.find((item) => item.id === 'interceptMarches');
+  return order ? { entry, order } : null;
 }
 
 function currentDeadwalkerIntent() {
@@ -2338,6 +2436,7 @@ function buildDoctrineRecommendations(builder) {
     !has('mine') ? { type: 'mine', label: 'Claim iron hill', meta: 'Iron for legions and siege' } : null,
     !has('archeryYard') ? { type: 'archeryYard', label: 'Raise archery yard', meta: 'Ranged kill zone' } : null,
     !has('shrine') && state.factions.olundar.resources.influence <= 3 ? { type: 'shrine', label: 'Consecrate Sun Shrine', meta: 'Influence and morale' } : null,
+    !has('rallyBanner') && mappedPercent() >= 18 && pactCommandKnownDeadPressure() ? { type: 'rallyBanner', label: 'Raise rally banner', meta: 'Frontier rally healing' } : null,
     !has('outpost') && mappedPercent() >= 12 ? { type: 'outpost', label: 'Plant frontier outpost', meta: 'Forward sight and muster' } : null,
     !has('wall') ? { type: 'wall', label: 'Close a kill gate', meta: 'Chokepoint defense' } : null
   ].filter(Boolean);
@@ -3552,10 +3651,17 @@ function currentPactFieldCommand() {
 }
 
 function recommendedPactFieldOrderId(entry) {
+  if (pactCommandMarchThreat()) return 'interceptMarches';
   if (pactCommandCapitalThreat()) return 'reinforceCapital';
   if (pactCommandKnownDeadPressure()) return 'harassDeadworks';
   if (entry.id === 'dawn') return 'defendRoads';
   return state.turn <= 8 ? 'defendRoads' : 'reinforceCapital';
+}
+
+function pactCommandMarchThreat() {
+  const campaign = getDeadwalkerCampaign(state);
+  if (campaign.marchingCount > 0) return true;
+  return state.units.some((unit) => unit.faction === 'dead' && unit.march && (isVisible(state, unit.x, unit.y) || isRevealedTile(unit.x, unit.y)));
 }
 
 function pactCommandKnownDeadPressure() {
@@ -3576,14 +3682,17 @@ function executePactFieldOrder(entry, order) {
   const result = setFieldOrder(state, entry.id, order.id);
   if (!result.ok) return result;
   activeMapLens = 'alliance';
-  const targetTile = diplomacyOpportunityTarget(entry.id);
+  const campaign = getDeadwalkerCampaign(state);
+  const targetTile = order.id === 'interceptMarches' && campaign.closest
+    ? { x: campaign.closest.x, y: campaign.closest.y, name: campaign.closest.name, type: 'march' }
+    : diplomacyOpportunityTarget(entry.id);
   if (targetTile) {
     state.cameraFocusTile = { x: targetTile.x, y: targetTile.y };
   }
   const faction = state.factions[entry.id] || {};
   return {
     ...result,
-    reason: `${entry.name}: ${order.name}. Alliance lens shows the shared front.`,
+    reason: `${entry.name}: ${order.name}. ${order.id === 'interceptMarches' ? 'Alliance lens centers the marching column.' : 'Alliance lens shows the shared front.'}`,
     strategicImpact: targetTile ? {
       type: 'fieldOrder',
       x: targetTile.x,
@@ -5046,6 +5155,13 @@ function buildingPortraitSvg(building) {
         <path class="portrait-road-edge" d="M12 55c4-18 10-34 26-49M31 57c1-17 4-29 18-46"/>
         <path class="portrait-banner" d="M40 18h11l-3 4 3 4H40z"/>
       `);
+    case 'rallyBanner':
+      return portraitSvg(`
+        <path class="portrait-hill" d="M7 50c12-7 25-8 50-4v11H7z"/>
+        <path class="portrait-tent" d="M18 52l14-22 14 22z"/>
+        <path class="portrait-cross" d="M30 34v10M26 38h8"/>
+        <path class="portrait-banner" d="M36 14h13l-4 4 4 4H36z"/>
+      `);
     case 'shrine':
       return portraitSvg(`
         <path class="portrait-hill" d="M7 50c11-8 24-9 50-4v11H7z"/>
@@ -5398,6 +5514,9 @@ missionPanel.addEventListener('click', (event) => {
   else if (target.dataset.action === 'set-mission-archive-detail') {
     missionArchiveDetailMode = MISSION_ARCHIVE_DETAIL_MODES.some((item) => item.id === target.dataset.detail) ? target.dataset.detail : 'details';
     render();
+  }
+  else if (target.dataset.action === 'export-mission-archive-chronicle') {
+    exportMissionArchiveChronicle();
   }
   else if (target.dataset.action === 'clear-mission-archive-search') {
     missionArchiveSearch = '';

@@ -244,6 +244,25 @@
     },
     "text": "Boosts influence and morale. Living units nearby resist grave-blight attrition."
   },
+  "rallyBanner": {
+    "id": "rallyBanner",
+    "name": "Rally Banner",
+    "glyph": "⚑",
+    "hp": 22,
+    "vision": 2,
+    "buildTurns": 2,
+    "cost": {
+      "wood": 18,
+      "stone": 4,
+      "gold": 6
+    },
+    "buildableBy": [
+      "engineer"
+    ],
+    "trains": [],
+    "income": {},
+    "text": "Forward rally point. Wounded legions recover beside this banner without retreating to the capital."
+  },
   "outpost": {
     "id": "outpost",
     "name": "Frontier Outpost",
