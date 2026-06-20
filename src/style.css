@@ -3566,6 +3566,39 @@ button:hover:not(:disabled) {
   color: #315d27;
 }
 
+.compact-envoy-doctrine {
+  gap: 0.30rem;
+  margin-bottom: 0.48rem;
+  padding: 0.52rem 0.58rem;
+}
+
+.compact-envoy-doctrine p {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.70rem;
+  line-height: 1.24;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.compact-envoy-doctrine > small {
+  display: none;
+}
+
+.compact-envoy-doctrine .doctrine-recommendation {
+  display: none;
+}
+
+.compact-envoy-doctrine .envoy-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.30rem;
+}
+
+.compact-envoy-doctrine .envoy-actions .order-button {
+  min-height: 2.24rem;
+  padding: 0.36rem 0.42rem;
+}
+
 .pact-command {
   border-color: rgba(47, 116, 141, 0.32);
   background:

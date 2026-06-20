@@ -2357,15 +2357,16 @@ function openingDoctrineCard() {
 function diplomacyOpportunityCard() {
   const opportunity = currentDiplomacyOpportunity();
   if (!opportunity || state.status !== 'playing') return null;
+  const compact = isCompactCommandRailMode();
   const card = document.createElement('article');
-  card.className = 'opening-doctrine diplomacy-doctrine';
+  card.className = `opening-doctrine diplomacy-doctrine ${compact ? 'compact-envoy-doctrine' : ''}`.trim();
   card.innerHTML = `
     <div class="opening-doctrine-head">
       <span>Envoy Opportunity</span>
       <b>${escapeHtml(opportunity.badge)}</b>
     </div>
-    <strong>${escapeHtml(opportunity.title)}</strong>
-    <p>${escapeHtml(opportunity.detail)}</p>
+    <strong>${escapeHtml(compact ? opportunity.compactTitle : opportunity.title)}</strong>
+    <p>${escapeHtml(compact ? opportunity.compactDetail : opportunity.detail)}</p>
     <small>${escapeHtml(opportunity.phase)}</small>
     <div class="doctrine-recommendation">
       <span>Diplomatic Order</span>
@@ -2399,6 +2400,8 @@ function currentDiplomacyOpportunity() {
     detail: `${entry.name} has enough trust for an oath offer to become a Survival Pact. Shared vision and emergency aid should not be buried below routine field orders.`,
     phase: 'Diplomacy into survival',
     recommendation: 'Offer Survival Pact',
+    compactTitle: `Pact with ${entry.name}`,
+    compactDetail: 'Bind shared sight now; field orders unlock after the pact.',
     meta: `${entry.posture.label} - ${entry.advice}`,
     cost: action.cost
   };
