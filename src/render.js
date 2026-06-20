@@ -228,6 +228,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
+  drawFieldCommandBanners(ctx, state, layout);
   drawSelectedUnitCommandPresence(ctx, state, layout);
   drawSelection(ctx, state, layout, hoverTile);
   drawOpeningOrderForeground(ctx, state, layout, openingOrderOverlay);
@@ -3843,6 +3844,172 @@ function drawUnits(ctx, state, layout) {
     const { x, y, s } = tileBounds(layout, unit.x, unit.y);
     drawUnitSprite(ctx, unit, x, y, s, state);
   }
+}
+
+function drawFieldCommandBanners(ctx, state, layout) {
+  const budget = renderBudget(layout);
+  const entries = fieldCommandBannerEntries(state, layout, budget);
+  const placed = [];
+  ctx.save();
+  for (const entry of entries) {
+    const rect = drawFieldCommandBanner(ctx, entry, layout, budget, placed);
+    if (rect) placed.push(rect);
+  }
+  ctx.restore();
+}
+
+function fieldCommandBannerEntries(state, layout, budget) {
+  const window = cameraTileWindow(layout, 1);
+  const entries = [];
+  for (const building of state.buildings) {
+    if (!isVisible(state, building.x, building.y) || !isInTileWindow(building, window)) continue;
+    const meta = fieldCommandBannerMeta(state, building, 'building');
+    if (meta) entries.push({ kind: 'building', item: building, ...meta });
+  }
+  for (const unit of state.units) {
+    if (!isVisible(state, unit.x, unit.y) || !isInTileWindow(unit, window)) continue;
+    const meta = fieldCommandBannerMeta(state, unit, 'unit');
+    if (meta) entries.push({ kind: 'unit', item: unit, ...meta });
+  }
+  const limit = budget.compact ? 7 : 11;
+  return entries
+    .sort((a, b) => b.priority - a.priority || (a.item.x + a.item.y) - (b.item.x + b.item.y))
+    .slice(0, limit);
+}
+
+function fieldCommandBannerMeta(state, item, kind) {
+  const selected = kind === 'unit'
+    ? state.selectedUnitId === item.id
+    : state.selectedBuildingId === item.id;
+  const ally = item.faction !== 'olundar' && Boolean(state.factions.olundar.pacts?.[item.faction]);
+  const hostile = item.faction !== 'olundar' && isEnemy(state, 'olundar', item.faction);
+  const color = FACTION_COLORS[item.faction] || '#f0c866';
+  if (selected) return null;
+  if (kind === 'unit') {
+    if (hostile) return { tone: 'threat', kicker: 'THREAT', title: fieldCommandBannerTitle(item), color, priority: 94 };
+    if (ally) return { tone: 'ally', kicker: 'PACT ALLY', title: fieldCommandBannerTitle(item), color, priority: 86 };
+    return null;
+  }
+  if (item.type === 'portal') return { tone: 'threat', kicker: 'PORTAL', title: item.name || 'Hollow Gate', color, priority: 98 };
+  if (hostile && ['bonePit', 'graveForge', 'necropolis'].includes(item.type)) return { tone: 'threat', kicker: 'DEADWORK', title: fieldCommandBannerTitle(item), color, priority: 90 };
+  if (item.type === 'city') {
+    const kicker = item.faction === 'olundar' ? 'CAPITAL' : ally ? 'PACT CITY' : hostile ? 'ENEMY CITY' : 'CITY';
+    return { tone: item.faction === 'olundar' ? 'ready' : ally ? 'ally' : hostile ? 'threat' : 'neutral', kicker, title: fieldCommandBannerTitle(item), color, priority: item.faction === 'olundar' ? 92 : 84 };
+  }
+  if (ally && ['watchtower', 'barracks', 'outpost'].includes(item.type)) return { tone: 'ally', kicker: 'ALLY HOLD', title: fieldCommandBannerTitle(item), color, priority: 70 };
+  return null;
+}
+
+function fieldCommandBannerTitle(item) {
+  const base = item.name || BUILDING_TYPES[item.type]?.name || UNIT_TYPES[item.type]?.name || item.type || 'Contact';
+  return base.replace(/^Olundaran /, '').replace(/^The /, '');
+}
+
+function drawFieldCommandBanner(ctx, entry, layout, budget, placed) {
+  const item = entry.item;
+  const bounds = tileBounds(layout, item.x, item.y);
+  const s = layout.tileSize;
+  const compact = budget.compact || s < 38;
+  const centerX = bounds.cx;
+  const y = bounds.cy - s * (entry.kind === 'building' ? (compact ? 1.12 : 1.30) : (compact ? 1.02 : 1.18));
+  const w = Math.max(compact ? 48 : 62, Math.min(compact ? s * 1.34 : s * 1.72, s * (entry.title.length > 12 ? 1.82 : 1.50)));
+  const h = Math.max(compact ? 18 : 22, s * (compact ? 0.34 : 0.38));
+  const x = centerX - w * 0.5;
+  const rect = { x: x - 3, y: y - h * 0.5 - 3, w: w + 6, h: h + 6, priority: entry.priority };
+  if (placed.some((other) => fieldBannerOverlaps(rect, other)) && entry.priority < 92) return null;
+
+  const color = entry.color || '#f0c866';
+  const parchment = entry.tone === 'threat' ? '#fff0e5' : entry.tone === 'ally' ? '#f0fbff' : '#fffbe8';
+  const rim = entry.tone === 'threat' ? '#9f2d20' : entry.tone === 'ally' ? '#1d7d97' : '#806334';
+  ctx.save();
+  ctx.shadowColor = entry.tone === 'threat' ? 'rgba(128, 28, 22, 0.30)' : 'rgba(31, 54, 42, 0.24)';
+  ctx.shadowBlur = Math.max(4, s * 0.09);
+  ctx.shadowOffsetY = Math.max(2, s * 0.04);
+  roundRectPath(ctx, x, y - h * 0.5, w, h, h * 0.34);
+  const fill = ctx.createLinearGradient(x, y - h * 0.5, x, y + h * 0.5);
+  fill.addColorStop(0, '#ffffff');
+  fill.addColorStop(0.42, parchment);
+  fill.addColorStop(1, colorMix(color, '#ffffff', 0.84));
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = colorMix(rim, '#ffffff', 0.28);
+  ctx.lineWidth = Math.max(1, s * 0.018);
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  roundRectPath(ctx, x + 2, y - h * 0.5 + 2, Math.max(6, w * 0.10), h - 4, h * 0.26);
+  ctx.fill();
+  drawFieldBannerPennon(ctx, x + Math.max(7, w * 0.10), y, h, color, entry.tone);
+  drawFieldBannerText(ctx, entry, x, y, w, h, compact);
+  drawFieldBannerVitalPips(ctx, entry, x, y, w, h, color);
+  ctx.restore();
+  return rect;
+}
+
+function drawFieldBannerPennon(ctx, x, y, h, color, tone) {
+  const pole = Math.max(9, h * 0.58);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(50, 31, 16, 0.62)';
+  ctx.lineWidth = Math.max(1, h * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h * 0.25);
+  ctx.lineTo(x, y - h * 0.34);
+  ctx.stroke();
+  ctx.fillStyle = tone === 'threat' ? colorMix(color, '#1c1116', 0.26) : colorMix(color, '#f6d46f', 0.20);
+  ctx.beginPath();
+  ctx.moveTo(x, y - h * 0.34);
+  ctx.lineTo(x + pole * 0.66, y - h * 0.25);
+  ctx.lineTo(x + pole * 0.42, y - h * 0.06);
+  ctx.lineTo(x + pole * 0.66, y + h * 0.12);
+  ctx.lineTo(x, y + h * 0.04);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFieldBannerText(ctx, entry, x, y, w, h, compact) {
+  const title = fieldBannerFitText(ctx, entry.title, compact ? 14 : 18);
+  const left = x + Math.max(17, w * 0.20);
+  const right = x + w - Math.max(8, w * 0.08);
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = entry.tone === 'threat' ? '#8f2418' : entry.tone === 'ally' ? '#155b72' : '#5c3a1b';
+  ctx.font = `900 ${Math.max(6.5, h * (compact ? 0.25 : 0.24))}px system-ui, sans-serif`;
+  ctx.fillText(entry.kicker, left, y - h * (compact ? 0.17 : 0.19), right - left);
+  ctx.fillStyle = '#243322';
+  ctx.font = `800 ${Math.max(7.5, h * (compact ? 0.32 : 0.34))}px system-ui, sans-serif`;
+  ctx.fillText(title, left, y + h * (compact ? 0.16 : 0.17), right - left);
+  ctx.restore();
+}
+
+function drawFieldBannerVitalPips(ctx, entry, x, y, w, h, color) {
+  const item = entry.item;
+  const pct = Number.isFinite(item.hp) && Number.isFinite(item.maxHp) && item.maxHp > 0
+    ? Math.max(0, Math.min(1, item.hp / item.maxHp))
+    : 1;
+  const px = x + w - Math.max(11, h * 0.42);
+  const py = y - h * 0.32;
+  const r = Math.max(2.2, h * 0.09);
+  ctx.save();
+  for (let i = 0; i < 3; i += 1) {
+    ctx.fillStyle = pct >= (i + 1) / 3 ? colorMix(color, '#ffffff', i * 0.12) : 'rgba(99, 77, 49, 0.22)';
+    ctx.beginPath();
+    ctx.arc(px + i * r * 2.35, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function fieldBannerFitText(ctx, text, maxChars) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxChars) return clean;
+  return `${clean.slice(0, Math.max(1, maxChars - 1)).trim()}...`;
+}
+
+function fieldBannerOverlaps(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 function drawSelectedUnitCommandPresence(ctx, state, layout) {
