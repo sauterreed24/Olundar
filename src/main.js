@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES, exportContentTables, reloadContentTables, validateAllContentTables } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
@@ -490,89 +490,20 @@ function applyGuideHighlights(guide) {
 
 function guideHighlightTargets(stepId) {
   const map = {
-    scout: ['#selectionPanel', '#actionPanel', '#gameCanvas'],
+    scout: ['#nextUnitTop', '#selectionPanel', '#actionPanel', '#gameCanvas'],
     engineer: ['#actionPanel', '#gameCanvas'],
     economy: ['#resourceBar', '#actionPanel'],
+    iron: ['#resourceBar', '#actionPanel'],
     diplomacy: ['#diplomacyPanel', '#actionPanel'],
+    pact: ['#diplomacyPanel', '#actionPanel'],
     deadwalker: ['#mapLensBar', '.map-help'],
-    endTurn: ['#endTurnTop', '#actionPanel']
+    endTurn: ['#endTurnTop', '#actionPanel', '#mapTurnReport']
   };
   return map[stepId] || ['#actionPanel', '#gameCanvas'];
 }
 
 function clearGuideHighlights() {
   document.querySelectorAll('.guide-ui-glow').forEach((el) => el.classList.remove('guide-ui-glow'));
-}
-
-function renderGuideHighlights() {
-  const guide = getFirstTurnsGuide(state);
-  document.querySelectorAll('.guide-ui-highlight').forEach((el) => el.classList.remove('guide-ui-highlight'));
-  if (!guide.visible || state.turn > 6) return;
-  const current = guide.steps.find((step) => step.id === guide.currentId);
-  if (!current) return;
-  const targets = guideHighlightTargets(current.id);
-  for (const selector of targets) {
-    document.querySelector(selector)?.classList.add('guide-ui-highlight');
-  }
-}
-
-function guideHighlightTargets(stepId) {
-  const map = {
-    scout: ['#nextUnitTop', '#selectionPanel', '#gameCanvas'],
-    engineer: ['#actionPanel', '#gameCanvas'],
-    iron: ['#resourceBar', '#actionPanel'],
-    pact: ['#diplomacyPanel', '#actionPanel'],
-    endTurn: ['#endTurnTop', '#mapTurnReport']
-  };
-  return map[stepId] || ['#actionPanel', '#gameCanvas'];
-}
-
-function renderTacticalPauseOverlay() {
-  const marchTurns = state.deadwalker?.nextMarchTurn ? state.deadwalker.nextMarchTurn - state.turn : 99;
-  const shouldPause = marchTurns <= 0 && state.status === 'playing';
-  marchPauseVisible = shouldPause;
-  let overlay = document.querySelector('#tacticalPauseOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'tacticalPauseOverlay';
-    overlay.className = 'tactical-pause-overlay';
-    canvas.parentElement?.appendChild(overlay);
-  }
-  overlay.hidden = !shouldPause;
-  if (shouldPause) {
-    overlay.innerHTML = `
-      <div class="tactical-pause-card">
-        <span class="pause-kicker">Deadwalker March</span>
-        <strong>The hollow legion has reached your frontier.</strong>
-        <p>Review ready forces, seal routes, and issue orders before the turn advances.</p>
-        <button type="button" data-action="dismiss-march-pause">Acknowledge</button>
-      </div>
-    `;
-    overlay.querySelector('[data-action="dismiss-march-pause"]')?.addEventListener('click', () => {
-      overlay.hidden = true;
-      marchPauseVisible = false;
-      playAudioCue('warning');
-    }, { once: true });
-  }
-}
-
-function renderCampaignIntroOverlay() {
-  let overlay = document.querySelector('#campaignIntroOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'campaignIntroOverlay';
-    overlay.className = 'campaign-intro-overlay';
-    canvas.parentElement?.appendChild(overlay);
-  }
-  overlay.hidden = !campaignIntroActive;
-  if (!campaignIntroActive) return;
-  overlay.innerHTML = `
-    <div class="campaign-intro-banner">
-      <span class="intro-sun">☀</span>
-      <h2>${escapeHtml(state.campaign?.scenarioName || 'Olundar')}</h2>
-      <p>${escapeHtml(state.campaign?.difficultyName || 'Standard')} · Turn ${state.turn}</p>
-    </div>
-  `;
 }
 
 function renderOperations() {
@@ -3129,25 +3060,6 @@ function handleResult(result, successCue = null) {
     spawnBuildComplete(result.building.x, result.building.y, result.building.id);
   }
   if (successCue === 'diplomacy') captureStrategicImpact(result);
-  if (successCue === 'attack') {
-    setCombatMusicActive(true);
-    triggerScreenShake(result.lethal ? 8 : 5, result.lethal ? 10 : 6);
-    spawnCombatImpact(
-      (result.targetX || 0) * 24 + canvas.width * 0.5,
-      (result.targetY || 0) * 16 + canvas.height * 0.35,
-      Boolean(result.lethal || result.targetDestroyed),
-      Number(result.damage) || 0
-    );
-  }
-  if (successCue === 'build' && result.building) {
-    spawnConstructionComplete(canvas.width * 0.5, canvas.height * 0.45);
-  }
-  if (successCue === 'move') {
-    setCombatMusicActive(false);
-    if (result.pathTiles?.length) {
-      tweenUnitMove(result.unitId, result.pathTiles, null, null);
-    }
-  }
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   return true;

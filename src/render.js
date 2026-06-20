@@ -1,5 +1,4 @@
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
-import { drawGameWithPixi } from './engine/pixi-renderer.js';
 import { idx, manhattan, neighbors4 } from './map.js';
 import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 import { getCamera } from './engine/camera.js';
@@ -243,6 +242,7 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
 
 export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
   canvas.__olundarState = state;
+  const ctx = canvas.getContext('2d');
   const layout = getLayout(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackdrop(ctx, canvas);
@@ -282,11 +282,6 @@ export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal',
   drawMiniMap(ctx, state, layout, lensId);
   drawHollowCrownCompass(ctx, state, layout);
   drawStatusRibbon(ctx, state, layout);
-}
-
-export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', routeOverlay = null, missionFocusOverlay = null, battleImpact = null, openingOrderOverlay = null, diplomacyOverlay = null) {
-  canvas.__olundarState = state;
-  drawGameWithPixi(canvas, state, drawGameToContext, hoverTile, lensId, routeOverlay, missionFocusOverlay, battleImpact, openingOrderOverlay, diplomacyOverlay);
 }
 
 function drawBattleImpact(ctx, state, layout, impact) {
