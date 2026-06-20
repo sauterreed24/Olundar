@@ -1,9 +1,11 @@
 export {
   AUDIO_STORAGE_KEY,
   DEFAULT_AUDIO_VOLUME,
+  AMBIENT_TILE_FADE_SECONDS,
   MUSIC_CROSSFADE_SECONDS,
   AUDIO_CUES,
   validateAudioCueRegistry,
+  ambientTileTargetsForContext,
   musicLayerTargetsForMode,
   initAudioPreference,
   audioIsEnabled,
@@ -14,6 +16,7 @@ export {
   setAudioEnabled,
   toggleAudio,
   playAudioCue,
+  updateAmbientTileSound,
   updateDynamicMusic,
   notifyCombatEngaged
 } from './engine/audio.js';

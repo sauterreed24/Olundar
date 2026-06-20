@@ -32,12 +32,18 @@ const MUSIC_MODE_MIXES = {
   tension: { exploration: 0.42, tension: 1, combat: 0 },
   combat: { exploration: 0.18, tension: 0.55, combat: 1 }
 };
+const AMBIENT_LAYER_FLOOR = 0.0001;
+export const AMBIENT_TILE_FADE_SECONDS = 0.9;
+const AMBIENT_TILE_LEVELS = { wind: 0.0045, water: 0.0038, crows: 0.0026, hammering: 0.0034 };
 
 let audioContext = null;
 let buses = {};
 let enabled = false;
 let busVolumes = { ...DEFAULT_BUS_VOLUMES };
 let musicLayers = { exploration: null, tension: null, combat: null };
+let ambientLayers = { wind: null, water: null, crows: null, hammering: null };
+let activeAmbientTargets = ambientTileTargetsForContext({ terrain: 'plains' });
+let activeAmbientSignature = '';
 let activeMusicMode = 'exploration';
 let combatEngaged = false;
 
@@ -87,6 +93,37 @@ export function musicLayerTargetsForMode(mode = 'exploration', levels = MUSIC_LA
   return targets;
 }
 
+export function ambientTileTargetsForContext(context = {}, levels = AMBIENT_TILE_LEVELS) {
+  const terrain = context.terrain || 'plains';
+  const blight = Number(context.blight || 0);
+  const weights = { wind: 0, water: 0, crows: 0, hammering: 0 };
+  const wet = terrain === 'river' || terrain === 'marsh' || context.nearWater || context.nearMarsh;
+  const blighted = terrain === 'blight' || blight >= 4 || context.blighted;
+  const openAir = ['plains', 'hills', 'mountains', 'forest', 'ruins'].includes(terrain);
+
+  if (terrain === 'plains') weights.wind = 1;
+  else if (openAir) weights.wind = 0.42;
+  if (wet) {
+    weights.water = terrain === 'river' ? 1 : 0.74;
+    weights.wind = Math.max(weights.wind, 0.18);
+  }
+  if (blighted) {
+    weights.crows = 1;
+    weights.wind = Math.max(weights.wind, 0.16);
+    weights.water *= 0.25;
+  }
+  if (context.construction || context.nearConstruction) {
+    weights.hammering = 1;
+    weights.wind = Math.max(Math.min(weights.wind, 0.42), 0.24);
+  }
+  if (!weights.wind && !weights.water && !weights.crows && !weights.hammering) weights.wind = 0.35;
+
+  return Object.fromEntries(Object.keys(AMBIENT_TILE_LEVELS).map((key) => {
+    const level = Number.isFinite(levels[key]) ? levels[key] : AMBIENT_TILE_LEVELS[key];
+    return [key, Math.max(AMBIENT_LAYER_FLOOR, level * (weights[key] || 0))];
+  }));
+}
+
 export function initAudioPreference(storage = null) {
   const store = storage || safeStorage();
   enabled = store?.getItem(AUDIO_STORAGE_KEY) === 'true';
@@ -128,7 +165,13 @@ export function setAudioEnabled(nextEnabled, storage = null) {
   }
 
   if (enabled) startMusicLayers();
-  else stopMusicLayers();
+  if (enabled) {
+    startAmbientLayers();
+    crossfadeAmbientLayers(activeAmbientTargets);
+  } else {
+    stopMusicLayers();
+    stopAmbientLayers();
+  }
 
   return enabled;
 }
@@ -189,6 +232,19 @@ export function notifyCombatEngaged(active = true) {
   updateDynamicMusic({ inCombat: active });
 }
 
+export function updateAmbientTileSound(context = {}) {
+  const targets = ambientTileTargetsForContext(context);
+  const signature = ambientTargetSignature(targets);
+  activeAmbientTargets = targets;
+  if (signature === activeAmbientSignature) return targets;
+
+  activeAmbientSignature = signature;
+  if (!enabled) return targets;
+  startAmbientLayers();
+  crossfadeAmbientLayers(targets);
+  return targets;
+}
+
 function ensureMixer() {
   const AudioContextClass = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
   if (!AudioContextClass) return null;
@@ -244,6 +300,44 @@ function stopMusicLayers() {
   musicLayers = { exploration: null, tension: null, combat: null };
 }
 
+function startAmbientLayers() {
+  const context = ensureMixer();
+  if (!context || ambientLayers.wind) return;
+
+  ambientLayers.wind = createAmbientBed(context, [
+    { frequency: 92, type: 'sine' },
+    { frequency: 137, type: 'triangle' }
+  ], AMBIENT_TILE_LEVELS.wind);
+  ambientLayers.water = createAmbientBed(context, [
+    { frequency: 174, type: 'sine' },
+    { frequency: 261.63, type: 'triangle' }
+  ], AMBIENT_TILE_LEVELS.water);
+  ambientLayers.crows = createAmbientBed(context, [
+    { frequency: 587.33, type: 'sawtooth' },
+    { frequency: 739.99, type: 'square' }
+  ], AMBIENT_TILE_LEVELS.crows);
+  ambientLayers.hammering = createAmbientBed(context, [
+    { frequency: 82.41, type: 'square' },
+    { frequency: 164.81, type: 'square' }
+  ], AMBIENT_TILE_LEVELS.hammering);
+  crossfadeAmbientLayers(activeAmbientTargets);
+}
+
+function stopAmbientLayers() {
+  for (const layer of Object.values(ambientLayers)) {
+    if (!layer) continue;
+    for (const node of layer.nodes) {
+      try {
+        if (typeof node.stop === 'function') node.stop();
+        node.disconnect();
+      } catch {
+        // Already stopped.
+      }
+    }
+  }
+  ambientLayers = { wind: null, water: null, crows: null, hammering: null };
+}
+
 function createMusicBed(context, lowFreq, highFreq, gainLevel, muted = true) {
   const gain = context.createGain();
   const startingGain = muted ? MUSIC_LAYER_FLOOR : gainLevel;
@@ -281,6 +375,22 @@ function createPercussionBed(context, gainLevel) {
   return { gain, nodes: [pulse, pulseGain, gain], level: gainLevel, target: MUSIC_LAYER_FLOOR };
 }
 
+function createAmbientBed(context, voices, gainLevel) {
+  const gain = context.createGain();
+  gain.gain.value = AMBIENT_LAYER_FLOOR;
+  gain.connect(buses.ambient);
+  const oscillators = voices.map((voice) => {
+    const oscillator = context.createOscillator();
+    oscillator.type = voice.type;
+    oscillator.frequency.value = voice.frequency;
+    oscillator.detune.value = voice.detune || 0;
+    oscillator.connect(gain);
+    oscillator.start();
+    return oscillator;
+  });
+  return { gain, nodes: [...oscillators, gain], level: gainLevel, target: AMBIENT_LAYER_FLOOR };
+}
+
 function crossfadeMusicLayers(mode) {
   const context = audioContext;
   if (!context) return;
@@ -289,7 +399,17 @@ function crossfadeMusicLayers(mode) {
 
   for (const [key, layer] of Object.entries(musicLayers)) {
     if (!layer?.gain) continue;
-    scheduleLayerCrossfade(layer, targets[key], now);
+    scheduleLayerCrossfade(layer, targets[key], now, MUSIC_CROSSFADE_SECONDS);
+  }
+}
+
+function crossfadeAmbientLayers(targets) {
+  const context = audioContext;
+  if (!context) return;
+  const now = context.currentTime;
+  for (const [key, layer] of Object.entries(ambientLayers)) {
+    if (!layer?.gain) continue;
+    scheduleLayerCrossfade(layer, targets[key], now, AMBIENT_TILE_FADE_SECONDS);
   }
 }
 
@@ -301,7 +421,7 @@ function currentMusicLayerLevels() {
   return levels;
 }
 
-function scheduleLayerCrossfade(layer, target, now) {
+function scheduleLayerCrossfade(layer, target, now, fadeSeconds = MUSIC_CROSSFADE_SECONDS) {
   const gainParam = layer.gain.gain;
   const safeTarget = Math.max(MUSIC_LAYER_FLOOR, target);
 
@@ -313,12 +433,18 @@ function scheduleLayerCrossfade(layer, target, now) {
       gainParam.cancelScheduledValues(now);
       gainParam.setValueAtTime(Math.max(MUSIC_LAYER_FLOOR, current || MUSIC_LAYER_FLOOR), now);
     }
-    gainParam.linearRampToValueAtTime(safeTarget, now + MUSIC_CROSSFADE_SECONDS);
+    gainParam.linearRampToValueAtTime(safeTarget, now + fadeSeconds);
     layer.target = safeTarget;
   } catch {
-    gainParam.setTargetAtTime(safeTarget, now, MUSIC_CROSSFADE_SECONDS / 3);
+    gainParam.setTargetAtTime(safeTarget, now, fadeSeconds / 3);
     layer.target = safeTarget;
   }
+}
+
+function ambientTargetSignature(targets) {
+  return Object.entries(targets)
+    .map(([key, value]) => `${key}:${Number(value || 0).toFixed(5)}`)
+    .join('|');
 }
 
 function playNoise(context, bus, startAt, gainLevel) {

@@ -45,7 +45,7 @@ import { describeSelection, describeTilePanel, drawGame, drawGameCore, getLayout
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 import { importSaveSnapshot } from './saveTransfer.js';
 import { applyContentBundle, getContentBundle } from './content.js';
-import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAudioVolume, setBusVolume, toggleAudio, updateDynamicMusic, notifyCombatEngaged } from './audio.js';
+import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAudioVolume, setBusVolume, toggleAudio, updateAmbientTileSound, updateDynamicMusic, notifyCombatEngaged } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
@@ -225,9 +225,46 @@ function render() {
 function syncDynamicAudio() {
   const campaign = getDeadwalkerCampaign(state);
   updateDynamicMusic({ marchCountdown: campaign.turnsToMarch, inCombat: Boolean(battleImpact?.type === 'unit') });
+  updateAmbientTileSound(ambientAudioContextForFocus());
   if (campaign.marchingCount > 0 && campaign.turnsToMarch <= 0 && !tacticalPauseVisible) {
     tacticalPauseVisible = true;
   }
+}
+
+function ambientAudioContextForFocus() {
+  const focus = hoverTile || lastTile;
+  if (!focus || !inMap(focus.x, focus.y) || !isVisible(state, focus.x, focus.y)) return { terrain: 'plains' };
+  const tile = tileAt(state, focus.x, focus.y);
+  if (!tile) return { terrain: 'plains' };
+  return {
+    terrain: tile.terrain,
+    blight: tile.blight || 0,
+    nearWater: nearbyAmbientTerrain(focus.x, focus.y, ['river', 'marsh']),
+    nearConstruction: nearbyAmbientConstruction(focus.x, focus.y)
+  };
+}
+
+function nearbyAmbientTerrain(x, y, terrainIds) {
+  const ids = new Set(terrainIds);
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (Math.abs(dx) + Math.abs(dy) > 1) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!inMap(nx, ny) || !isVisible(state, nx, ny)) continue;
+      const tile = tileAt(state, nx, ny);
+      if (tile && ids.has(tile.terrain)) return true;
+    }
+  }
+  return false;
+}
+
+function nearbyAmbientConstruction(x, y) {
+  return state.buildings.some((building) => (
+    building.turnsLeft > 0
+    && Math.abs(building.x - x) + Math.abs(building.y - y) <= 1
+    && isVisible(state, building.x, building.y)
+  ));
 }
 
 function renderTacticalPause() {
