@@ -276,9 +276,21 @@ function renderMapHelp() {
     ];
   const chips = [
     ...(directive ? [`<span class="next-directive"><b>Next</b> ${escapeHtml(directive.current.label)}</span>`] : []),
+    deadwalkerMapHelpChip(),
     ...hints
-  ];
+  ].filter(Boolean);
   mapHelp.innerHTML = chips.join('');
+}
+
+function deadwalkerMapHelpChip() {
+  if (state.status !== 'playing') return '';
+  const intent = currentDeadwalkerIntent();
+  if (!intent?.next) return '';
+  const compact = typeof window !== 'undefined' && window.innerWidth <= 620;
+  const when = intent.next.turn === state.turn + 1 ? 'next' : `T${intent.next.turn}`;
+  const label = intent.next.labels.slice(0, compact ? 1 : 2).join(', ');
+  const extra = intent.next.labels.length > (compact ? 1 : 2) ? ' +' : '';
+  return `<span class="deadwalker-directive"><b>Dead</b> ${escapeHtml(label)} ${escapeHtml(when)}${extra}</span>`;
 }
 
 function renderCouncil() {
@@ -1136,12 +1148,13 @@ function renderActions() {
   const placementCard = buildPlacementCard();
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
   const tacticalMoveCard = tacticalMoveOrdersCard(selectedUnit);
+  const deadwalkerIntent = deadwalkerIntentCard();
   const readyForcesCard = activeReadyForcesCard(selectedUnit);
   const musterCard = musterReadyCard(selectedBuilding);
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, tacticalMoveCard, doctrineCard, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -1600,6 +1613,170 @@ function focusMusterSite(buildingId) {
   playAudioCue('select');
   render();
   if (window.innerWidth <= 980) actionPanel.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
+}
+
+function deadwalkerIntentCard() {
+  if (state.status !== 'playing') return null;
+  const intent = currentDeadwalkerIntent();
+  if (!intent) return null;
+  const card = actionSection('Deadwalker Intent', intent.summary, 'deadwalker-intent-card');
+  const list = document.createElement('div');
+  list.className = 'deadwalker-intent-list';
+  list.innerHTML = intent.lines.map((line) => `
+    <span class="${escapeHtml(line.tone)}">
+      <b>${escapeHtml(line.kicker)}</b>
+      <small>${escapeHtml(line.text)}</small>
+    </span>
+  `).join('');
+  card.appendChild(list);
+
+  const actions = commandActions('deadwalker-intent-actions');
+  actions.appendChild(orderButton(intent.focusTarget ? 'Show threat' : 'Show blight lens', intent.focusTarget ? `${intent.focusTarget.name} front` : 'Read the eastern pressure line', () => focusDeadwalkerIntent(intent), {
+    tone: intent.focusTarget ? 'danger' : 'secondary'
+  }));
+  const defender = nearestReadyDefenderForIntent(intent);
+  if (defender) {
+    actions.appendChild(orderButton('Focus defender', `${defender.name} can still act`, () => focusReadyForce(defender.id), {
+      tone: 'primary'
+    }));
+  }
+  const counter = recommendedCounterMuster();
+  if (counter) {
+    actions.appendChild(orderButton('Muster counter', `${counter.unitDef.name} at ${counter.building.name || counter.buildingDef.name}`, () => queueMusterOrder(counter.building.id, counter.unitType), {
+      tone: 'primary'
+    }));
+  }
+  card.appendChild(actions);
+  return card;
+}
+
+function currentDeadwalkerIntent() {
+  const pressure = deadwalkerPressureSettings();
+  const next = nextDeadwalkerSurge(pressure);
+  const threats = knownDeadwalkerThreats();
+  const pressureCount = state.units.filter((unit) => unit.faction === 'dead').length + state.buildings.filter((building) => building.faction === 'dead').length;
+  const nearest = threats[0] || null;
+  const nextLabel = next ? `${next.turn === state.turn + 1 ? 'Next turn' : `Turn ${next.turn}`}: ${next.labels.join(', ')}` : 'No new surge in the next twelve turns';
+  const pressureLabel = nearest
+    ? `${nearest.name} ${nearest.distance} sector${nearest.distance === 1 ? '' : 's'} from ${nearest.targetName}.`
+    : `Portal pressure is ${pressureCount}; the front is still beyond direct sight.`;
+  const lines = [
+    { kicker: 'Surge', text: nextLabel, tone: next?.turn === state.turn + 1 ? 'danger' : 'warning' },
+    { kicker: 'Pressure', text: pressureLabel, tone: nearest ? 'danger' : 'warning' }
+  ];
+  if (nearest?.intent) lines.push({ kicker: 'Intent', text: nearest.intent, tone: nearest.canAttack ? 'danger' : 'info' });
+  return {
+    next,
+    nearest,
+    focusTarget: nearest,
+    pressureCount,
+    summary: nearest
+      ? `Known dead pressure: ${pressureCount}. ${nearest.name} is the nearest visible/revealed threat.`
+      : `Hollow Crown pressure: ${pressureCount}. ${nextLabel}.`,
+    lines
+  };
+}
+
+function deadwalkerPressureSettings() {
+  return DIFFICULTY_PRESETS[state.campaign?.difficultyId]?.deadwalker || DIFFICULTY_PRESETS.standard.deadwalker;
+}
+
+function nextDeadwalkerSurge(pressure) {
+  const checks = [
+    { id: 'thrall', cadence: pressure.thrallEvery, label: UNIT_TYPES.boneThrall.name },
+    { id: 'archer', cadence: pressure.archerEvery, label: UNIT_TYPES.corpseArcher.name },
+    { id: 'knight', cadence: pressure.knightEvery, label: UNIT_TYPES.graveKnight.name },
+    { id: 'outpost', cadence: pressure.outpostEvery, label: 'Deadwork outpost' }
+  ].filter((item) => item.cadence > 0);
+  for (let turn = state.turn + 1; turn <= state.turn + 12; turn += 1) {
+    const labels = checks
+      .filter((item) => turn >= pressure.startTurn && turn % item.cadence === 0)
+      .map((item) => item.label);
+    if (labels.length) return { turn, labels };
+  }
+  return null;
+}
+
+function knownDeadwalkerThreats() {
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city') || state.buildings.find((building) => building.faction === 'olundar');
+  const threats = [
+    ...state.units
+      .filter((unit) => unit.faction === 'dead' && (isVisible(state, unit.x, unit.y) || isRevealedTile(unit.x, unit.y)))
+      .map((unit) => deadwalkerThreatEntry(unit, false, capital)),
+    ...state.buildings
+      .filter((building) => building.faction === 'dead' && (isVisible(state, building.x, building.y) || isRevealedTile(building.x, building.y)))
+      .map((building) => deadwalkerThreatEntry(building, true, capital))
+  ].filter(Boolean);
+  return threats.sort((a, b) => Number(!a.visible) - Number(!b.visible) || a.distance - b.distance || b.priority - a.priority);
+}
+
+function deadwalkerThreatEntry(entity, building, fallbackTarget) {
+  const target = nearestLivingEntityForThreat(entity.x, entity.y) || fallbackTarget;
+  if (!target) return null;
+  const def = building ? BUILDING_TYPES[entity.type] : UNIT_TYPES[entity.type];
+  const distance = gridDistance(entity.x, entity.y, target.x, target.y);
+  const range = building ? 2 : def?.range || 1;
+  const canAttack = distance <= range;
+  const kind = building ? 'deadwork' : def?.role || 'undead';
+  return {
+    id: entity.id,
+    building,
+    name: entity.name || def?.name || 'Deadwalker',
+    kind,
+    x: entity.x,
+    y: entity.y,
+    visible: isVisible(state, entity.x, entity.y),
+    distance,
+    targetName: target.name || BUILDING_TYPES[target.type]?.name || UNIT_TYPES[target.type]?.name || 'living target',
+    canAttack,
+    intent: canAttack
+      ? `Can attack ${target.name || 'a living target'} on the next Deadwalker turn.`
+      : building
+        ? `Projects pressure toward ${target.name || 'living ground'} and may damage nearby works.`
+        : `Likely marches toward ${target.name || 'living ground'} before striking.`,
+    priority: canAttack ? 10 : building ? 7 : 5
+  };
+}
+
+function nearestLivingEntityForThreat(x, y) {
+  return [
+    ...state.units.filter((unit) => unit.faction !== 'dead' && isEnemy(state, 'dead', unit.faction)),
+    ...state.buildings.filter((building) => building.faction !== 'dead' && isEnemy(state, 'dead', building.faction))
+  ].sort((a, b) => gridDistance(x, y, a.x, a.y) - gridDistance(x, y, b.x, b.y))[0] || null;
+}
+
+function nearestReadyDefenderForIntent(intent) {
+  const target = intent.focusTarget || state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  if (!target) return null;
+  const ready = getReadyOlundarUnits(state);
+  return ready.sort((a, b) => defenderScore(a, target) - defenderScore(b, target))[0] || null;
+}
+
+function defenderScore(unit, target) {
+  const tags = UNIT_TYPES[unit.type].tags || [];
+  const roleBias = tags.includes('ranged') ? -5 : tags.includes('spear') ? -4 : tags.includes('line') || tags.includes('shield') ? -3 : tags.includes('mounted') ? -2 : tags.includes('builder') ? 5 : 0;
+  return gridDistance(unit.x, unit.y, target.x, target.y) + roleBias;
+}
+
+function recommendedCounterMuster() {
+  const orders = musterReadyOrders();
+  return orders.find((order) => ['archer', 'spearGuard', 'legionary', 'cavalry'].includes(order.unitType)) || null;
+}
+
+function focusDeadwalkerIntent(intent) {
+  activeMapLens = 'blight';
+  const target = intent.focusTarget;
+  if (target) {
+    lastTile = { x: target.x, y: target.y };
+    hoverTile = lastTile;
+    state.cameraFocusTile = lastTile;
+    toast(`${target.name}: ${target.intent}`, target.canAttack ? 'bad' : 'info');
+  } else {
+    toast('Blight lens engaged. Scout east to turn the omen into visible targets.', 'info');
+  }
+  playAudioCue(target?.canAttack ? 'warning' : 'select');
+  render();
+  scrollBattlefieldIntoView();
 }
 
 function endTurnReviewCard() {

@@ -721,6 +721,19 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.map-help .deadwalker-directive {
+  border-color: rgba(143, 36, 24, 0.36);
+  background:
+    linear-gradient(180deg, rgba(255, 244, 225, 0.30), rgba(143, 36, 24, 0.14));
+  color: #ffe7c4;
+}
+
+.map-help .deadwalker-directive b {
+  margin-right: 0.22rem;
+  color: #fff4ca;
+  text-transform: uppercase;
+}
+
 .side {
   display: flex;
   flex-direction: column;
@@ -3670,6 +3683,87 @@ button:hover:not(:disabled) {
   font-weight: 900;
 }
 
+.deadwalker-intent-card {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.48rem;
+  padding: 0.58rem;
+  border: 1px solid rgba(143, 36, 24, 0.24);
+  border-left: 4px solid rgba(143, 36, 24, 0.78);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.98), rgba(237, 246, 230, 0.86)),
+    radial-gradient(circle at 100% 0%, rgba(210, 255, 175, 0.34), transparent 7.5rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 9px 20px rgba(85, 72, 55, 0.11);
+}
+
+.deadwalker-intent-card .order-section-head h3 {
+  color: #7d2719;
+}
+
+.deadwalker-intent-card .order-section-head p {
+  color: #465845;
+  font-size: 0.70rem;
+}
+
+.deadwalker-intent-list {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.deadwalker-intent-list span {
+  display: grid;
+  grid-template-columns: minmax(3.55rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.36rem;
+  min-width: 0;
+  padding: 0.34rem 0.42rem;
+  border: 1px solid rgba(143, 36, 24, 0.13);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255,255,253,0.92), rgba(248, 240, 219, 0.78)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.72), transparent 5.5rem);
+  color: #4f3123;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
+}
+
+.deadwalker-intent-list span.danger {
+  border-color: rgba(143, 36, 24, 0.20);
+  background:
+    linear-gradient(180deg, rgba(255, 249, 235, 0.94), rgba(238, 214, 188, 0.82)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.72), transparent 5.5rem);
+}
+
+.deadwalker-intent-list span.info {
+  border-color: rgba(36, 116, 142, 0.16);
+}
+
+.deadwalker-intent-list b {
+  color: #8f2418;
+  font-size: 0.60rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.deadwalker-intent-list small {
+  min-width: 0;
+  color: #46503f;
+  font-size: 0.64rem;
+  font-weight: 850;
+  line-height: 1.22;
+}
+
+.deadwalker-intent-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.30rem;
+  margin-top: 0.04rem;
+}
+
+.deadwalker-intent-actions .order-button {
+  min-height: 2.56rem;
+}
+
 .end-turn-review-card {
   display: grid;
   gap: 0.42rem;
@@ -3765,6 +3859,11 @@ button:hover:not(:disabled) {
     padding: 0.46rem;
   }
 
+  .deadwalker-intent-card {
+    gap: 0.34rem;
+    padding: 0.46rem;
+  }
+
   .ready-force-grid {
     gap: 0.22rem;
   }
@@ -3779,6 +3878,11 @@ button:hover:not(:disabled) {
   }
 
   .end-turn-review-actions {
+    grid-template-columns: 1fr;
+    gap: 0.24rem;
+  }
+
+  .deadwalker-intent-actions {
     grid-template-columns: 1fr;
     gap: 0.24rem;
   }
@@ -3840,6 +3944,15 @@ button:hover:not(:disabled) {
   }
 
   .end-turn-review-warnings small {
+    font-size: 0.58rem;
+  }
+
+  .deadwalker-intent-list span {
+    grid-template-columns: minmax(3.1rem, auto) minmax(0, 1fr);
+    gap: 0.28rem;
+  }
+
+  .deadwalker-intent-list small {
     font-size: 0.58rem;
   }
 
@@ -6331,6 +6444,17 @@ button:hover:not(:disabled),
   background:
     linear-gradient(180deg, rgba(255, 253, 236, 0.96), rgba(238, 218, 151, 0.78));
   color: #7b2c21;
+}
+
+.map-help .deadwalker-directive {
+  border-color: rgba(143, 36, 24, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 240, 0.98), rgba(246, 224, 201, 0.86));
+  color: #7d2719;
+}
+
+.map-help .deadwalker-directive b {
+  color: #8f2418;
 }
 
 .map-intel,
