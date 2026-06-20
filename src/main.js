@@ -158,6 +158,7 @@ let pixiBooted = false;
 let introPlaying = false;
 let tacticalPauseVisible = false;
 let lastMarchCountdown = 99;
+let tacticalPauseWarningTurn = null;
 
 function getCanvas() {
   return getPixiCanvas() || canvas;
@@ -226,9 +227,18 @@ function syncDynamicAudio() {
   const campaign = getDeadwalkerCampaign(state);
   updateDynamicMusic({ marchCountdown: campaign.turnsToMarch, inCombat: Boolean(battleImpact?.type === 'unit') });
   updateAmbientTileSound(ambientAudioContextForFocus());
-  if (campaign.marchingCount > 0 && campaign.turnsToMarch <= 0 && !tacticalPauseVisible) {
+  syncTacticalPauseWarning(campaign);
+}
+
+function syncTacticalPauseWarning(campaign) {
+  const countdownHitThree = lastMarchCountdown > 3 && campaign.turnsToMarch === 3;
+  const landedWithoutWarning = campaign.marchingCount > 0 && campaign.turnsToMarch <= 0 && tacticalPauseWarningTurn !== campaign.nextMarchTurn;
+  if ((countdownHitThree || landedWithoutWarning) && !tacticalPauseVisible) {
     tacticalPauseVisible = true;
+    tacticalPauseWarningTurn = campaign.nextMarchTurn;
   }
+  if (campaign.turnsToMarch > lastMarchCountdown) tacticalPauseWarningTurn = null;
+  lastMarchCountdown = campaign.turnsToMarch;
 }
 
 function ambientAudioContextForFocus() {
@@ -279,8 +289,14 @@ function renderTacticalPause() {
     overlay.className = 'tactical-pause-overlay';
     overlay.innerHTML = `
       <div class="tactical-pause-card" role="dialog" aria-modal="true" aria-labelledby="tacticalPauseTitle">
-        <h2 id="tacticalPauseTitle">Deadwalker March Lands</h2>
-        <p>The Hollow Crown columns have reached the frontier. Review your lines, then continue command.</p>
+        <span class="tactical-pause-kicker">Tactical Pause</span>
+        <h2 id="tacticalPauseTitle">Deadwalker March in 3 Turns</h2>
+        <p>The Hollow Crown is forming a column for Olundar Prime. Use these last orders to shape the battlefield before it moves.</p>
+        <ul>
+          <li>Pull wounded legions onto supplied tiles or Rally Banners.</li>
+          <li>Block road lanes with shields, walls, or pact allies.</li>
+          <li>Put archers and onagers behind the first contact line.</li>
+        </ul>
         <button type="button" id="tacticalPauseContinue">Resume Command</button>
       </div>
     `;
