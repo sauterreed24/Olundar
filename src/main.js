@@ -2783,7 +2783,7 @@ function blockedBuilderRecovery(builder, blockedLabel, nextLabel = blockedLabel)
       kind: 'fortify',
       unitId: guard.id,
       canExecute: true,
-      label: ironRecovery ? 'Hold for iron claim' : 'Hold while engineer readies',
+      label: ironRecovery ? 'Hold for iron route' : 'Hold while engineer readies',
       meta: ironRecovery ? `${blockedLabel} after engineer refresh` : `${blockedLabel} needs a fresh engineer next turn`,
       executeLabel: 'Do order',
       executeMeta: 'Fortify, then end turn',
@@ -2988,7 +2988,7 @@ function recommendedIronOrder() {
   const mine = recommendedMineBuild(engineer);
   if (mine) return openingBlockedInfrastructureAction(mine);
   if (engineer.hasActed) {
-    return blockedBuilderRecovery(engineer, 'Hill Mine route', 'Claim iron');
+    return blockedBuilderRecovery(engineer, 'Hill Mine route', 'Iron road');
   }
   const target = bestIronMineTarget(engineer);
   if (!target) {

@@ -933,7 +933,8 @@ export function getFirstTurnsGuide(state) {
     || state.messages.some((message) => message.text.includes('training begun') || message.text.includes('musters at'));
   const constructionStarted = state.messages.some((message) => message.text.includes('construction started') || message.text.includes('completed'));
   const mineStarted = state.buildings.some((building) => building.faction === 'olundar' && building.type === 'mine');
-  const ironEngineerSpent = !mineStarted && openingEngineerSpent(state);
+  const ironRouteCommitted = mineStarted || openingIronRouteCommitted(state);
+  const ironEngineerSpent = !ironRouteCommitted && openingEngineerSpent(state);
   const knownDead = knownDeadwalkerThreat(state);
   const steps = [
     {
@@ -956,9 +957,15 @@ export function getFirstTurnsGuide(state) {
     },
     {
       id: 'iron',
-      label: 'Claim iron for the legions',
-      done: mineStarted,
-      detail: ironEngineerSpent ? 'Engineer refreshes next turn. Scout or hold safely now, then claim iron.' : 'A Hill Mine or ruin mine unlocks reliable legionaries, spear guards, and siege.'
+      label: 'Commit to an iron route',
+      done: ironRouteCommitted,
+      detail: mineStarted
+        ? 'Hill Mine committed. Keep feeding legions, spear guards, and siege.'
+        : ironRouteCommitted
+          ? 'Iron road committed. Keep extending it while scouts secure allies and warning lines.'
+          : ironEngineerSpent
+            ? 'Engineer refreshes next turn. Scout or hold safely now, then continue the iron road.'
+            : 'Start a Hill Mine or road route so legions, spear guards, and siege have iron.'
     },
     {
       id: 'contact',
@@ -998,7 +1005,7 @@ function guidePhase(state, completed, total) {
 
 function guideSummary(state, current) {
   const ironEngineerSpent = current.id === 'iron' && openingEngineerSpent(state);
-  if (ironEngineerSpent) return 'Engineer refreshes next turn. Scout or hold safely now, then claim iron.';
+  if (ironEngineerSpent) return 'Engineer refreshes next turn. Scout or hold safely now, then continue the iron road.';
   if (state.campaign?.difficultyId === 'hollowCrown') {
     return `Hollow Crown pressure starts immediately. Next best order: ${current.label}.`;
   }
@@ -1013,6 +1020,10 @@ function openingEngineerSpent(state) {
     const def = UNIT_TYPES[unit.type];
     return unit.faction === 'olundar' && unit.hasActed && def?.tags?.includes('builder');
   });
+}
+
+function openingIronRouteCommitted(state) {
+  return state.buildings.filter((building) => building.faction === 'olundar' && building.type === 'road').length >= 2;
 }
 
 export function getSiegeOperations(state) {
