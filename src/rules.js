@@ -22,6 +22,7 @@ import { generateWorld, idx, inBounds, manhattan, neighbors4, xy } from './map.j
 
 const LIVING_DIPLOMACY_FACTIONS = ['dawn', 'veyr', 'mire'];
 const DIPLOMACY_MEMORY_MAX = 12;
+const DEFAULT_MARCH = { firstTurn: 12, interval: 9, size: 3, growth: 1, cap: 8, menacePerTurn: 1 };
 
 const CRISIS_OUTCOME_PREVIEWS = {
   refugeeCaravan: {
@@ -82,6 +83,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       factionPromises: {},
       promiseDemands: {}
     },
+    deadwalker: createDeadwalkerCampaignState(campaign.difficulty),
     diplomacyLog: [],
     diplomacyMemory: createDiplomacyMemoryState(),
     crises: {
@@ -129,7 +131,10 @@ function normalizeCampaignState(state) {
   if (!state.factions?.olundar?.fieldOrders) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
-  if (state.campaign?.scenarioId && state.campaign?.difficultyId) return;
+  if (state.campaign?.scenarioId && state.campaign?.difficultyId) {
+    normalizeDeadwalkerCampaign(state);
+    return;
+  }
   const fallback = normalizeCampaignConfig(state.seed || 'Olundar-Legacy');
   state.campaign = {
     seed: state.seed || fallback.seed,
@@ -139,10 +144,42 @@ function normalizeCampaignState(state) {
     difficultyName: fallback.difficulty.name,
     difficultyText: fallback.difficulty.text
   };
+  normalizeDeadwalkerCampaign(state);
 }
 
 function createDiplomacyMemoryState() {
   return Object.fromEntries(LIVING_DIPLOMACY_FACTIONS.map((id) => [id, { promises: 0, grievances: 0, records: [], fulfilledOrders: {} }]));
+}
+
+function marchConfigFromDifficulty(difficulty) {
+  return { ...DEFAULT_MARCH, ...(difficulty?.march || {}) };
+}
+
+function createDeadwalkerCampaignState(difficulty) {
+  const march = marchConfigFromDifficulty(difficulty);
+  return {
+    menace: 0,
+    marchesSent: 0,
+    nextMarchTurn: march.firstTurn,
+    lastMarchTurn: 0,
+    lastMarchSize: 0
+  };
+}
+
+function marchConfigFor(state) {
+  return marchConfigFromDifficulty(DIFFICULTY_PRESETS[state.campaign?.difficultyId]);
+}
+
+function normalizeDeadwalkerCampaign(state) {
+  const config = marchConfigFor(state);
+  const raw = state.deadwalker && typeof state.deadwalker === 'object' ? state.deadwalker : {};
+  state.deadwalker = {
+    menace: Math.max(0, Number(raw.menace) || 0),
+    marchesSent: Math.max(0, Number(raw.marchesSent) || 0),
+    nextMarchTurn: Number.isFinite(raw.nextMarchTurn) ? raw.nextMarchTurn : config.firstTurn,
+    lastMarchTurn: Math.max(0, Number(raw.lastMarchTurn) || 0),
+    lastMarchSize: Math.max(0, Number(raw.lastMarchSize) || 0)
+  };
 }
 
 function normalizeDiplomacyMemory(state) {
@@ -1809,6 +1846,40 @@ function knownDeadwalkerThreat(state) {
   return { knownUnits, knownBuildings, score, label };
 }
 
+export function getDeadwalkerCampaign(state) {
+  normalizeCampaignState(state);
+  const camp = state.deadwalker;
+  const config = marchConfigFor(state);
+  const capital = olundarCapital(state);
+  const marchers = state.units.filter((unit) => unit.faction === 'dead' && unit.march);
+  const visibleMarchers = marchers.filter((unit) => isRevealed(state, unit.x, unit.y));
+  const closest = capital
+    ? visibleMarchers
+      .map((unit) => ({ unit, distance: manhattan(unit.x, unit.y, capital.x, capital.y) }))
+      .sort((a, b) => a.distance - b.distance)[0]
+    : null;
+  const turnsToMarch = Math.max(0, camp.nextMarchTurn - state.turn);
+  const nextSize = Math.min(config.cap || Infinity, config.size + config.growth * camp.marchesSent);
+  const stage = camp.menace >= 28 ? 'Onslaught' : camp.menace >= 12 ? 'Marching' : 'Gathering';
+  const imminent = state.status === 'playing' && turnsToMarch <= 1 && state.turn + 1 >= config.firstTurn;
+  const summary = camp.marchesSent
+    ? `${camp.marchesSent} march${camp.marchesSent === 1 ? '' : 'es'} sent. ${marchers.length} dead now hunt Olundar Prime.`
+    : `The Hollow Crown is gathering its first march on Olundar (about turn ${camp.nextMarchTurn}).`;
+  return {
+    menace: camp.menace,
+    stage,
+    marchesSent: camp.marchesSent,
+    nextMarchTurn: camp.nextMarchTurn,
+    turnsToMarch,
+    nextSize,
+    imminent,
+    marchingCount: marchers.length,
+    revealedMarchingCount: visibleMarchers.length,
+    closest: closest ? { name: closest.unit.name, distance: closest.distance, x: closest.unit.x, y: closest.unit.y } : null,
+    summary
+  };
+}
+
 function revealedPercent(state) {
   return (state.revealed.filter(Boolean).length / state.revealed.length) * 100;
 }
@@ -2720,6 +2791,7 @@ export function endTurn(state) {
   processConstructionAndTraining(state);
   processEconomy(state);
   processBlight(state);
+  processOlundarRecovery(state);
   runNonPlayerTurns(state);
   resetActions(state);
   updateVisibility(state);
@@ -2868,6 +2940,43 @@ function cleanseAround(state, cx, cy, radius) {
   }
 }
 
+// Wounded living units recover when resting in friendly territory so attrition is a
+// rhythm of rotate-and-heal rather than a one-way death spiral. Units that are in
+// blight or pinned next to an enemy cannot rally.
+function processOlundarRecovery(state) {
+  for (const unit of state.units) {
+    if (unit.faction !== 'olundar' || unit.hp >= unit.maxHp) continue;
+    const tile = tileAt(state, unit.x, unit.y);
+    if (tile?.terrain === 'blight') continue;
+    if (enemyAdjacent(state, unit)) continue;
+    const rally = rallyHealAmount(state, unit);
+    if (rally > 0) {
+      unit.hp = Math.min(unit.maxHp, unit.hp + rally);
+    }
+  }
+}
+
+function rallyHealAmount(state, unit) {
+  let rally = 0;
+  if (nearFriendlyHaven(state, unit.x, unit.y)) rally += 2;
+  if (nearBuilding(state, unit.x, unit.y, 'shrine', 'olundar', 2)) rally += 1;
+  if (rally > 0 && unit.fortified > 0) rally += 1;
+  return rally;
+}
+
+function nearFriendlyHaven(state, x, y) {
+  return state.buildings.some((b) => (
+    b.faction === 'olundar'
+    && b.turnsLeft <= 0
+    && ['city', 'outpost'].includes(b.type)
+    && manhattan(b.x, b.y, x, y) <= 1 + (b.upgraded || 0)
+  ));
+}
+
+function enemyAdjacent(state, unit) {
+  return state.units.some((other) => isEnemy(state, unit.faction, other.faction) && manhattan(unit.x, unit.y, other.x, other.y) <= 1);
+}
+
 function runNonPlayerTurns(state) {
   runDeadwalkerTurn(state);
   for (const factionId of ['dawn', 'veyr', 'mire']) runLivingAiTurn(state, factionId);
@@ -2880,12 +2989,19 @@ function runDeadwalkerTurn(state) {
   if (state.turn >= pressure.startTurn && state.turn % pressure.archerEvery === 0) spawnUndeadFrom(state, 'portal', 'corpseArcher');
   if (state.turn >= pressure.startTurn && state.turn % pressure.knightEvery === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
   if (state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
+  advanceDeadwalkerMarch(state, pressure);
 
+  const capital = olundarCapital(state);
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
   for (const unit of deadUnits) {
     if (!state.units.includes(unit)) continue;
     const acted = aiTryAttack(state, unit);
     if (acted) continue;
+    if (unit.march && capital) {
+      aiAdvanceToward(state, unit, capital.x, capital.y);
+      aiTryAttack(state, unit);
+      continue;
+    }
     const target = nearestLivingTarget(state, unit.x, unit.y);
     if (!target) continue;
     aiMoveToward(state, unit, target.x, target.y);
@@ -2899,6 +3015,115 @@ function runDeadwalkerTurn(state) {
       if (target.ref.hp <= 0) destroyBuilding(state, target.ref.id, 'dead');
     }
   }
+}
+
+function olundarCapital(state) {
+  return state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city')
+    || state.buildings.find((b) => b.faction === 'olundar' && ['outpost', 'barracks'].includes(b.type))
+    || null;
+}
+
+// The Hollow Crown gathers menace each turn and periodically dispatches a directed
+// march on Olundar Prime. Marches conscript the idle eastern horde first, then
+// reinforce from the forwardmost deadwork so escalation stays inevitable but readable.
+function advanceDeadwalkerMarch(state, pressure) {
+  normalizeDeadwalkerCampaign(state);
+  if (state.turn < pressure.startTurn) return null;
+  const config = marchConfigFor(state);
+  const camp = state.deadwalker;
+  camp.menace += config.menacePerTurn;
+  if (state.turn < camp.nextMarchTurn) return null;
+  const dispatched = dispatchDeadwalkerMarch(state, config, camp);
+  camp.marchesSent += 1;
+  camp.lastMarchTurn = state.turn;
+  camp.lastMarchSize = dispatched;
+  camp.nextMarchTurn = state.turn + Math.max(2, config.interval);
+  return dispatched;
+}
+
+function dispatchDeadwalkerMarch(state, config, camp) {
+  const capital = olundarCapital(state);
+  if (!capital) return 0;
+  const size = Math.min(config.cap || Infinity, config.size + config.growth * camp.marchesSent);
+  let mustered = 0;
+  // Conscript the standing dead nearest to Olundar so the eastern horde turns west.
+  const standing = state.units
+    .filter((unit) => unit.faction === 'dead' && !unit.march && getUnitDef(unit)?.tags.includes('boss') !== true)
+    .sort((a, b) => manhattan(a.x, a.y, capital.x, capital.y) - manhattan(b.x, b.y, capital.x, capital.y));
+  for (const unit of standing) {
+    if (mustered >= size) break;
+    unit.march = true;
+    mustered += 1;
+  }
+  // Reinforce the shortfall from the deadwork closest to the capital.
+  const origin = forwardDeadwork(state, capital);
+  const composition = marchComposition(camp.menace);
+  let index = 0;
+  while (mustered < size && origin) {
+    const spawn = findSpawnNear(state, origin.x, origin.y, 'dead');
+    if (!spawn) break;
+    const unit = addUnit(state, composition[index % composition.length], 'dead', spawn.x, spawn.y);
+    unit.march = true;
+    mustered += 1;
+    index += 1;
+  }
+  if (mustered > 0) {
+    addMessage(state, `The Hollow Crown marshals a march of ${mustered} dead toward Olundar Prime.`, 'danger');
+  }
+  return mustered;
+}
+
+function forwardDeadwork(state, capital) {
+  const spawners = state.buildings.filter((b) => b.faction === 'dead' && ['portal', 'necropolis', 'graveForge', 'bonePit'].includes(b.type) && b.turnsLeft <= 0);
+  return spawners.sort((a, b) => manhattan(a.x, a.y, capital.x, capital.y) - manhattan(b.x, b.y, capital.x, capital.y))[0]
+    || state.buildings.find((b) => b.faction === 'dead' && b.type === 'portal')
+    || null;
+}
+
+function marchComposition(menace) {
+  if (menace >= 28) return ['boneThrall', 'corpseArcher', 'graveKnight', 'graveKnight'];
+  if (menace >= 16) return ['boneThrall', 'boneThrall', 'corpseArcher', 'graveKnight'];
+  if (menace >= 8) return ['boneThrall', 'boneThrall', 'corpseArcher'];
+  return ['boneThrall'];
+}
+
+// Step a unit along a real route toward an open tile beside the target so marchers
+// reliably navigate mountains, rivers, and rival armies instead of stalling.
+function aiAdvanceToward(state, unit, tx, ty) {
+  const def = getUnitDef(unit);
+  const goal = openApproachTile(state, unit, tx, ty);
+  if (goal) {
+    const route = findPath(state, unit, goal.x, goal.y, Infinity);
+    if (route && route.path.length) {
+      let budget = def.move;
+      let from = { x: unit.x, y: unit.y };
+      let landed = null;
+      for (const key of route.path) {
+        const point = xy(key);
+        const step = moveCostFor(state, unit, point.x, point.y, from);
+        if (step > budget || !canEnter(state, unit, point.x, point.y)) break;
+        budget -= step;
+        from = point;
+        landed = point;
+      }
+      if (landed) {
+        unit.x = landed.x;
+        unit.y = landed.y;
+        unit.hasActed = true;
+        return true;
+      }
+    }
+  }
+  aiMoveToward(state, unit, tx, ty);
+  return true;
+}
+
+function openApproachTile(state, unit, tx, ty) {
+  if (canEnter(state, unit, tx, ty)) return { x: tx, y: ty };
+  return neighbors4(tx, ty)
+    .filter((point) => canEnter(state, unit, point.x, point.y))
+    .map((point) => ({ ...point, dist: manhattan(unit.x, unit.y, point.x, point.y) }))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
 }
 
 function deadwalkerPressureFor(state) {

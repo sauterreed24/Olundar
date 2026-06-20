@@ -176,8 +176,23 @@ The Deadwalker AI follows a survival-horror strategy pattern:
 4. Move units toward nearest living targets.
 5. Attack units first, then buildings.
 6. Convert fallen living cities into Necropolises.
+7. Gather menace and dispatch directed **marches on Olundar Prime** (the March of the Hollow Crown).
 
 This gives the player a visible long-term enemy growth curve instead of isolated wave defense.
+
+### The March of the Hollow Crown
+
+Local-target hatred alone let the Deadwalkers feast on the nearest rival civilization while a distant, turtling Olundar sat untouched for dozens of turns. To honor the pillar that the dead are *inevitable if ignored*, the campaign now tracks Deadwalker **menace** that rises every turn after the invasion begins. On a difficulty-scaled cadence the Hollow Crown dispatches a **march**: it conscripts the standing dead nearest to Olundar so the eastern horde turns west, then reinforces any shortfall from the deadwork closest to the capital. Marchers navigate real routes toward Olundar Prime instead of only chasing whatever is nearest.
+
+Marches are designed to be felt, fair, and legible:
+
+- **Telegraphed.** The Deadwalker Intent panel shows the next march's countdown, projected size, and how many dead are already marching, so pressure is never an un-signposted ambush.
+- **Escalating but bounded.** Each march grows and its composition hardens with menace (thralls, then corpse archers, then grave knights), but a per-difficulty size cap keeps waves counterable instead of becoming an unwinnable tide.
+- **Difficulty-coherent.** Harder presets start marches earlier, send them more often, and gather menace faster, so Hollow Crown is genuinely more relentless than Chronicle rather than accidentally gentler.
+
+### Recovery and attrition
+
+Living units have no innate regeneration, which previously made every point of blight attrition or combat damage a permanent loss and turned bad turns into death spirals with no comeback. Wounded Olundaran units now **rally** at the end of the turn when resting beside a friendly city or outpost, healing faster near a Sun Shrine and slightly faster when fortified. Units standing in grave-blight or pinned next to an enemy cannot rally. This makes attrition a rotate-and-heal rhythm — pull veterans back to recover, then return them to the line — and gives the player a real comeback tool against the escalating marches without trivializing front-line losses.
 
 ## Population and morale
 
@@ -216,7 +231,8 @@ Olundar loses its city or collapses beyond recovery. The current prototype hard-
 - Early game: scout and economy.
 - Mid game: diplomacy and defense line.
 - Late game: siege push into blight.
-- Deadwalkers should feel inevitable if ignored, beatable if studied.
+- Deadwalkers should feel inevitable if ignored, beatable if studied: the March of the Hollow Crown guarantees pressure reaches the player, but telegraphing, march size caps, and rally healing keep it fair.
+- Turtling should buy time, never victory; escalating menace eventually forces the player out to kill Vorgath and shatter the portal.
 - Allies should matter but never play the game for the player.
 - Pressure actions should be tempting during emergencies but dangerous long-term.
 

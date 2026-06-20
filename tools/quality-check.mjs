@@ -19,6 +19,7 @@ import {
   getCampaignRecap,
   getAftermathMissions,
   getCrisisCouncil,
+  getDeadwalkerCampaign,
   getDiplomacyLedger,
   getEndTurnWarnings,
   getFirstTurnsGuide,
@@ -1317,6 +1318,83 @@ check('battle forecasts match combat without mutating state', () => {
   const strike = attackBuilding(buildingState, archer.id, portal.id);
   assert(strike.ok && strike.damage === buildingForecast.damage, 'Building forecast damage should match real attack.');
   assert(portal.hp === buildingForecast.targetHpAfter, 'Building forecast HP result should match real attack.');
+});
+
+check('deadwalker marches escalate and target Olundar', () => {
+  for (const id of ['chronicle', 'standard', 'legion', 'hollowCrown']) {
+    const march = DIFFICULTY_PRESETS[id].march;
+    assert(march && march.firstTurn > 0 && march.interval >= 2 && march.size > 0 && march.cap >= march.size, `${id} needs a valid march escalation config.`);
+  }
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-march' });
+  assert(state.deadwalker && state.deadwalker.nextMarchTurn === DIFFICULTY_PRESETS.hollowCrown.march.firstTurn, 'Deadwalker campaign state should schedule the first march.');
+  const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  let firstMarchTurn = null;
+  for (let i = 0; i < 24 && state.status === 'playing'; i += 1) {
+    const before = state.deadwalker.marchesSent;
+    endTurn(state);
+    if (state.deadwalker.marchesSent > before && firstMarchTurn === null) firstMarchTurn = state.turn;
+  }
+  assert(firstMarchTurn !== null, 'Hollow Crown never dispatched a march on Olundar.');
+  assert(firstMarchTurn >= DIFFICULTY_PRESETS.hollowCrown.march.firstTurn, 'A march fired before its first scheduled turn.');
+  assert(state.units.some((u) => u.faction === 'dead' && u.march), 'A dispatched march should tag dead units to hunt Olundar Prime.');
+  const campaign = getDeadwalkerCampaign(state);
+  assert(campaign.marchesSent > 0 && campaign.marchingCount > 0, 'Campaign telegraph should report active marches.');
+  assert(campaign.nextSize <= DIFFICULTY_PRESETS.hollowCrown.march.cap, 'March size should respect the difficulty cap.');
+  let nearCapital = false;
+  for (let i = 0; i < 30 && state.status === 'playing' && !nearCapital; i += 1) {
+    endTurn(state);
+    nearCapital = state.units.some((u) => u.faction === 'dead' && Math.abs(u.x - capital.x) + Math.abs(u.y - capital.y) <= 6);
+  }
+  assert(nearCapital || state.status !== 'playing', 'Deadwalker marches should bring real pressure to Olundar Prime.');
+});
+
+check('deadwalker pressure scales coherently with difficulty', () => {
+  const firstMarch = (id) => {
+    const s = createGame({ scenarioId: 'founding', difficultyId: id, seed: 'quality-scale' });
+    for (let i = 0; i < 40 && s.status === 'playing'; i += 1) {
+      const before = s.deadwalker.marchesSent;
+      endTurn(s);
+      if (s.deadwalker.marchesSent > before) return s.turn;
+    }
+    return Infinity;
+  };
+  const chronicle = firstMarch('chronicle');
+  const standard = firstMarch('standard');
+  const legion = firstMarch('legion');
+  const hollow = firstMarch('hollowCrown');
+  assert(chronicle > standard && standard > legion && legion > hollow, `Marches should arrive sooner on harder difficulty (chronicle ${chronicle} > standard ${standard} > legion ${legion} > hollowCrown ${hollow}).`);
+
+  const turtleLoss = (id) => {
+    const s = createGame({ scenarioId: 'founding', difficultyId: id, seed: 'quality-turtle' });
+    for (let i = 0; i < 160; i += 1) {
+      endTurn(s);
+      if (s.status === 'lost') return s.turn;
+    }
+    return Infinity;
+  };
+  const chronicleLoss = turtleLoss('chronicle');
+  const hollowLoss = turtleLoss('hollowCrown');
+  assert(hollowLoss < chronicleLoss, `A neglected capital must fall sooner on Hollow Crown (${hollowLoss}) than Chronicle (${chronicleLoss}).`);
+});
+
+check('wounded living units rally near friendly havens', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-rally' });
+  const city = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const haven = addUnit(state, 'legionary', 'olundar', city.x, city.y + 1, { name: 'Haven Legion' });
+  haven.hp = 4;
+  const clamp = addUnit(state, 'spearGuard', 'olundar', city.x - 1, city.y, { name: 'Clamp Guard' });
+  clamp.hp = clamp.maxHp - 1;
+  const exposed = addUnit(state, 'legionary', 'olundar', 12, 16, { name: 'Exposed Legion' });
+  exposed.hp = 4;
+  const exposedBefore = exposed.hp;
+  endTurn(state);
+  const havenAfter = state.units.find((u) => u.id === haven.id);
+  const clampAfter = state.units.find((u) => u.id === clamp.id);
+  const exposedAfter = state.units.find((u) => u.id === exposed.id);
+  assert(havenAfter && havenAfter.hp > 4, 'A wounded unit beside the capital should rally and heal.');
+  assert(havenAfter.hp <= havenAfter.maxHp, 'Rally healing must never exceed max HP.');
+  assert(clampAfter && clampAfter.hp === clampAfter.maxHp, 'Rally healing should clamp exactly to max HP.');
+  assert(exposedAfter && exposedAfter.hp <= exposedBefore, 'A unit resting far from any haven should not passively heal.');
 });
 
 check('24-turn simulation remains stable', () => {
