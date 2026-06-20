@@ -8,7 +8,9 @@ import {
   attackUnit,
   moveUnit,
   performDiplomacy,
+  fortifyUnit,
   resolveCrisis,
+  resolvePromiseDemand,
   setFieldOrder,
   startConstruction,
   startTraining,
@@ -97,8 +99,12 @@ export class Command {
         return performDiplomacy(state, payload.factionId, payload.actionId);
       case 'diplomacyPromise':
         return makeDiplomaticPromise(state, payload.factionId, payload.promiseId);
+      case 'promiseDemand':
+        return resolvePromiseDemand(state, payload.factionId, payload.demandId, payload.choiceId);
       case 'fieldOrder':
         return setFieldOrder(state, payload.factionId, payload.orderId);
+      case 'fortify':
+        return fortifyUnit(state, payload.unitId);
       case 'crisis':
         return resolveCrisis(state, payload.eventId, payload.choiceId);
       default:
@@ -135,8 +141,16 @@ export function diplomacyPromiseCommand(factionId, promiseId) {
   return new Command('diplomacyPromise', { factionId, promiseId }, 'Diplomatic promise');
 }
 
+export function promiseDemandCommand(factionId, demandId, choiceId) {
+  return new Command('promiseDemand', { factionId, demandId, choiceId }, 'Promise demand');
+}
+
 export function fieldOrderCommand(factionId, orderId) {
   return new Command('fieldOrder', { factionId, orderId }, 'Field order');
+}
+
+export function fortifyCommand(unitId) {
+  return new Command('fortify', { unitId }, 'Fortify unit');
 }
 
 export function crisisCommand(eventId, choiceId) {

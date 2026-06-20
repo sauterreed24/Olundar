@@ -16,8 +16,7 @@ export class ParticleSystem {
   emit(config) {
     const count = config.count || 8;
     for (let i = 0; i < count; i += 1) {
-      const p = this.pool.pop() || createParticle();
-      p.active = true;
+      const p = this.borrowParticle();
       p.x = config.x + (config.spreadX || 0) * (Math.random() - 0.5);
       p.y = config.y + (config.spreadY || 0) * (Math.random() - 0.5);
       p.vx = (config.vx || 0) + (Math.random() - 0.5) * (config.jitter || 1.2);
@@ -32,6 +31,17 @@ export class ParticleSystem {
       p.shrink = config.shrink ?? 0.96;
       this.particles.push(p);
     }
+  }
+
+  borrowParticle() {
+    const particle = this.pool.pop() || createParticle();
+    particle.active = true;
+    return particle;
+  }
+
+  recycleParticle(particle) {
+    particle.active = false;
+    if (this.pool.length < POOL_SIZE) this.pool.push(particle);
   }
 
   dustTrail(x, y, direction = 0) {
@@ -108,25 +118,28 @@ export class ParticleSystem {
 
   update(dt) {
     const step = Math.min(0.05, dt);
-    for (let i = this.particles.length - 1; i >= 0; i -= 1) {
+    let writeIndex = 0;
+    for (let i = 0; i < this.particles.length; i += 1) {
       const p = this.particles[i];
       p.life -= step;
       if (p.life <= 0) {
-        p.active = false;
-        this.pool.push(p);
-        this.particles.splice(i, 1);
+        this.recycleParticle(p);
         continue;
       }
       p.vy += p.gravity;
       p.x += p.vx * step * 60;
       p.y += p.vy * step * 60;
       p.size *= p.shrink;
+      this.particles[writeIndex] = p;
+      writeIndex += 1;
     }
+    this.particles.length = writeIndex;
   }
 
-  draw(graphics) {
+  draw(graphics, viewport = null) {
     if (!graphics || !this.particles.length) return;
     for (const p of this.particles) {
+      if (viewport && !isParticleInViewport(p, viewport)) continue;
       const t = p.life / p.maxLife;
       graphics.circle(p.x, p.y, Math.max(0.5, p.size * t));
       graphics.fill({ color: p.color, alpha: p.alpha * t });
@@ -150,6 +163,13 @@ function createParticle() {
     kind: 'dust',
     shrink: 0.96
   };
+}
+
+function isParticleInViewport(particle, viewport) {
+  return particle.x >= viewport.minX
+    && particle.x <= viewport.maxX
+    && particle.y >= viewport.minY
+    && particle.y <= viewport.maxY;
 }
 
 let sharedParticles = null;

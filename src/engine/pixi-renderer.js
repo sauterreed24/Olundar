@@ -3,11 +3,19 @@
  * Base terrain/units render via Canvas 2D (render.js); Pixi composites premium effects on top.
  */
 
-import { Application, Assets, Graphics, Text, TextStyle } from 'pixi.js';
+import { Application, Assets, Graphics, Text } from 'pixi.js';
 import { getCamera } from './camera.js';
 import { getParticleSystem } from './particles.js';
 
 const SPRITE_SHEET = './assets/sprites/olundar-sprite-sheet.svg';
+const TILE_CULL_MARGIN = 3;
+const PIXEL_CULL_MARGIN = 96;
+const FLOATING_TEXT_STYLE = {
+  fontFamily: 'system-ui',
+  fontSize: 14,
+  fontWeight: '900',
+  fill: '#ff8a8a'
+};
 
 const IMPERIAL_PALETTE = {
   parchment: 0xf6ead0,
@@ -34,17 +42,31 @@ let floatingTexts = [];
 let fogRevealTiles = new Map();
 let buildingBounces = new Map();
 let initialized = false;
+let initPromise = null;
 let getLayoutFn = null;
+let overlayGraphics = null;
+const floatingTextPool = [];
 
 export function isPixiReady() {
   return initialized && app !== null;
 }
 
 export async function initPixiRenderer(canvasElement, { getLayout } = {}) {
+  if (getLayout) getLayoutFn = getLayout;
   if (initialized) return app;
-  getLayoutFn = getLayout;
+  if (initPromise) return initPromise;
   baseCanvas = canvasElement;
 
+  initPromise = bootPixiRenderer(canvasElement);
+  try {
+    return await initPromise;
+  } catch (error) {
+    initPromise = null;
+    throw error;
+  }
+}
+
+async function bootPixiRenderer(canvasElement) {
   const parent = canvasElement.parentElement;
   if (!parent) throw new Error('Canvas parent missing for Pixi overlay.');
 
@@ -76,6 +98,8 @@ export async function initPixiRenderer(canvasElement, { getLayout } = {}) {
   lightingLayer = app.stage;
   particleLayer = app.stage;
   effectsLayer = app.stage;
+  overlayGraphics = new Graphics();
+  app.stage.addChild(overlayGraphics);
 
   try {
     atlasTexture = await Assets.load(SPRITE_SHEET);
@@ -123,21 +147,22 @@ export function renderPixiFrame(canvas, state, hoverTile, lensId, routeOverlay, 
 
   applyViewportTransform(camera);
 
-  app.stage.removeChildren();
-  const g = new Graphics();
+  const g = overlayGraphics || new Graphics();
+  if (!g.parent) app.stage.addChild(g);
+  g.clear();
   const layout = getLayoutFn?.(canvas);
+  const viewport = layout ? pixiViewport(layout, TILE_CULL_MARGIN, PIXEL_CULL_MARGIN) : null;
   if (layout && state) {
     drawVignette(g, canvas.width, canvas.height);
-    drawUnitShadows(g, state, layout);
-    drawStructureGlow(g, state, layout);
-    drawBlightGlow(g, state, layout);
+    drawUnitShadows(g, state, layout, viewport);
+    drawStructureGlow(g, state, layout, viewport);
+    drawBlightGlow(g, state, layout, viewport);
   }
   const particles = getParticleSystem();
   particles.update(dt);
-  particles.draw(g);
-  app.stage.addChild(g);
+  particles.draw(g, viewport?.pixel);
   drawFloatingTexts(dt);
-  updateFogReveal(state, dt);
+  updateFogReveal(state, dt, viewport?.tile);
   updateBlightPulse(dt);
 
   return true;
@@ -195,11 +220,10 @@ export function spawnBuildComplete(x, y, buildingId) {
 function updateParticles(dt) {
   const particles = getParticleSystem();
   particles.update(dt);
-  app.stage.removeChildren();
-  const g = new Graphics();
+  const g = overlayGraphics || new Graphics();
+  if (!g.parent) app.stage.addChild(g);
+  g.clear();
   particles.draw(g);
-  drawLightingGraphics(g, null, null, true);
-  app.stage.addChild(g);
   drawFloatingTexts(dt);
 }
 
@@ -211,10 +235,11 @@ function drawLightingGraphics(g, state, layout, particlesOnly = false) {
   if (!state || !layout || particlesOnly) return;
   const w = app.renderer.width;
   const h = app.renderer.height;
+  const viewport = pixiViewport(layout, TILE_CULL_MARGIN, PIXEL_CULL_MARGIN);
   drawVignette(g, w, h);
-  drawUnitShadows(g, state, layout);
-  drawStructureGlow(g, state, layout);
-  drawBlightGlow(g, state, layout);
+  drawUnitShadows(g, state, layout, viewport);
+  drawStructureGlow(g, state, layout, viewport);
+  drawBlightGlow(g, state, layout, viewport);
 }
 
 function drawVignette(g, w, h) {
@@ -225,20 +250,22 @@ function drawVignette(g, w, h) {
   }
 }
 
-function drawUnitShadows(g, state, layout) {
+function drawUnitShadows(g, state, layout, viewport) {
   for (const unit of state.units) {
-    if (!isTileVisible(state, unit.x, unit.y)) continue;
+    if (!isTileVisible(state, unit.x, unit.y) || !isInTileWindow(unit, viewport?.tile)) continue;
     const { x, y } = tileToScreen(layout, unit.x, unit.y);
+    if (!isScreenPointInViewport({ x, y }, viewport?.pixel)) continue;
     const s = layout.tileSize * 0.22;
     g.ellipse(x, y + s * 0.6, s * 0.9, s * 0.35);
     g.fill({ color: 0x1a1208, alpha: 0.18 });
   }
 }
 
-function drawStructureGlow(g, state, layout) {
+function drawStructureGlow(g, state, layout, viewport) {
   for (const building of state.buildings) {
-    if (!isTileVisible(state, building.x, building.y)) continue;
+    if (!isTileVisible(state, building.x, building.y) || !isInTileWindow(building, viewport?.tile)) continue;
     const { x, y } = tileToScreen(layout, building.x, building.y);
+    if (!isScreenPointInViewport({ x, y }, viewport?.pixel)) continue;
     const s = layout.tileSize * 0.35;
     if (building.type === 'shrine') {
       g.circle(x, y, s * 1.4);
@@ -253,50 +280,56 @@ function drawStructureGlow(g, state, layout) {
 
 let blightPulse = 0;
 
-function drawBlightGlow(g, state, layout) {
+function drawBlightGlow(g, state, layout, viewport) {
   const pulse = 0.08 + Math.sin(blightPulse) * 0.04;
-  for (let y = 0; y < state.map.length; y += 1) {
-    for (let x = 0; x < state.map[y].length; x += 1) {
-      const tile = state.map[y][x];
-      if (tile.terrain !== 'blight' || !isTileVisible(state, x, y)) continue;
-      const pos = tileToScreen(layout, x, y);
-      const s = layout.tileSize * 0.4;
-      g.circle(pos.x, pos.y, s * (1 + pulse));
-      g.fill({ color: 0x76e969, alpha: pulse });
-    }
-  }
+  forEachPixiWindowTile(state, viewport?.tile, (tile) => {
+    if (tile.terrain !== 'blight' || !isTileVisible(state, tile.x, tile.y)) return;
+    const pos = tileToScreen(layout, tile.x, tile.y);
+    if (!isScreenPointInViewport(pos, viewport?.pixel)) return;
+    const s = layout.tileSize * 0.4;
+    g.circle(pos.x, pos.y, s * (1 + pulse));
+    g.fill({ color: 0x76e969, alpha: pulse });
+  });
 }
 
 function updateBlightPulse(dt) {
   blightPulse += dt * 2.5;
 }
 
-function updateFogReveal(state, dt) {
-  for (let y = 0; y < state.map.length; y += 1) {
-    for (let x = 0; x < state.map[y].length; x += 1) {
-      const key = `${x},${y}`;
-      const visible = state.visibility?.[y]?.[x] === 2;
-      const current = fogRevealTiles.get(key) ?? (visible ? 1 : 0);
-      if (visible && current < 1) fogRevealTiles.set(key, Math.min(1, current + dt / 0.4));
-      else if (!visible) fogRevealTiles.delete(key);
+function updateFogReveal(state, dt, tileWindow) {
+  forEachPixiWindowTile(state, tileWindow, (tile) => {
+    const key = `${tile.x},${tile.y}`;
+    const visible = isTileVisible(state, tile.x, tile.y);
+    const current = fogRevealTiles.get(key) ?? (visible ? 1 : 0);
+    if (visible && current < 1) fogRevealTiles.set(key, Math.min(1, current + dt / 0.4));
+    else if (!visible) fogRevealTiles.delete(key);
+  });
+
+  for (const key of fogRevealTiles.keys()) {
+    const [x, y] = key.split(',').map(Number);
+    if (!isInTileWindow({ x, y }, tileWindow) || !isTileVisible(state, x, y)) {
+      fogRevealTiles.delete(key);
     }
   }
 }
 
 function drawFloatingTexts(dt) {
-  const style = new TextStyle({ fontFamily: 'system-ui', fontSize: 14, fontWeight: '900', fill: '#ff8a8a' });
   for (let i = floatingTexts.length - 1; i >= 0; i -= 1) {
     const ft = floatingTexts[i];
     ft.life -= dt;
     ft.y += ft.vy;
     if (ft.life <= 0) {
+      recycleFloatingText(ft.label);
       floatingTexts.splice(i, 1);
       continue;
     }
-    const label = new Text({ text: ft.text, style: { ...style, fill: ft.color } });
+    const label = ft.label || borrowFloatingText(ft.text, ft.color);
+    ft.label = label;
+    label.text = ft.text;
+    label.style = { ...FLOATING_TEXT_STYLE, fill: ft.color };
     label.alpha = ft.life / 0.9;
     label.position.set(ft.x, ft.y);
-    app.stage.addChild(label);
+    if (!label.parent) app.stage.addChild(label);
   }
 }
 
@@ -310,7 +343,87 @@ function tileToScreen(layout, x, y) {
 }
 
 function isTileVisible(state, x, y) {
+  const key = tileIndex(state, x, y);
+  if (key < 0) return false;
+  if (Array.isArray(state.visible)) return Boolean(state.visible[key]);
   return state.visibility?.[y]?.[x] >= 1;
+}
+
+function pixiViewport(layout, tileMargin = TILE_CULL_MARGIN, pixelMargin = PIXEL_CULL_MARGIN) {
+  return {
+    tile: pixiTileWindow(layout, tileMargin),
+    pixel: pixiPixelWindow(layout, pixelMargin)
+  };
+}
+
+function pixiTileWindow(layout, margin = TILE_CULL_MARGIN) {
+  return {
+    minX: Math.max(0, layout.camera.x - margin),
+    maxX: layout.camera.x + layout.camera.width + margin - 1,
+    minY: Math.max(0, layout.camera.y - margin),
+    maxY: layout.camera.y + layout.camera.height + margin - 1
+  };
+}
+
+function pixiPixelWindow(layout, margin = PIXEL_CULL_MARGIN) {
+  return {
+    minX: layout.frameX - margin,
+    maxX: layout.frameX + layout.mapWidth + margin,
+    minY: layout.frameY - margin,
+    maxY: layout.frameY + layout.mapHeight + margin
+  };
+}
+
+function isInTileWindow(point, tileWindow) {
+  if (!tileWindow) return true;
+  return point.x >= tileWindow.minX
+    && point.x <= tileWindow.maxX
+    && point.y >= tileWindow.minY
+    && point.y <= tileWindow.maxY;
+}
+
+function isScreenPointInViewport(point, viewport) {
+  if (!viewport) return true;
+  return point.x >= viewport.minX
+    && point.x <= viewport.maxX
+    && point.y >= viewport.minY
+    && point.y <= viewport.maxY;
+}
+
+function forEachPixiWindowTile(state, tileWindow, visitor) {
+  const map = state?.map;
+  if (!map) return;
+  const width = map.width || map[0]?.length || 0;
+  const height = map.height || map.length || 0;
+  if (!width || !height) return;
+  const window = tileWindow || { minX: 0, maxX: width - 1, minY: 0, maxY: height - 1 };
+  for (let y = Math.max(0, window.minY); y <= Math.min(height - 1, window.maxY); y += 1) {
+    for (let x = Math.max(0, window.minX); x <= Math.min(width - 1, window.maxX); x += 1) {
+      const tile = map.tiles?.[y * width + x] || map[y]?.[x];
+      if (tile) visitor(tile);
+    }
+  }
+}
+
+function tileIndex(state, x, y) {
+  const width = state?.map?.width || state?.map?.[0]?.length || 0;
+  const height = state?.map?.height || state?.map?.length || 0;
+  if (x < 0 || y < 0 || x >= width || y >= height) return -1;
+  return y * width + x;
+}
+
+function borrowFloatingText(text, color) {
+  const label = floatingTextPool.pop() || new Text({ text, style: { ...FLOATING_TEXT_STYLE, fill: color } });
+  label.text = text;
+  label.style = { ...FLOATING_TEXT_STYLE, fill: color };
+  return label;
+}
+
+function recycleFloatingText(label) {
+  if (!label) return;
+  label.removeFromParent();
+  label.alpha = 1;
+  floatingTextPool.push(label);
 }
 
 export function getAtlasTexture() {
@@ -330,5 +443,10 @@ export function destroyPixiRenderer() {
     app.destroy(true);
     app = null;
   }
+  overlayGraphics = null;
+  floatingTexts = [];
+  floatingTextPool.length = 0;
+  fogRevealTiles = new Map();
+  initPromise = null;
   initialized = false;
 }
