@@ -4242,6 +4242,91 @@ button:hover:not(:disabled) {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 10px 20px rgba(45, 82, 78, 0.11);
 }
 
+.directive-source-card {
+  gap: 0.42rem;
+  margin-bottom: 0.52rem;
+  border-color: rgba(39, 100, 126, 0.30);
+  border-left: 4px solid rgba(36, 116, 142, 0.74);
+  background:
+    linear-gradient(145deg, rgba(250, 255, 252, 0.98), rgba(218, 241, 235, 0.92)),
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 8rem);
+}
+
+.directive-source-card .order-section-head h3 {
+  color: #246f7f;
+}
+
+.directive-source-card .order-section-head p {
+  color: #4c625c;
+  font-size: 0.70rem;
+}
+
+.directive-source-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.46rem;
+  min-width: 0;
+  padding: 0.42rem;
+  border: 1px solid rgba(36, 116, 142, 0.14);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255,255,253,0.90), rgba(232, 248, 243, 0.76)),
+    radial-gradient(circle at 0% 0%, rgba(255,255,255,0.76), transparent 5rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.78);
+}
+
+.directive-source-body .selection-portrait {
+  width: 2.28rem;
+  height: 2.28rem;
+}
+
+.directive-source-body span {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.directive-source-body small,
+.directive-source-body em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directive-source-body small {
+  color: #5b704f;
+  font-size: 0.56rem;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.directive-source-body b {
+  overflow: hidden;
+  color: #8d3024;
+  font-size: 0.82rem;
+  font-weight: 950;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directive-source-body em {
+  color: #435e5b;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.12;
+}
+
+.directive-source-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.30rem;
+  margin-top: 0;
+}
+
 .opening-doctrine.diplomacy-doctrine {
   border-color: rgba(82, 130, 63, 0.30);
   background:
@@ -5448,6 +5533,34 @@ button:hover:not(:disabled) {
     gap: 0.24rem;
     margin-bottom: 0.48rem;
     padding: 0.5rem 0.56rem;
+  }
+
+  .directive-source-card {
+    gap: 0.28rem;
+    margin-bottom: 0.38rem;
+    padding: 0.46rem 0.50rem;
+  }
+
+  .directive-source-body {
+    gap: 0.34rem;
+    padding: 0.32rem 0.36rem;
+  }
+
+  .directive-source-body .selection-portrait {
+    width: 2.02rem;
+    height: 2.02rem;
+  }
+
+  .directive-source-body b {
+    font-size: 0.74rem;
+  }
+
+  .directive-source-body em {
+    font-size: 0.58rem;
+  }
+
+  .directive-source-actions {
+    gap: 0.24rem;
   }
 
   .opening-doctrine-head {

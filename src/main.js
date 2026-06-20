@@ -986,7 +986,7 @@ function focusOpeningActionSource(action, options = {}) {
   hoverTile = Number.isFinite(action.x) && Number.isFinite(action.y)
     ? { x: action.x, y: action.y }
     : lastTile;
-  if (options.toast !== false) toast(`${source.label} focused for ${action.label}.`, 'info');
+  if (options.toast !== false) toast(`${source.label} selected for the opening order.`, 'info');
   playAudioCue('select');
   render();
   if (window.innerWidth <= 980) scrollBattlefieldIntoView();
@@ -1147,6 +1147,7 @@ function renderActions() {
   const counselCard = tacticalCounselCard(selectedUnit, selectedBuilding);
   const placementCard = buildPlacementCard();
   const doctrineCard = state.mode.type === 'build' ? null : openingDoctrineCard();
+  const directiveSourceCard = openingDirectiveSourceCard();
   const tacticalMoveCard = tacticalMoveOrdersCard(selectedUnit);
   const deadwalkerIntent = deadwalkerIntentCard();
   const readyForcesCard = activeReadyForcesCard(selectedUnit);
@@ -1154,7 +1155,7 @@ function renderActions() {
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
   const pactCommandCard = pactFieldCommandCard();
-  const priorityCommandCards = [placementCard, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [placementCard, directiveSourceCard, tacticalMoveCard, doctrineCard, deadwalkerIntent, readyForcesCard, musterCard, endTurnReview, envoyCard, pactCommandCard].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -3065,6 +3066,38 @@ function turnReportCard() {
       ${messages}
     </details>
   `;
+  return card;
+}
+
+function openingDirectiveSourceCard() {
+  const directive = currentOpeningDirective();
+  if (!directive || state.status !== 'playing' || state.mode.type === 'build') return null;
+  const recommendation = openingDirectiveAction(directive.current.id);
+  if (!recommendation?.canExecute || recommendation.disabled || openingActionMatchesSelection(recommendation)) return null;
+  const source = openingActionSource(recommendation);
+  if (!source) return null;
+  const selection = source.unit ? { unit: source.unit } : { building: source.building };
+  const sourceType = source.unit ? `${unitCommandRole(source.unit)} order source` : `${BUILDING_TYPES[source.building.type]?.name || 'Structure'} order source`;
+  const card = actionSection('Order Source', `${source.label} is the recommended actor for ${directive.current.label.toLowerCase()}.`, 'directive-source-card');
+  const body = document.createElement('div');
+  body.className = 'directive-source-body';
+  body.innerHTML = `
+    ${selectionPortraitMarkup(selection)}
+    <span>
+      <small>${escapeHtml(sourceType)}</small>
+      <b>${escapeHtml(source.label)}</b>
+      <em>${escapeHtml(recommendation.meta)}</em>
+    </span>
+  `;
+  card.appendChild(body);
+  const actions = commandActions('directive-source-actions');
+  actions.appendChild(orderButton(`Focus ${source.label}`, 'Select the right actor', () => focusOpeningActionSource(recommendation), {
+    tone: 'primary'
+  }));
+  actions.appendChild(orderButton('Preview order', recommendation.previewMeta || focusOpeningDirectiveMeta(directive.current.id), () => previewOpeningDirective(recommendation), {
+    tone: 'secondary'
+  }));
+  card.appendChild(actions);
   return card;
 }
 
