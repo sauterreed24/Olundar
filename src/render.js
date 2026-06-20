@@ -240,11 +240,14 @@ export function drawGame(canvas, state, hoverTile = null, lensId = 'normal', rou
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
-  drawDiplomacyOpportunityRoute(ctx, state, layout, diplomacyOverlay);
-  drawOpeningOrderRoute(ctx, state, layout, openingOrderOverlay);
-  drawMissionRoute(ctx, state, layout, routeOverlay);
-  drawMissionFocus(ctx, state, layout, missionFocusOverlay);
-  drawBuildSites(ctx, state, layout);
+  const placementFocusMode = state.mode.type === 'build';
+  if (!placementFocusMode) {
+    drawDiplomacyOpportunityRoute(ctx, state, layout, diplomacyOverlay);
+    drawOpeningOrderRoute(ctx, state, layout, openingOrderOverlay);
+    drawMissionRoute(ctx, state, layout, routeOverlay);
+    drawMissionFocus(ctx, state, layout, missionFocusOverlay);
+  }
+  drawBuildSites(ctx, state, layout, hoverTile);
   drawPieceCastShadows(ctx, state, layout);
   drawBuildings(ctx, state, layout);
   drawUnits(ctx, state, layout);
@@ -3844,21 +3847,282 @@ function drawCommandHalo(ctx, layout, unit, active) {
   ctx.restore();
 }
 
-function drawBuildSites(ctx, state, layout) {
+function drawBuildSites(ctx, state, layout, hoverTile = null) {
   if (state.mode.type !== 'build') return;
   const builder = state.units.find((u) => u.id === state.mode.builderId);
   if (!builder) return;
+  const survey = buildSiteSurvey(state, builder, state.mode.buildingType);
+  if (!survey.length) return;
+  const validSites = survey.filter((candidate) => candidate.ok);
+  const invalidSites = survey.filter((candidate) => !candidate.ok);
   ctx.save();
-  for (let y = builder.y - 1; y <= builder.y + 1; y += 1) {
-    for (let x = builder.x - 1; x <= builder.x + 1; x += 1) {
-      if (Math.abs(builder.x - x) + Math.abs(builder.y - y) > 1 || !inMap(x, y)) continue;
-      const result = canBuildOn(state, state.mode.buildingType, x, y);
-      const bounds = tileBounds(layout, x, y);
-      fillTileDiamond(ctx, bounds, result.ok ? 'rgba(186, 245, 140, 0.22)' : 'rgba(255, 138, 138, 0.18)', 2);
-      strokeTileDiamond(ctx, bounds, result.ok ? '#baf58c' : '#ff8a8a', Math.max(2, layout.tileSize * 0.06), 3);
-    }
+  drawBuildSurveyConnectors(ctx, layout, builder, validSites);
+  for (const candidate of invalidSites) drawBuildSitePlate(ctx, layout, candidate, sameTile(candidate, hoverTile));
+  for (const candidate of validSites) drawBuildSitePlate(ctx, layout, candidate, sameTile(candidate, hoverTile));
+  ctx.restore();
+}
+
+function buildSiteSurvey(state, builder, buildingType) {
+  return [
+    { dx: 0, dy: 0, label: 'Builder tile' },
+    { dx: 1, dy: 0, label: 'East site' },
+    { dx: -1, dy: 0, label: 'West site' },
+    { dx: 0, dy: 1, label: 'South site' },
+    { dx: 0, dy: -1, label: 'North site' }
+  ]
+    .map((candidate, index) => {
+      const x = builder.x + candidate.dx;
+      const y = builder.y + candidate.dy;
+      if (!inMap(x, y)) return null;
+      const result = canBuildOn(state, buildingType, x, y);
+      const tile = tileAt(state, x, y);
+      const supplied = isTileSupplied(state, x, y);
+      const road = Boolean(tile?.road || state.buildings.some((building) => building.type === 'road' && building.x === x && building.y === y));
+      return {
+        ...candidate,
+        x,
+        y,
+        index,
+        ok: result.ok,
+        reason: result.reason || '',
+        tile,
+        terrain: tile?.terrain || 'plains',
+        supplied,
+        road,
+        buildingType
+      };
+    })
+    .filter(Boolean);
+}
+
+function drawBuildSurveyConnectors(ctx, layout, builder, candidates) {
+  if (!candidates.length) return;
+  const origin = tileCenter(layout, builder.x, builder.y);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const candidate of candidates) {
+    if (candidate.x === builder.x && candidate.y === builder.y) continue;
+    const target = tileCenter(layout, candidate.x, candidate.y);
+    ctx.globalAlpha = 0.70;
+    ctx.strokeStyle = 'rgba(31, 72, 45, 0.55)';
+    ctx.lineWidth = Math.max(3, layout.tileSize * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y + layout.halfTileHeight * 0.35);
+    ctx.lineTo(target.x, target.y + layout.halfTileHeight * 0.35);
+    ctx.stroke();
+    ctx.globalAlpha = 0.86;
+    ctx.strokeStyle = 'rgba(217, 255, 178, 0.78)';
+    ctx.lineWidth = Math.max(1.5, layout.tileSize * 0.030);
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y + layout.halfTileHeight * 0.33);
+    ctx.lineTo(target.x, target.y + layout.halfTileHeight * 0.33);
+    ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawBuildSitePlate(ctx, layout, candidate, hovered = false) {
+  const bounds = tileBounds(layout, candidate.x, candidate.y);
+  const { x, y, s } = bounds;
+  const ok = candidate.ok;
+  const supplied = candidate.supplied || candidate.road;
+  const accent = ok
+    ? supplied ? '#baf58c' : '#f0c866'
+    : '#ff8a8a';
+  const shadow = ok
+    ? supplied ? 'rgba(57, 118, 56, 0.34)' : 'rgba(150, 101, 35, 0.30)'
+    : 'rgba(139, 40, 34, 0.26)';
+  const fillTop = ok
+    ? supplied ? 'rgba(237, 255, 199, 0.48)' : 'rgba(255, 240, 164, 0.42)'
+    : 'rgba(255, 218, 210, 0.30)';
+  const fillBottom = ok
+    ? supplied ? 'rgba(111, 208, 95, 0.30)' : 'rgba(222, 158, 62, 0.26)'
+    : 'rgba(197, 54, 45, 0.18)';
+  const label = ok ? buildSiteShortLabel(candidate.buildingType) : 'Blocked';
+
+  ctx.save();
+  ctx.shadowColor = shadow;
+  ctx.shadowBlur = s * (hovered ? 0.26 : 0.16);
+  const plate = ctx.createLinearGradient(bounds.cx, bounds.cy - bounds.halfH, bounds.cx, bounds.cy + bounds.halfH);
+  plate.addColorStop(0, fillTop);
+  plate.addColorStop(1, fillBottom);
+  fillTileDiamond(ctx, bounds, plate, hovered ? 0.5 : 2.2);
+  ctx.shadowBlur = 0;
+  strokeTileDiamond(ctx, bounds, 'rgba(20, 34, 24, 0.54)', Math.max(2, s * (hovered ? 0.080 : 0.060)), 2.4);
+  strokeTileDiamond(ctx, bounds, accent, Math.max(2, s * (hovered ? 0.050 : 0.036)), 7.0);
+  strokeTileDiamond(ctx, bounds, 'rgba(255, 255, 244, 0.70)', Math.max(1, s * 0.014), 11.0);
+  drawBuildSiteBlueprint(ctx, candidate, bounds, accent, ok, hovered);
+  if (!ok) drawBuildBlockedHatch(ctx, bounds, layout);
+  drawBuildSiteBadge(ctx, candidate, bounds, label, accent, ok, hovered);
+  ctx.restore();
+}
+
+function drawBuildSiteBlueprint(ctx, candidate, bounds, accent, ok, hovered) {
+  const { x, y, s } = bounds;
+  const alpha = ok ? (hovered ? 0.98 : 0.86) : 0.48;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ok ? colorMix(accent, '#1d3f27', 0.20) : 'rgba(126, 44, 36, 0.70)';
+  ctx.fillStyle = ok ? 'rgba(255, 255, 239, 0.72)' : 'rgba(255, 230, 220, 0.46)';
+  ctx.lineWidth = Math.max(1.4, s * 0.035);
+  const type = candidate.buildingType;
+  if (type === 'road') {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.15, y + s * 0.54);
+    ctx.lineTo(x + s * 0.85, y + s * 0.54);
+    ctx.stroke();
+    ctx.strokeStyle = ok ? 'rgba(255, 255, 231, 0.82)' : 'rgba(255, 236, 228, 0.56)';
+    ctx.lineWidth = Math.max(1, s * 0.014);
+    for (let i = 0; i < 4; i += 1) {
+      const px = x + s * (0.24 + i * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(px, y + s * 0.47);
+      ctx.lineTo(px + s * 0.06, y + s * 0.61);
+      ctx.stroke();
+    }
+  } else if (type === 'farm') {
+    for (let i = 0; i < 4; i += 1) {
+      const py = y + s * (0.38 + i * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.22, py);
+      ctx.quadraticCurveTo(x + s * 0.50, py - s * 0.07, x + s * 0.78, py);
+      ctx.stroke();
+    }
+  } else if (type === 'mine') {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.26, y + s * 0.68);
+    ctx.lineTo(x + s * 0.46, y + s * 0.34);
+    ctx.lineTo(x + s * 0.66, y + s * 0.68);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.62, y + s * 0.28);
+    ctx.lineTo(x + s * 0.38, y + s * 0.62);
+    ctx.moveTo(x + s * 0.53, y + s * 0.25);
+    ctx.lineTo(x + s * 0.68, y + s * 0.34);
+    ctx.stroke();
+  } else if (type === 'watchtower' || type === 'outpost') {
+    ctx.strokeRect(x + s * 0.38, y + s * 0.36, s * 0.24, s * 0.26);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.34, y + s * 0.36);
+    ctx.lineTo(x + s * 0.50, y + s * 0.22);
+    ctx.lineTo(x + s * 0.66, y + s * 0.36);
+    ctx.moveTo(x + s * 0.40, y + s * 0.62);
+    ctx.lineTo(x + s * 0.32, y + s * 0.74);
+    ctx.moveTo(x + s * 0.60, y + s * 0.62);
+    ctx.lineTo(x + s * 0.68, y + s * 0.74);
+    ctx.stroke();
+  } else if (type === 'wall') {
+    for (let i = 0; i < 4; i += 1) {
+      ctx.strokeRect(x + s * (0.23 + i * 0.13), y + s * 0.44, s * 0.12, s * 0.12);
+    }
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.22, y + s * 0.58);
+    ctx.lineTo(x + s * 0.78, y + s * 0.58);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(x + s * 0.32, y + s * 0.36, s * 0.36, s * 0.26);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.28, y + s * 0.36);
+    ctx.lineTo(x + s * 0.50, y + s * 0.22);
+    ctx.lineTo(x + s * 0.72, y + s * 0.36);
+    ctx.moveTo(x + s * 0.24, y + s * 0.68);
+    ctx.lineTo(x + s * 0.76, y + s * 0.68);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBuildBlockedHatch(ctx, bounds, layout) {
+  const { x, y, s } = bounds;
+  ctx.save();
+  tileDiamondPath(ctx, bounds, 6);
+  ctx.clip();
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = 'rgba(142, 35, 29, 0.58)';
+  ctx.lineWidth = Math.max(1, layout.tileSize * 0.018);
+  for (let i = -2; i <= 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * (i * 0.20), y + s * 0.18);
+    ctx.lineTo(x + s * (0.44 + i * 0.20), y + s * 0.84);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBuildSiteBadge(ctx, candidate, bounds, label, accent, ok, hovered) {
+  const { s } = bounds;
+  const compactBadge = s < 62;
+  const badgeW = Math.max(s * (compactBadge ? 0.82 : 0.72), ok ? label.length * s * (compactBadge ? 0.108 : 0.095) : s * 0.74);
+  const badgeH = Math.max(compactBadge ? 16 : 14, s * (hovered ? 0.30 : 0.25));
+  const badge = buildSiteBadgeAnchor(candidate, bounds, badgeW, badgeH);
+  const x = badge.x;
+  const y = badge.y;
+  ctx.save();
+  ctx.globalAlpha = hovered ? 0.96 : 0.82;
+  ctx.strokeStyle = ok ? colorMix(accent, '#2e4d2f', 0.34) : 'rgba(154, 45, 36, 0.58)';
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.beginPath();
+  ctx.moveTo(bounds.cx, bounds.cy + bounds.halfH * 0.08);
+  ctx.lineTo(x + badgeW * 0.5, y + badgeH * 0.52);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.shadowColor = ok ? 'rgba(46, 80, 45, 0.22)' : 'rgba(128, 35, 31, 0.20)';
+  ctx.shadowBlur = s * 0.08;
+  roundRectPath(ctx, x, y, badgeW, badgeH, badgeH * 0.40);
+  const fill = ctx.createLinearGradient(x, y, x, y + badgeH);
+  fill.addColorStop(0, ok ? 'rgba(255, 255, 246, 0.96)' : 'rgba(255, 240, 235, 0.94)');
+  fill.addColorStop(1, ok ? colorMix(accent, '#ffffff', 0.72) : 'rgba(255, 203, 194, 0.84)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = ok ? colorMix(accent, '#24522c', 0.22) : '#b9362e';
+  ctx.lineWidth = Math.max(1, s * 0.014);
+  ctx.stroke();
+  ctx.fillStyle = ok ? '#244322' : '#8f2418';
+  ctx.font = `900 ${Math.max(compactBadge ? 8 : 7, s * (hovered ? 0.150 : 0.126))}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + badgeW * 0.5, y + badgeH * 0.52, badgeW - s * 0.12);
+  if (ok && (candidate.supplied || candidate.road)) {
+    const r = Math.max(2.4, s * 0.045);
+    ctx.fillStyle = '#4d8c59';
+    ctx.beginPath();
+    ctx.arc(x + badgeW - r * 2.0, y + badgeH * 0.50, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function buildSiteBadgeAnchor(candidate, bounds, badgeW, badgeH) {
+  const { s } = bounds;
+  if (candidate.dx > 0) {
+    return { x: bounds.cx + s * 0.16, y: bounds.cy + bounds.halfH * 0.10 };
+  }
+  if (candidate.dx < 0) {
+    return { x: bounds.cx - badgeW - s * 0.16, y: bounds.cy + bounds.halfH * 0.10 };
+  }
+  if (candidate.dy > 0) {
+    return { x: bounds.cx - badgeW * 0.5, y: bounds.cy + bounds.halfH * 0.96 };
+  }
+  if (candidate.dy < 0) {
+    return { x: bounds.cx - badgeW * 0.5, y: bounds.cy - bounds.halfH * 1.08 - badgeH * 0.18 };
+  }
+  return { x: bounds.cx - badgeW * 0.5, y: bounds.cy - bounds.halfH * 0.96 - badgeH * 0.18 };
+}
+
+function buildSiteShortLabel(buildingType) {
+  const def = BUILDING_TYPES[buildingType];
+  if (!def) return 'Build';
+  if (buildingType === 'road') return 'Road';
+  if (buildingType === 'lumberCamp') return 'Lumber';
+  if (buildingType === 'watchtower') return 'Tower';
+  if (buildingType === 'archeryYard') return 'Archery';
+  return def.name.replace(/^Military\s+/, '').replace(/\s+Yard$/, '');
 }
 
 function drawPieceCastShadows(ctx, state, layout) {
