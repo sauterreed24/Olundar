@@ -3158,6 +3158,127 @@ button:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.70), 0 8px 18px rgba(61, 84, 53, 0.10);
 }
 
+.tactical-counsel {
+  display: grid;
+  gap: 0.32rem;
+  margin-top: 0.46rem;
+  padding: 0.52rem;
+  border: 1px solid rgba(50, 112, 133, 0.24);
+  border-left: 4px solid rgba(36, 116, 142, 0.68);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(246, 255, 252, 0.96), rgba(221, 241, 232, 0.82)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.90), transparent 7.5rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.76), 0 9px 20px rgba(58, 91, 75, 0.11);
+}
+
+.tactical-counsel.attack {
+  border-left-color: rgba(146, 45, 30, 0.86);
+  background:
+    linear-gradient(145deg, rgba(255, 249, 239, 0.97), rgba(244, 222, 184, 0.82)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.90), transparent 7.5rem);
+}
+
+.tactical-counsel.danger {
+  border-left-color: rgba(154, 73, 35, 0.86);
+  background:
+    linear-gradient(145deg, rgba(255, 250, 235, 0.97), rgba(241, 229, 198, 0.84)),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.88), transparent 7.5rem);
+}
+
+.tactical-counsel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.44rem;
+}
+
+.tactical-counsel-head span,
+.tactical-counsel-stats small {
+  color: #52654e;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.tactical-counsel-head b {
+  padding: 0.15rem 0.40rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  color: #315d27;
+  font-size: 0.66rem;
+}
+
+.tactical-counsel > strong {
+  color: #7d2719;
+  font-size: 0.92rem;
+}
+
+.tactical-counsel p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #435340;
+  font-size: 0.70rem;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.tactical-counsel-tags,
+.tactical-counsel-stats {
+  display: grid;
+  gap: 0.30rem;
+}
+
+.tactical-counsel-tags {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tactical-counsel-tags span {
+  min-width: 0;
+  padding: 0.26rem 0.34rem;
+  border: 1px solid rgba(50, 112, 133, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #4b553c;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.12;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tactical-counsel-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tactical-counsel-stats span {
+  min-width: 0;
+  padding: 0.28rem 0.22rem;
+  border: 1px solid rgba(54, 111, 104, 0.15);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+  text-align: center;
+}
+
+.tactical-counsel-stats b {
+  display: block;
+  color: #173d45;
+  font-size: 0.72rem;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tactical-counsel-stats small {
+  display: block;
+  margin-top: 0.12rem;
+}
+
 .build-placement-card {
   display: grid;
   gap: 0.42rem;
@@ -6042,6 +6163,37 @@ body {
   .mobile-command-strip strong,
   .mobile-collapsible-summary span {
     letter-spacing: 0;
+  }
+
+  .tactical-counsel {
+    gap: 0.22rem;
+    margin-top: 0.34rem;
+    padding: 0.34rem 0.40rem;
+  }
+
+  .tactical-counsel > strong {
+    font-size: 0.82rem;
+    line-height: 1.05;
+  }
+
+  .tactical-counsel p {
+    font-size: 0.64rem;
+    line-height: 1.18;
+    -webkit-line-clamp: 2;
+  }
+
+  .tactical-counsel-tags {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.18rem;
+  }
+
+  .tactical-counsel-tags span {
+    padding: 0.18rem 0.26rem;
+    font-size: 0.52rem;
+  }
+
+  .tactical-counsel-stats {
+    display: none;
   }
 }
 
