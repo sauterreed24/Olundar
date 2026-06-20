@@ -4295,18 +4295,18 @@ button:hover:not(:disabled) {
   }
 
   .toast {
-    top: auto;
-    right: 0.56rem;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.58rem);
-    left: 0.56rem;
+    top: calc(env(safe-area-inset-top, 0px) + 7.95rem);
+    right: 0.48rem;
+    bottom: auto;
+    left: auto;
     display: -webkit-box;
-    max-width: none;
+    max-width: min(19rem, calc(100vw - 0.96rem));
     max-height: 2.48rem;
     overflow: hidden;
     padding: 0.32rem 0.52rem;
     font-size: 0.68rem;
     line-height: 1.15;
-    transform: translateY(0.38rem);
+    transform: translateY(-0.42rem);
     z-index: 30;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
