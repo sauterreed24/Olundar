@@ -275,7 +275,7 @@ function renderMapHelp() {
       '<span>E ends turn | Esc cancels build</span>'
     ];
   const chips = [
-    ...(directive ? [`<span class="next-directive"><b>Next</b> ${escapeHtml(directive.current.label)}</span>`] : []),
+    ...(directive ? [`<button type="button" class="next-directive map-help-action" data-map-help-action="opening" aria-label="Focus the next opening order"><b>Next</b> ${escapeHtml(directive.current.label)}</button>`] : []),
     deadwalkerMapHelpChip(),
     ...hints
   ].filter(Boolean);
@@ -290,7 +290,7 @@ function deadwalkerMapHelpChip() {
   const when = intent.next.turn === state.turn + 1 ? 'next' : `T${intent.next.turn}`;
   const label = intent.next.labels.slice(0, compact ? 1 : 2).join(', ');
   const extra = intent.next.labels.length > (compact ? 1 : 2) ? ' +' : '';
-  return `<span class="deadwalker-directive"><b>Dead</b> ${escapeHtml(label)} ${escapeHtml(when)}${extra}</span>`;
+  return `<button type="button" class="deadwalker-directive map-help-action" data-map-help-action="deadwalker" aria-label="Show Deadwalker intent and blight pressure"><b>Dead</b> ${escapeHtml(label)} ${escapeHtml(when)}${extra}</button>`;
 }
 
 function renderCouncil() {
@@ -4992,6 +4992,20 @@ function scheduleHoverRender() {
 mobileIntelDrawer?.addEventListener('toggle', () => {
   if (!syncingMobileIntelDrawer && isMobileIntelDrawerMode()) {
     mobileIntelDrawerTouched = true;
+  }
+});
+mapHelp?.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target.closest('[data-map-help-action]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  const action = target.dataset.mapHelpAction;
+  if (action === 'opening') {
+    const directive = currentOpeningDirective();
+    if (directive) focusOpeningDirective(directive.current.id);
+    return;
+  }
+  if (action === 'deadwalker') {
+    const intent = currentDeadwalkerIntent();
+    if (intent) focusDeadwalkerIntent(intent);
   }
 });
 window.addEventListener('resize', resizeCanvas);

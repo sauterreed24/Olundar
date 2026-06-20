@@ -701,11 +701,18 @@ button:disabled {
   background: linear-gradient(180deg, rgba(57, 33, 20, 0.88), rgba(29, 18, 15, 0.94));
 }
 
-.map-help span {
+.map-help span,
+.map-help button {
   border: 1px solid rgba(255, 218, 128, 0.26);
   border-radius: 999px;
   padding: 0.28rem 0.58rem;
   background: rgba(255, 226, 156, 0.08);
+  color: inherit;
+  font: inherit;
+}
+
+.map-help button {
+  cursor: pointer;
 }
 
 .map-help .next-directive {
@@ -732,6 +739,14 @@ button:disabled {
   margin-right: 0.22rem;
   color: #fff4ca;
   text-transform: uppercase;
+}
+
+.map-help button:hover,
+.map-help button:focus-visible {
+  border-color: rgba(36, 116, 142, 0.42);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.74),
+    0 5px 12px rgba(45, 82, 78, 0.16);
 }
 
 .side {
@@ -4689,7 +4704,8 @@ button:hover:not(:disabled) {
   backdrop-filter: blur(8px);
 }
 
-.map-help span {
+.map-help span,
+.map-help button {
   background: rgba(255, 255, 255, 0.62);
 }
 
@@ -6434,6 +6450,24 @@ button:hover:not(:disabled),
     0 8px 15px rgba(49, 86, 63, 0.09);
 }
 
+.map-help button {
+  min-height: 0;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.map-help .next-directive {
+  background:
+    linear-gradient(180deg, rgba(255, 253, 236, 0.96), rgba(238, 218, 151, 0.78));
+  color: #7b2c21;
+}
+
+.map-help .deadwalker-directive {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 240, 0.98), rgba(246, 224, 201, 0.86));
+  color: #7d2719;
+}
+
 .top-actions button {
   min-height: 2.02rem;
   padding: 0.34rem 0.50rem;
@@ -6545,7 +6579,8 @@ button:hover:not(:disabled),
     inset 0 1px 0 rgba(255,255,255,0.80);
 }
 
-.map-help span {
+.map-help span,
+.map-help button {
   padding: 0.18rem 0.42rem;
   border-color: rgba(38, 121, 132, 0.10);
   background: rgba(255,255,255,0.64);
@@ -7369,7 +7404,8 @@ body {
   overflow: hidden;
 }
 
-.map-help span {
+.map-help span,
+.map-help button {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7380,7 +7416,8 @@ body {
     flex-wrap: nowrap;
   }
 
-  .map-help span {
+  .map-help span,
+  .map-help button {
     white-space: nowrap;
   }
 }
