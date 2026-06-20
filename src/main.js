@@ -43,16 +43,35 @@ import {
   isTileSupplied,
   isVisible
 } from './rules.js';
-import { describeSelection, describeTilePanel, drawGame, pointToTile } from './render.js';
+import { describeSelection, describeTilePanel, drawGame, drawGameCore, getLayout, pointToTile } from './render.js';
 import { MAX_SAVE_SLOTS, createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from './saveSlots.js';
 import { importSaveSnapshot } from './saveTransfer.js';
-import { audioIsEnabled, initAudioPreference, playAudioCue, setAudioVolume, toggleAudio } from './audio.js';
+import { applyContentBundle, getContentBundle } from './content.js';
+import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAudioVolume, setBusVolume, toggleAudio, updateDynamicMusic, notifyCombatEngaged } from './audio.js';
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
+import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
+import { getCamera } from './engine/camera.js';
+import {
+  executePlayerCommand,
+  getCommandHistory,
+  moveCommand,
+  attackCommand,
+  buildCommand,
+  trainCommand,
+  upgradeCommand,
+  diplomacyCommand,
+  diplomacyPromiseCommand,
+  fieldOrderCommand,
+  crisisCommand
+} from './engine/commands.js';
+import { setModOverrides, validateContentSchema } from './engine/entity-factory.js';
+import { loadContentAsync } from './engine/content-loader.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
-const canvas = document.querySelector('#gameCanvas');
+let canvas = document.querySelector('#gameCanvas');
+const mapShell = document.querySelector('.map-shell');
 const mapIntel = document.querySelector('#mapIntel');
 const mapTurnReport = document.querySelector('#mapTurnReport');
 const mapLensBar = document.querySelector('#mapLensBar');
@@ -136,6 +155,14 @@ let turnReport = null;
 let mobileIntelDrawerTouched = false;
 let syncingMobileIntelDrawer = false;
 let pendingHoverFrame = null;
+let pixiBooted = false;
+let introPlaying = false;
+let tacticalPauseVisible = false;
+let lastMarchCountdown = 99;
+
+function getCanvas() {
+  return getPixiCanvas() || canvas;
+}
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -144,7 +171,7 @@ focusFirstReadyUnit();
 
 function resizeCanvas() {
   const compactViewport = window.innerWidth <= 620;
-  const parent = canvas.parentElement;
+  const parent = getCanvas()?.parentElement || mapShell;
   const mapScale = getMapScalePreset(playerSettings);
   const width = Math.max(320, parent.clientWidth);
   const idealHeight = width * (compactViewport ? 1.02 : 0.8);
@@ -152,9 +179,13 @@ function resizeCanvas() {
   const height = Math.max(mapScale.minHeight, Math.min(idealHeight, maxHeight));
   const dprCap = mapCanvasDprCap(width, height, compactViewport);
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-  canvas.style.height = `${height}px`;
+  if (pixiBooted) {
+    resizePixiRenderer(width, height, dpr);
+  } else {
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.height = `${height}px`;
+  }
   render();
 }
 
@@ -167,7 +198,10 @@ function mapCanvasDprCap(width, height, compactViewport) {
 }
 
 function render() {
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
+  const activeCanvas = getCanvas();
+  drawGame(activeCanvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
+  syncDynamicAudio();
+  renderTacticalPause();
   renderTopBar();
   renderMapLensBar();
   renderMapHelp();
@@ -187,6 +221,40 @@ function render() {
   renderMode();
   renderMobileIntelDrawer();
   maybeOpenOutcomeRecap();
+}
+
+function syncDynamicAudio() {
+  const campaign = getDeadwalkerCampaign(state);
+  updateDynamicMusic({ marchCountdown: campaign.turnsToMarch, inCombat: Boolean(battleImpact?.type === 'unit') });
+  if (campaign.marchingCount > 0 && campaign.turnsToMarch <= 0 && !tacticalPauseVisible) {
+    tacticalPauseVisible = true;
+  }
+}
+
+function renderTacticalPause() {
+  let overlay = document.querySelector('#tacticalPauseOverlay');
+  if (!tacticalPauseVisible) {
+    if (overlay) overlay.hidden = true;
+    return;
+  }
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'tacticalPauseOverlay';
+    overlay.className = 'tactical-pause-overlay';
+    overlay.innerHTML = `
+      <div class="tactical-pause-card" role="dialog" aria-modal="true" aria-labelledby="tacticalPauseTitle">
+        <h2 id="tacticalPauseTitle">Deadwalker March Lands</h2>
+        <p>The Hollow Crown columns have reached the frontier. Review your lines, then continue command.</p>
+        <button type="button" id="tacticalPauseContinue">Resume Command</button>
+      </div>
+    `;
+    mapShell?.appendChild(overlay);
+    overlay.querySelector('#tacticalPauseContinue')?.addEventListener('click', () => {
+      tacticalPauseVisible = false;
+      render();
+    });
+  }
+  overlay.hidden = false;
 }
 
 function renderTopBar() {
@@ -378,6 +446,7 @@ function renderGuide() {
   guidePanel.hidden = !guide.visible;
   if (!guide.visible) {
     guidePanel.innerHTML = '';
+    clearGuideHighlights();
     return;
   }
   const openSteps = guide.steps.filter((step) => !step.done);
@@ -395,7 +464,7 @@ function renderGuide() {
     <p class="guide-summary">${escapeHtml(guide.summary)}</p>
     <ol class="guide-steps">
       ${visibleSteps.map((step) => `
-        <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current' : ''}">
+        <li class="${step.done ? 'done' : step.id === guide.currentId ? 'current guide-highlight-target' : ''}" data-guide-step="${escapeHtml(step.id)}">
           <span class="step-status">${step.done ? 'Done' : step.id === guide.currentId ? 'Next' : 'Open'}</span>
           <strong>${escapeHtml(step.label)}</strong>
           <small>${escapeHtml(step.detail)}</small>
@@ -404,6 +473,34 @@ function renderGuide() {
     </ol>
     ${hiddenCount ? `<p class="guide-more">${hiddenCount} later opening ${hiddenCount === 1 ? 'order' : 'orders'} stay queued below the current priorities.</p>` : ''}
   `;
+  applyGuideHighlights(guide);
+}
+
+function applyGuideHighlights(guide) {
+  clearGuideHighlights();
+  const current = guide.steps.find((step) => step.id === guide.currentId);
+  if (!current) return;
+  const targets = guideHighlightTargets(current.id);
+  for (const selector of targets) {
+    const el = document.querySelector(selector);
+    if (el) el.classList.add('guide-ui-glow');
+  }
+}
+
+function guideHighlightTargets(stepId) {
+  const map = {
+    scout: ['#selectionPanel', '#actionPanel', '#gameCanvas'],
+    engineer: ['#actionPanel', '#gameCanvas'],
+    economy: ['#resourceBar', '#actionPanel'],
+    diplomacy: ['#diplomacyPanel', '#actionPanel'],
+    deadwalker: ['#mapLensBar', '.map-help'],
+    endTurn: ['#endTurnTop', '#actionPanel']
+  };
+  return map[stepId] || ['#actionPanel', '#gameCanvas'];
+}
+
+function clearGuideHighlights() {
+  document.querySelectorAll('.guide-ui-glow').forEach((el) => el.classList.remove('guide-ui-glow'));
 }
 
 function renderOperations() {
@@ -2574,10 +2671,12 @@ function mapIntelState(tile) {
   const road = Boolean(mapTile?.road || state.buildings.some((building) => building.type === 'road' && building.x === tile.x && building.y === tile.y));
   const supplied = Boolean(mapTile && isTileSupplied(state, tile.x, tile.y));
   const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId);
+  const terrainTactical = terrain?.tactical ? ` ${terrain.tactical}` : '';
   const baseStats = [
     { value: terrainName, label: 'terrain' },
     { value: `${tile.x},${tile.y}`, label: 'sector' }
   ];
+  if (terrain?.move) baseStats.push({ value: String(terrain.move), label: 'move cost' });
   if (road) baseStats.push({ value: 'road', label: 'logistics' });
   else if (supplied) baseStats.push({ value: 'supply', label: 'logistics' });
   if (mapTile?.blight) baseStats.push({ value: `${mapTile.blight}/9`, label: 'blight' });
@@ -2844,17 +2943,17 @@ function setMobileIntelDrawerOpen(open) {
 }
 
 function canvasClicked(event) {
-  const tile = pointToTile(canvas, event.clientX, event.clientY);
+  const activeCanvas = getCanvas();
+  const tile = pointToTile(activeCanvas, event.clientX, event.clientY);
   if (!inMap(tile.x, tile.y)) return;
   lastTile = tile;
 
   if (state.status !== 'playing') return;
 
   if (state.mode.type === 'build') {
-    const result = startConstruction(state, state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
+    const cmd = buildCommand(state.mode.builderId, state.mode.buildingType, tile.x, tile.y);
     state.mode = { type: 'select' };
-    handleResult(result, 'build');
-    render();
+    runCommand(cmd, 'build');
     return;
   }
 
@@ -2875,14 +2974,12 @@ function canvasClicked(event) {
   const selectedUnit = state.units.find((u) => u.id === state.selectedUnitId);
 
   if (selectedUnit && visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
-    handleResult(attackUnit(state, selectedUnit.id, visibleUnit.id), 'attack');
-    render();
+    runCommand(attackCommand(selectedUnit.id, visibleUnit.id, 'unit'), 'attack');
     return;
   }
 
   if (selectedUnit && visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
-    handleResult(attackBuilding(state, selectedUnit.id, visibleBuilding.id), 'attack');
-    render();
+    runCommand(attackCommand(selectedUnit.id, visibleBuilding.id, 'building'), 'attack');
     return;
   }
 
@@ -2901,8 +2998,7 @@ function canvasClicked(event) {
   }
 
   if (selectedUnit && selectedUnit.faction === 'olundar') {
-    handleResult(moveUnit(state, selectedUnit.id, tile.x, tile.y), 'move');
-    render();
+    runCommand(moveCommand(selectedUnit.id, tile.x, tile.y), 'move');
     return;
   }
 
@@ -2926,12 +3022,16 @@ function selectBuilding(id) {
   state.cameraFocusTile = null;
 }
 
-function runAction(action, successCue = 'ui') {
-  const result = action();
+function runAction(action, successCue = 'ui', command = null) {
+  const result = command ? executePlayerCommand(state, command) : action();
   const ok = handleResult(result, successCue);
   render();
   if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
   return ok;
+}
+
+function runCommand(command, successCue = 'ui') {
+  return runAction(null, successCue, command);
 }
 
 function handleResult(result, successCue = null) {
@@ -2944,7 +3044,18 @@ function handleResult(result, successCue = null) {
   }
   turnReport = null;
   state.pendingEndTurn = null;
-  if (successCue === 'attack') captureBattleImpact(result);
+  if (successCue === 'attack') {
+    captureBattleImpact(result);
+    notifyCombatEngaged(true);
+    spawnCombatJuice(result.targetX, result.targetY, result.damage || 0, Boolean(result.targetDestroyed || result.lethal));
+    triggerScreenShake(result.targetDestroyed || result.lethal ? 6 : 3);
+  }
+  if (successCue === 'move') {
+    spawnMoveTrail(result.x ?? lastTile.x, result.y ?? lastTile.y);
+  }
+  if (successCue === 'build' && result.building) {
+    spawnBuildComplete(result.building.x, result.building.y, result.building.id);
+  }
   if (successCue === 'diplomacy') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
@@ -4454,8 +4565,25 @@ function renderSettingsPanel() {
       <button class="icon-button" type="button" data-action="close-settings" aria-label="Close settings">X</button>
     </div>
     <label class="setup-field volume-field">
-      <span>Audio volume <b id="volumeValue">${settings.audioVolume}%</b></span>
+      <span>Master volume <b id="volumeValue">${settings.audioVolume}%</b></span>
       <input id="audioVolume" name="audioVolume" type="range" min="0" max="100" step="1" value="${settings.audioVolume}" />
+    </label>
+    <h3>Audio buses</h3>
+    <label class="setup-field volume-field">
+      <span>SFX <b>${settings.sfxVolume}%</b></span>
+      <input name="sfxVolume" type="range" min="0" max="100" step="1" value="${settings.sfxVolume}" />
+    </label>
+    <label class="setup-field volume-field">
+      <span>Ambient <b>${settings.ambientVolume}%</b></span>
+      <input name="ambientVolume" type="range" min="0" max="100" step="1" value="${settings.ambientVolume}" />
+    </label>
+    <label class="setup-field volume-field">
+      <span>Music <b>${settings.musicVolume}%</b></span>
+      <input name="musicVolume" type="range" min="0" max="100" step="1" value="${settings.musicVolume}" />
+    </label>
+    <label class="setup-field volume-field">
+      <span>UI <b>${settings.uiVolume}%</b></span>
+      <input name="uiVolume" type="range" min="0" max="100" step="1" value="${settings.uiVolume}" />
     </label>
     <h3>Motion</h3>
     <div class="card-grid settings-grid">
@@ -4476,6 +4604,10 @@ function renderSettingsPanel() {
 function applyPlayerSettings(settings) {
   playerSettings = normalizeSettings(settings);
   setAudioVolume(playerSettings.audioVolume);
+  setBusVolume('sfx', playerSettings.sfxVolume);
+  setBusVolume('ambient', playerSettings.ambientVolume);
+  setBusVolume('music', playerSettings.musicVolume);
+  setBusVolume('ui', playerSettings.uiVolume);
   document.body.classList.toggle('reduced-motion', playerSettings.motion === 'reduced');
 }
 
@@ -4578,6 +4710,19 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
     <div class="card-grid difficulty-grid">
       ${Object.values(DIFFICULTY_PRESETS).map((item) => choiceCard('difficultyId', item.id, item.name, item.text, item.id === difficultyId)).join('')}
     </div>
+    <details class="mod-menu-drawer">
+      <summary>Mod Menu — hot-reload JSON tweaks</summary>
+      <p class="muted">Edit stats and costs while playing. Changes apply on reload.</p>
+      <label class="setup-field">
+        <span>Unit stat patch (JSON)</span>
+        <textarea id="modUnitsPatch" name="modUnitsPatch" rows="4" placeholder='{"scout":{"move":5}}'></textarea>
+      </label>
+      <label class="setup-field">
+        <span>Building stat patch (JSON)</span>
+        <textarea id="modBuildingsPatch" name="modBuildingsPatch" rows="4" placeholder='{"farm":{"buildTurns":1}}'></textarea>
+      </label>
+      <button type="button" data-action="apply-mods">Apply Mod Patches</button>
+    </details>
     <div class="setup-actions">
       <button type="submit">Start Campaign</button>
       <button type="button" data-action="close-setup">Cancel</button>
@@ -4617,12 +4762,66 @@ function startConfiguredCampaign(form) {
   focusedArchivedMissionId = null;
   battleImpact = null;
   turnReport = null;
+  tacticalPauseVisible = false;
+  getCommandHistory().clear();
+  getCamera().reset();
   focusFirstReadyUnit();
   closeCampaignRecap();
   closeCampaignSetup();
-  toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
-  playAudioCue('fanfare');
-  render();
+  playCinematicIntro(() => {
+    toast(`${state.campaign.scenarioName} started on ${state.campaign.difficultyName}.`);
+    playAudioCue('fanfare');
+    render();
+  });
+}
+
+function playCinematicIntro(onComplete) {
+  if (playerSettings.motion === 'reduced') {
+    onComplete?.();
+    return;
+  }
+  let overlay = document.querySelector('#cinematicIntro');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'cinematicIntro';
+    overlay.className = 'cinematic-intro';
+    overlay.innerHTML = `
+      <div class="cinematic-banner">
+        <div class="cinematic-sun">O</div>
+        <h2>Olundar</h2>
+        <p>The imperial war table awaits your first orders.</p>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  introPlaying = true;
+  overlay.hidden = false;
+  overlay.classList.remove('fade-out');
+  requestAnimationFrame(() => overlay.classList.add('fade-in'));
+  setTimeout(() => {
+    overlay.classList.add('fade-out');
+    setTimeout(() => {
+      overlay.hidden = true;
+      introPlaying = false;
+      onComplete?.();
+    }, 700);
+  }, 1800);
+}
+
+function applyModPatchesFromForm(form) {
+  try {
+    const unitsPatch = JSON.parse(String(form.querySelector('#modUnitsPatch')?.value || '{}'));
+    const buildingsPatch = JSON.parse(String(form.querySelector('#modBuildingsPatch')?.value || '{}'));
+    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch });
+    const bundle = getContentBundle();
+    validateContentSchema(bundle);
+    applyContentBundle(bundle);
+    toast('Mod patches applied.');
+    playAudioCue('ui');
+  } catch (error) {
+    toast(error.message || 'Invalid mod JSON.', 'bad');
+    playAudioCue('error');
+  }
 }
 
 function exportSave() {
@@ -5032,38 +5231,26 @@ function inMap(x, y) {
 
 function canvasCursorForTile(tile) {
   if (!tile || !inMap(tile.x, tile.y)) return '';
+  if (state.mode.type === 'build') return 'crosshair';
   if (openingDirectiveForTile(tile) || diplomacyOpportunityForTile(tile)) return 'pointer';
   const selectedUnit = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar' && !unit.hasActed);
   if (!selectedUnit || state.mode.type !== 'select') return '';
   const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
-  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) return 'pointer';
+  if (visibleUnit && visibleUnit.id !== selectedUnit.id && isEnemy(state, selectedUnit.faction, visibleUnit.faction)) {
+    return "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ctext y='18' font-size='18'%3E⚔%3C/text%3E%3C/svg%3E\") 12 12, pointer";
+  }
   const visibleBuilding = isVisible(state, tile.x, tile.y) ? buildingAt(state, tile.x, tile.y) : null;
-  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) return 'pointer';
+  if (visibleBuilding && isEnemy(state, selectedUnit.faction, visibleBuilding.faction)) {
+    return "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ctext y='18' font-size='18'%3E⚔%3C/text%3E%3C/svg%3E\") 12 12, pointer";
+  }
+  if (diplomacyOpportunityForTile(tile)) {
+    return "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ctext y='18' font-size='18'%3E💬%3C/text%3E%3C/svg%3E\") 12 12, pointer";
+  }
   const def = UNIT_TYPES[selectedUnit.type];
   return findPath(state, selectedUnit, tile.x, tile.y, def.move) ? 'pointer' : '';
 }
 
 canvas.addEventListener('click', canvasClicked);
-canvas.addEventListener('mousemove', (event) => {
-  const tile = pointToTile(canvas, event.clientX, event.clientY);
-  if (!inMap(tile.x, tile.y)) {
-    hoverTile = null;
-  } else {
-    hoverTile = tile;
-    lastTile = tile;
-  }
-  canvas.style.cursor = canvasCursorForTile(hoverTile);
-  scheduleHoverRender();
-});
-canvas.addEventListener('mouseleave', () => {
-  hoverTile = null;
-  canvas.style.cursor = '';
-  if (pendingHoverFrame !== null) {
-    cancelAnimationFrame(pendingHoverFrame);
-    pendingHoverFrame = null;
-  }
-  render();
-});
 
 function scheduleHoverRender() {
   if (pendingHoverFrame !== null) return;
@@ -5071,7 +5258,7 @@ function scheduleHoverRender() {
     pendingHoverFrame = null;
     renderTilePanel();
     renderMapIntel();
-    drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
+    drawGame(getCanvas(), state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay(), diplomacyOpportunityOverlay());
   });
 }
 
@@ -5129,6 +5316,18 @@ window.addEventListener('keydown', (event) => {
   } else if (event.key.toLowerCase() === 'l' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     openSaveManager('load');
+  } else if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey) && event.shiftKey) {
+    event.preventDefault();
+    const result = getCommandHistory().redo(state);
+    if (result.ok) toast(result.reason || 'Redid action.');
+    else if (result.reason) toast(result.reason, 'bad');
+    render();
+  } else if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    const result = getCommandHistory().undo(state);
+    if (result.ok) toast(result.reason || 'Undid last action.');
+    else if (result.reason) toast(result.reason, 'bad');
+    render();
   }
 });
 
@@ -5243,6 +5442,7 @@ setupOverlay.addEventListener('click', (event) => {
 
 campaignSetup.addEventListener('click', (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.action === 'close-setup') closeCampaignSetup();
+  if (event.target instanceof HTMLElement && event.target.dataset.action === 'apply-mods') applyModPatchesFromForm(campaignSetup);
 });
 
 campaignSetup.addEventListener('change', (event) => {
@@ -5389,6 +5589,10 @@ settingsPanel.addEventListener('submit', (event) => {
   const data = new FormData(settingsPanel);
   persistPlayerSettings({
     audioVolume: data.get('audioVolume'),
+    sfxVolume: data.get('sfxVolume'),
+    ambientVolume: data.get('ambientVolume'),
+    musicVolume: data.get('musicVolume'),
+    uiVolume: data.get('uiVolume'),
     motion: data.get('motion'),
     mapScale: data.get('mapScale')
   });
@@ -5398,4 +5602,47 @@ settingsPanel.addEventListener('submit', (event) => {
   playAudioCue('ui');
 });
 
-resizeCanvas();
+async function bootEngine() {
+  try {
+    await loadContentAsync();
+    validateContentSchema(getContentBundle());
+    const canvasEl = document.querySelector('#gameCanvas');
+    await initPixiRenderer(canvasEl, { getLayout });
+    canvas = getPixiCanvas() || canvasEl;
+    pixiBooted = true;
+    canvas.addEventListener('click', canvasClicked);
+    canvas.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      getCamera().handleWheel(event.deltaY, event.clientX, event.clientY, rect);
+      render();
+    }, { passive: false });
+    canvas.addEventListener('mousemove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      getCamera().setPointer(event.clientX, event.clientY, true, rect);
+      const tile = pointToTile(canvas, event.clientX, event.clientY);
+      if (!inMap(tile.x, tile.y)) hoverTile = null;
+      else {
+        hoverTile = tile;
+        lastTile = tile;
+      }
+      canvas.style.cursor = canvasCursorForTile(hoverTile);
+      scheduleHoverRender();
+    });
+    canvas.addEventListener('mouseleave', () => {
+      getCamera().setPointer(0, 0, false, null);
+      hoverTile = null;
+      canvas.style.cursor = '';
+      if (pendingHoverFrame !== null) {
+        cancelAnimationFrame(pendingHoverFrame);
+        pendingHoverFrame = null;
+      }
+      render();
+    });
+  } catch (error) {
+    console.warn('Pixi renderer fallback:', error);
+  }
+  resizeCanvas();
+}
+
+bootEngine();
