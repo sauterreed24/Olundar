@@ -134,6 +134,7 @@ let battleImpact = null;
 let turnReport = null;
 let mobileIntelDrawerTouched = false;
 let syncingMobileIntelDrawer = false;
+let pendingHoverFrame = null;
 
 initAudioPreference();
 applyPlayerSettings(playerSettings);
@@ -2793,8 +2794,11 @@ function recommendedIronOrder() {
   if (!engineer) return null;
   const mine = recommendedMineBuild(engineer);
   if (mine) return openingBlockedInfrastructureAction(mine);
-  if (engineer.hasActed) return blockedBuilderRecovery(engineer, 'Hill Mine route', 'Hill Mine route');
   const target = bestIronMineTarget(engineer);
+  if (engineer.hasActed) {
+    const label = target ? `Hill Mine ${target.x},${target.y}` : 'Hill Mine route';
+    return blockedBuilderRecovery(engineer, label, label);
+  }
   if (!target) {
     return {
       kind: 'focus',
@@ -2887,7 +2891,7 @@ function bestIronRoadAdvance(engineer, target) {
   }
   const destination = candidates.sort((a, b) => a.score - b.score || a.remaining - b.remaining || a.cost - b.cost)[0];
   if (!destination) return null;
-  return ironMoveDirective(engineer, destination, target, 'Advance along the iron road', `road march | ${destination.cost}/${def.move} move`);
+  return ironMoveDirective(engineer, destination, target, 'Advance along the iron road', `road march | ${destination.cost}/${def.move} move | ${ironRouteProgressLabel(engineer, destination, target)}`);
 }
 
 function recommendedIronRoadExtension(engineer, target) {
@@ -2914,7 +2918,7 @@ function recommendedIronRoadExtension(engineer, target) {
     y: site.y,
     canExecute: true,
     label: 'Extend iron road',
-    meta: `toward ${target.x},${target.y} ${TERRAIN[target.terrain].name} | ${formatCost(BUILDING_TYPES.road.cost)}`,
+    meta: `toward ${target.x},${target.y} ${TERRAIN[target.terrain].name} | ${ironRouteProgressLabel(engineer, site, target)} | ${formatCost(BUILDING_TYPES.road.cost)}`,
     executeLabel: 'Do order',
     executeMeta: `Iron road at ${site.x},${site.y}`,
     previewMeta: 'Preview iron road',
@@ -2944,7 +2948,7 @@ function bestIronAdvance(engineer, target) {
   }
   const destination = candidates.sort((a, b) => a.score - b.score || a.remaining - b.remaining || a.cost - b.cost)[0];
   if (!destination) return null;
-  return ironMoveDirective(engineer, destination, target, 'March toward hill iron', `${destination.cost}/${def.move} move | ${target.x},${target.y} mine route`);
+  return ironMoveDirective(engineer, destination, target, 'March toward hill iron', `${destination.cost}/${def.move} move | ${ironRouteProgressLabel(engineer, destination, target)}`);
 }
 
 function ironMoveDirective(engineer, destination, target, label, meta) {
@@ -2962,6 +2966,13 @@ function ironMoveDirective(engineer, destination, target, label, meta) {
     previewToast: `${engineer.name} can move toward the ${TERRAIN[target.terrain].name} mine route at ${target.x},${target.y}.`,
     successToast: `${engineer.name} advances toward iron at ${target.x},${target.y}.`
   };
+}
+
+function ironRouteProgressLabel(engineer, destination, target) {
+  const remainingPath = findPath(state, { ...engineer, x: destination.x, y: destination.y }, target.x, target.y, Infinity);
+  const remaining = remainingPath?.cost ?? target.cost;
+  if (remaining <= 0) return `${TERRAIN[target.terrain].name} ${target.x},${target.y} reached`;
+  return `${remaining} route left to ${target.x},${target.y}`;
 }
 
 function neighborsOf(x, y) {
@@ -3997,15 +4008,27 @@ canvas.addEventListener('mousemove', (event) => {
     lastTile = tile;
   }
   canvas.style.cursor = canvasCursorForTile(hoverTile);
-  renderTilePanel();
-  renderMapIntel();
-  drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
+  scheduleHoverRender();
 });
 canvas.addEventListener('mouseleave', () => {
   hoverTile = null;
   canvas.style.cursor = '';
+  if (pendingHoverFrame !== null) {
+    cancelAnimationFrame(pendingHoverFrame);
+    pendingHoverFrame = null;
+  }
   render();
 });
+
+function scheduleHoverRender() {
+  if (pendingHoverFrame !== null) return;
+  pendingHoverFrame = requestAnimationFrame(() => {
+    pendingHoverFrame = null;
+    renderTilePanel();
+    renderMapIntel();
+    drawGame(canvas, state, hoverTile, activeMapLens, focusedMissionRouteOverlay(), missionSiteFocusOverlay(), battleImpactOverlay(), openingOrderOverlay());
+  });
+}
 
 mobileIntelDrawer?.addEventListener('toggle', () => {
   if (!syncingMobileIntelDrawer && isMobileIntelDrawerMode()) {
