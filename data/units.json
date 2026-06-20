@@ -1,0 +1,316 @@
+{
+  "scout": {
+    "id": "scout",
+    "name": "Pathfinder Scout",
+    "role": "Recon",
+    "faction": "living",
+    "glyph": "S",
+    "hp": 8,
+    "attack": 2,
+    "range": 1,
+    "move": 4,
+    "sight": 5,
+    "armor": 0,
+    "upkeep": {
+      "food": 1
+    },
+    "cost": {
+      "food": 8,
+      "wood": 4,
+      "gold": 4
+    },
+    "trainTurns": 2,
+    "requires": [
+      "city"
+    ],
+    "tags": [
+      "recon",
+      "light"
+    ],
+    "text": "Fast explorer. Reveals fog, surveys ruins, and can slip through forests."
+  },
+  "legionary": {
+    "id": "legionary",
+    "name": "Shield Legionary",
+    "role": "Infantry",
+    "faction": "living",
+    "glyph": "L",
+    "hp": 16,
+    "attack": 5,
+    "range": 1,
+    "move": 2,
+    "sight": 3,
+    "armor": 2,
+    "upkeep": {
+      "food": 1,
+      "gold": 1
+    },
+    "cost": {
+      "food": 18,
+      "wood": 6,
+      "iron": 8,
+      "gold": 6
+    },
+    "trainTurns": 3,
+    "requires": [
+      "barracks"
+    ],
+    "tags": [
+      "line",
+      "shield"
+    ],
+    "text": "Reliable sword-and-shield core that holds formation around cities and roads."
+  },
+  "spearGuard": {
+    "id": "spearGuard",
+    "name": "Spear Guard",
+    "role": "Anti-cavalry",
+    "faction": "living",
+    "glyph": "P",
+    "hp": 15,
+    "attack": 4,
+    "range": 1,
+    "move": 2,
+    "sight": 3,
+    "armor": 2,
+    "upkeep": {
+      "food": 1
+    },
+    "cost": {
+      "food": 16,
+      "wood": 10,
+      "iron": 4,
+      "gold": 4
+    },
+    "trainTurns": 2,
+    "requires": [
+      "barracks"
+    ],
+    "tags": [
+      "line",
+      "spear"
+    ],
+    "text": "Cheap disciplined defensive unit. Strong when guarding chokepoints."
+  },
+  "archer": {
+    "id": "archer",
+    "name": "Olundaran Archer",
+    "role": "Ranged",
+    "faction": "living",
+    "glyph": "A",
+    "hp": 10,
+    "attack": 4,
+    "range": 3,
+    "move": 2,
+    "sight": 4,
+    "armor": 0,
+    "upkeep": {
+      "food": 1,
+      "wood": 1
+    },
+    "cost": {
+      "food": 12,
+      "wood": 14,
+      "gold": 5
+    },
+    "trainTurns": 3,
+    "requires": [
+      "archeryYard"
+    ],
+    "tags": [
+      "ranged",
+      "wood"
+    ],
+    "text": "Ranged pressure. Hills and walls make them dangerous."
+  },
+  "cavalry": {
+    "id": "cavalry",
+    "name": "Equite Cavalry",
+    "role": "Flanker",
+    "faction": "living",
+    "glyph": "C",
+    "hp": 14,
+    "attack": 5,
+    "range": 1,
+    "move": 4,
+    "sight": 4,
+    "armor": 1,
+    "upkeep": {
+      "food": 2,
+      "gold": 1
+    },
+    "cost": {
+      "food": 22,
+      "wood": 8,
+      "iron": 8,
+      "gold": 16
+    },
+    "trainTurns": 4,
+    "requires": [
+      "stable"
+    ],
+    "tags": [
+      "mounted",
+      "fast"
+    ],
+    "text": "Fast strike unit for saving allies, raiding bone pits, and closing on archers."
+  },
+  "engineer": {
+    "id": "engineer",
+    "name": "Field Engineer",
+    "role": "Builder",
+    "faction": "living",
+    "glyph": "E",
+    "hp": 9,
+    "attack": 1,
+    "range": 1,
+    "move": 2,
+    "sight": 3,
+    "armor": 0,
+    "upkeep": {
+      "food": 1
+    },
+    "cost": {
+      "food": 10,
+      "wood": 8,
+      "gold": 6
+    },
+    "trainTurns": 2,
+    "requires": [
+      "city"
+    ],
+    "tags": [
+      "builder"
+    ],
+    "text": "Builds roads, outposts, camps, walls, and siege infrastructure."
+  },
+  "onager": {
+    "id": "onager",
+    "name": "Onager Crew",
+    "role": "Siege",
+    "faction": "living",
+    "glyph": "O",
+    "hp": 12,
+    "attack": 8,
+    "range": 2,
+    "move": 1,
+    "sight": 3,
+    "armor": 0,
+    "upkeep": {
+      "food": 1,
+      "wood": 1,
+      "gold": 1
+    },
+    "cost": {
+      "food": 18,
+      "wood": 28,
+      "iron": 14,
+      "gold": 18
+    },
+    "trainTurns": 5,
+    "requires": [
+      "workshop"
+    ],
+    "tags": [
+      "siege",
+      "slow"
+    ],
+    "text": "Slow artillery that cracks necropolises, gates, and the Deadwalker portal."
+  },
+  "boneThrall": {
+    "id": "boneThrall",
+    "name": "Bone Thrall",
+    "role": "Undead mob",
+    "faction": "dead",
+    "glyph": "b",
+    "hp": 8,
+    "attack": 3,
+    "range": 1,
+    "move": 2,
+    "sight": 3,
+    "armor": 0,
+    "upkeep": {},
+    "cost": {},
+    "trainTurns": 1,
+    "requires": [
+      "bonePit"
+    ],
+    "tags": [
+      "undead",
+      "swarm"
+    ],
+    "text": "Cheap skeletons that appear in numbers and regenerate on blight."
+  },
+  "corpseArcher": {
+    "id": "corpseArcher",
+    "name": "Corpse Archer",
+    "role": "Undead ranged",
+    "faction": "dead",
+    "glyph": "r",
+    "hp": 9,
+    "attack": 3,
+    "range": 3,
+    "move": 2,
+    "sight": 4,
+    "armor": 0,
+    "upkeep": {},
+    "cost": {},
+    "trainTurns": 2,
+    "requires": [
+      "graveForge"
+    ],
+    "tags": [
+      "undead",
+      "ranged"
+    ],
+    "text": "Bleached archers that punish unsupported infantry."
+  },
+  "graveKnight": {
+    "id": "graveKnight",
+    "name": "Grave Knight",
+    "role": "Undead elite",
+    "faction": "dead",
+    "glyph": "k",
+    "hp": 18,
+    "attack": 6,
+    "range": 1,
+    "move": 2,
+    "sight": 3,
+    "armor": 2,
+    "upkeep": {},
+    "cost": {},
+    "trainTurns": 3,
+    "requires": [
+      "necropolis"
+    ],
+    "tags": [
+      "undead",
+      "elite"
+    ],
+    "text": "Armored dead champions that anchor Deadwalker assaults."
+  },
+  "lichBoss": {
+    "id": "lichBoss",
+    "name": "Vorgath the Hollow Crown",
+    "role": "Boss",
+    "faction": "dead",
+    "glyph": "V",
+    "hp": 42,
+    "attack": 8,
+    "range": 2,
+    "move": 1,
+    "sight": 5,
+    "armor": 2,
+    "upkeep": {},
+    "cost": {},
+    "trainTurns": 99,
+    "requires": [
+      "portal"
+    ],
+    "tags": [
+      "undead",
+      "boss"
+    ],
+    "text": "The central Deadwalker commander. Slay Vorgath and destroy the portal to end the war."
+  }
+}
