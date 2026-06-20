@@ -135,6 +135,16 @@ check('content tables are internally consistent', () => {
     assert(scenario.name && scenario.seed && scenario.text, `Scenario ${id} needs name, seed, and text.`);
     assert(DIFFICULTY_PRESETS[scenario.difficultyId], `Scenario ${id} references missing difficulty.`);
     for (const unit of scenario.units || []) assert(UNIT_TYPES[unit.type], `Scenario ${id} starts with missing unit ${unit.type}.`);
+    for (const building of scenario.buildings || []) assert(BUILDING_TYPES[building.type], `Scenario ${id} starts with missing building ${building.type}.`);
+    for (const patch of scenario.terrainPatches || []) {
+      assert(Number.isInteger(patch.x) && Number.isInteger(patch.y) && patch.x >= 0 && patch.y >= 0 && patch.x < MAP_WIDTH && patch.y < MAP_HEIGHT, `Scenario ${id} has invalid terrain patch coordinates.`);
+      assert(TERRAIN[patch.terrain], `Scenario ${id} references missing terrain ${patch.terrain}.`);
+    }
+    assert(Array.isArray(scenario.victoryConditions) && scenario.victoryConditions.length > 0, `Scenario ${id} needs victory conditions.`);
+    for (const condition of scenario.victoryConditions) {
+      assert(condition.id && condition.type && condition.label && condition.text, `Scenario ${id} has incomplete victory condition metadata.`);
+      if (condition.target !== undefined) assert(Number.isInteger(condition.target) && condition.target > 0, `Scenario ${id} victory condition ${condition.id} has invalid target.`);
+    }
   }
   for (const [id, order] of Object.entries(FIELD_ORDERS)) {
     assert(order.id === id, `Field order ${id} has mismatched id.`);
@@ -1248,12 +1258,23 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
 check('scenario and difficulty presets change campaign shape', () => {
   const founding = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-scenario' });
   const dawnroad = createGame({ scenarioId: 'dawnroad', difficultyId: 'standard', seed: 'quality-scenario' });
+  const ironVanguard = createGame({ scenarioId: 'ironVanguard', difficultyId: 'legion', seed: 'quality-scenario' });
+  const mireVeil = createGame({ scenarioId: 'mireVeil', difficultyId: 'standard', seed: 'quality-scenario' });
+  const hollowEclipse = createGame({ scenarioId: 'hollowEclipse', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
   const chronicle = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-scenario' });
   const hollow = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: 'quality-scenario' });
 
+  assert(Object.keys(SCENARIOS).length >= 7, 'Campaign setup should include the three replayability scenarios.');
   assert(dawnroad.campaign.scenarioName === SCENARIOS.dawnroad.name, 'Scenario name is not preserved in campaign metadata.');
   assert(dawnroad.units.some((u) => u.name === 'Road Oath-Spear'), 'Dawnward Road scenario should add its sworn spear.');
   assert(dawnroad.factions.olundar.resources.influence > founding.factions.olundar.resources.influence, 'Scenario resource changes did not apply.');
+  assert(ironVanguard.units.some((u) => u.name === 'First Vanguard Onager') && ironVanguard.buildings.some((b) => b.name === 'Vanguard Siege Yard'), 'Iron Vanguard should start with a siege unit and workshop.');
+  assert(tileAt(ironVanguard, 9, 18).terrain === 'hills' && tileAt(ironVanguard, 11, 18).terrain === 'ruins', 'Iron Vanguard should reshape nearby iron terrain.');
+  assert(mireVeil.units.some((u) => u.name === 'Veil Route Scout') && tileAt(mireVeil, 6, 18).terrain === 'marsh' && tileAt(mireVeil, 7, 18).terrain === 'river', 'Mire Veil should add route scout and marsh terrain.');
+  assert(hollowEclipse.buildings.some((b) => b.name === 'Eclipse Rally Banner') && hollowEclipse.buildings.some((b) => b.name === 'Eclipse Bone Pit'), 'Hollow Eclipse should start with a forward banner and closer deadwork.');
+  assert(tileAt(hollowEclipse, 20, 15).terrain === 'blight' && tileAt(hollowEclipse, 20, 15).blight >= 5, 'Hollow Eclipse should push blight closer to the front.');
+  assert(getWarCouncil(ironVanguard).campaign.victoryConditions.some((condition) => condition.id === 'ironDeadworks'), 'War council should expose scenario victory conditions.');
+  assert(ironVanguard.objectives.includes('Crack three deadworks') && getObjectiveProgress(ironVanguard).length === ironVanguard.objectives.length, 'Scenario victory conditions should become live objective progress.');
   assert(chronicle.factions.olundar.resources.food > founding.factions.olundar.resources.food, 'Chronicle should give more opening resources.');
   assert(hollow.factions.olundar.resources.morale < founding.factions.olundar.resources.morale, 'Hollow Crown should start with lower morale.');
 

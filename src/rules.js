@@ -56,6 +56,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       seed: campaign.seed,
       scenarioId: campaign.scenario.id,
       scenarioName: campaign.scenario.name,
+      victoryConditions: scenarioVictoryConditions(campaign.scenario),
       difficultyId: campaign.difficulty.id,
       difficultyName: campaign.difficulty.name,
       difficultyText: campaign.difficulty.text
@@ -92,7 +93,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       aftermath: { queue: [], resolved: {} },
       missions: []
     },
-    objectives: OBJECTIVES.slice(),
+    objectives: campaignObjectives(campaign.scenario),
     messages: []
   };
 
@@ -132,6 +133,9 @@ function normalizeCampaignState(state) {
     if (state.factions?.olundar) state.factions.olundar.fieldOrders = {};
   }
   if (state.campaign?.scenarioId && state.campaign?.difficultyId) {
+    const scenario = SCENARIOS[state.campaign.scenarioId] || SCENARIOS.founding;
+    state.campaign.victoryConditions = scenarioVictoryConditions(scenario);
+    state.objectives = campaignObjectives(scenario);
     normalizeDeadwalkerCampaign(state);
     return;
   }
@@ -140,11 +144,22 @@ function normalizeCampaignState(state) {
     seed: state.seed || fallback.seed,
     scenarioId: fallback.scenario.id,
     scenarioName: fallback.scenario.name,
+    victoryConditions: scenarioVictoryConditions(fallback.scenario),
     difficultyId: fallback.difficulty.id,
     difficultyName: fallback.difficulty.name,
     difficultyText: fallback.difficulty.text
   };
+  state.objectives = campaignObjectives(fallback.scenario);
   normalizeDeadwalkerCampaign(state);
+}
+
+function scenarioVictoryConditions(scenario) {
+  return Array.isArray(scenario?.victoryConditions) ? clone(scenario.victoryConditions) : [];
+}
+
+function campaignObjectives(scenario) {
+  const scenarioObjectives = scenarioVictoryConditions(scenario).map((condition) => condition.label);
+  return [...OBJECTIVES, ...scenarioObjectives];
 }
 
 function createDiplomacyMemoryState() {
@@ -202,7 +217,27 @@ function applyCampaignSetup(state, campaign) {
     state.factions.olundar.resources[key] = Math.max(0, state.factions.olundar.resources[key] || 0);
   }
   state.factions.olundar.resources.morale = Math.max(1, Math.min(12, state.factions.olundar.resources.morale || 1));
+  for (const patch of campaign.scenario.terrainPatches || []) applyScenarioTerrainPatch(state, patch);
+  for (const building of campaign.scenario.buildings || []) {
+    addBuilding(state, building.type, building.faction || 'olundar', building.x, building.y, {
+      name: building.name,
+      complete: building.complete !== false,
+      turnsLeft: building.turnsLeft,
+      upgraded: building.upgraded,
+      hp: building.hp
+    });
+  }
   for (const unit of campaign.scenario.units || []) addUnit(state, unit.type, unit.faction || 'olundar', unit.x, unit.y, { name: unit.name });
+}
+
+function applyScenarioTerrainPatch(state, patch) {
+  if (!patch || !inBounds(patch.x, patch.y) || !TERRAIN[patch.terrain]) return;
+  const tile = tileAt(state, patch.x, patch.y);
+  tile.terrain = patch.terrain;
+  tile.baseTerrain = patch.baseTerrain && TERRAIN[patch.baseTerrain] ? patch.baseTerrain : patch.terrain;
+  if (Number.isFinite(patch.blight)) tile.blight = Math.max(0, patch.blight);
+  if (typeof patch.road === 'boolean') tile.road = patch.road;
+  if (typeof patch.rumor === 'string') tile.rumor = patch.rumor;
 }
 
 function createFactions() {
@@ -368,6 +403,7 @@ function unitCommandPriority(unit) {
 }
 
 export function getObjectiveProgress(state) {
+  normalizeCampaignState(state);
   const discoveredLiving = Object.values(state.factions).filter((faction) => !faction.player && faction.id !== 'dead' && faction.discovered).length;
   const revealedPortal = state.buildings.some((building) => building.type === 'portal' && state.revealed[building.y * MAP_WIDTH + building.x]);
   const economyPieces = [
@@ -377,7 +413,7 @@ export function getObjectiveProgress(state) {
     hasOperationalBuilding(state, 'barracks'),
     hasOperationalBuilding(state, 'archeryYard') || state.units.filter((unit) => unit.faction === 'olundar' && unit.type === 'archer').length >= 2
   ];
-  return [
+  const baseProgress = [
     {
       done: revealedPortal,
       detail: revealedPortal ? 'Portal revealed' : `${Math.round(revealedPercent(state))}% of the world mapped`
@@ -399,6 +435,44 @@ export function getObjectiveProgress(state) {
       detail: state.flags.portalDestroyed ? 'Portal destroyed' : 'Portal still active'
     }
   ];
+  return [...baseProgress, ...scenarioVictoryProgress(state, discoveredLiving)];
+}
+
+function scenarioVictoryProgress(state, discoveredLiving) {
+  return (state.campaign?.victoryConditions || []).map((condition) => scenarioConditionProgress(state, condition, discoveredLiving));
+}
+
+function scenarioConditionProgress(state, condition, discoveredLiving) {
+  const target = Number(condition.target) || 1;
+  if (condition.type === 'portal') {
+    return {
+      done: state.flags.portalDestroyed,
+      detail: state.flags.portalDestroyed ? 'Portal destroyed' : condition.text || 'Portal still active'
+    };
+  }
+  if (condition.type === 'holdPacts') {
+    const count = Object.values(state.factions.olundar.pacts || {}).filter(Boolean).length;
+    return { done: count >= target, detail: `${count}/${target} Survival Pact${target === 1 ? '' : 's'} active` };
+  }
+  if (condition.type === 'tradeRoutes') {
+    const count = Object.values(state.factions.olundar.trades || {}).filter(Boolean).length;
+    return { done: count >= target, detail: `${count}/${target} trade route${target === 1 ? '' : 's'} active` };
+  }
+  if (condition.type === 'destroyDeadworks') {
+    const count = state.flags.deadStrongholdsDestroyed || 0;
+    return { done: count >= target, detail: `${count}/${target} Deadwalker stronghold${target === 1 ? '' : 's'} destroyed` };
+  }
+  if (condition.type === 'contactFactions') {
+    return { done: discoveredLiving >= target, detail: `${discoveredLiving}/${target} living civilization${target === 1 ? '' : 's'} contacted` };
+  }
+  if (condition.type === 'surviveTurn') {
+    return { done: state.turn >= target && state.status !== 'lost', detail: state.status === 'lost' ? 'Olundar fell before the target turn' : `Turn ${state.turn}/${target}` };
+  }
+  if (condition.type === 'maintainMorale') {
+    const morale = state.factions.olundar.resources.morale || 0;
+    return { done: morale >= target, detail: `Morale ${morale}/${target}` };
+  }
+  return { done: false, detail: condition.text || 'Scenario condition is pending' };
 }
 
 export function getAftermathMissions(state) {
@@ -620,6 +694,7 @@ export function getWarCouncil(state) {
     headline: councilHeadline(state, knownDead),
     campaign: {
       scenarioName: state.campaign.scenarioName,
+      victoryConditions: state.campaign.victoryConditions || [],
       difficultyName: state.campaign.difficultyName,
       difficultyText: state.campaign.difficultyText
     },

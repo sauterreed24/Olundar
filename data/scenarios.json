@@ -4,7 +4,22 @@
     "name": "Founding of Olundar",
     "seed": "Olundar-Founding",
     "difficultyId": "standard",
-    "text": "Balanced start with the capital, a scout, an engineer, and enough time to choose your first frontier."
+    "text": "Balanced start with the capital, a scout, an engineer, and enough time to choose your first frontier.",
+    "victoryConditions": [
+      {
+        "id": "foundingPortal",
+        "type": "portal",
+        "label": "Shatter the Bone Portal",
+        "text": "Kill Vorgath and destroy the Bone Portal."
+      },
+      {
+        "id": "foundingPact",
+        "type": "holdPacts",
+        "target": 1,
+        "label": "Bind one Survival Pact",
+        "text": "Secure at least one living faction pact before the endgame siege."
+      }
+    ]
   },
   "dawnroad": {
     "id": "dawnroad",
@@ -25,6 +40,21 @@
         "y": 16,
         "name": "Road Oath-Spear"
       }
+    ],
+    "victoryConditions": [
+      {
+        "id": "dawnroadPacts",
+        "type": "holdPacts",
+        "target": 2,
+        "label": "Forge a road coalition",
+        "text": "Hold two Survival Pacts while the road front is still alive."
+      },
+      {
+        "id": "dawnroadPortal",
+        "type": "portal",
+        "label": "Break the portal war",
+        "text": "Destroy the Bone Portal after the coalition forms."
+      }
     ]
   },
   "marketCrown": {
@@ -38,7 +68,22 @@
       "food": -8,
       "influence": -1,
       "morale": -1
-    }
+    },
+    "victoryConditions": [
+      {
+        "id": "marketTrade",
+        "type": "tradeRoutes",
+        "target": 2,
+        "label": "Open two trade routes",
+        "text": "Turn coin into at least two active trade compacts."
+      },
+      {
+        "id": "marketPortal",
+        "type": "portal",
+        "label": "Fund the final siege",
+        "text": "Use the market start to reach and destroy the Bone Portal."
+      }
+    ]
   },
   "ashgate": {
     "id": "ashgate",
@@ -50,6 +95,199 @@
       "iron": 12,
       "stone": 12,
       "morale": -1
-    }
+    },
+    "victoryConditions": [
+      {
+        "id": "ashgateDeadworks",
+        "type": "destroyDeadworks",
+        "target": 2,
+        "label": "Crack two deadworks",
+        "text": "Destroy two Deadwalker strongholds before committing to the portal."
+      },
+      {
+        "id": "ashgatePortal",
+        "type": "portal",
+        "label": "Close Ash Gate",
+        "text": "Destroy the Bone Portal on a harder siege-forward front."
+      }
+    ]
+  },
+  "ironVanguard": {
+    "id": "ironVanguard",
+    "name": "Iron Vanguard",
+    "seed": "Iron-Vanguard",
+    "difficultyId": "legion",
+    "text": "A siege-forward campaign with an early workshop, one onager crew, exposed iron hills, and deadworks that must be cracked before the final push.",
+    "resourceDelta": {
+      "food": -10,
+      "wood": -10,
+      "iron": 18,
+      "stone": 10,
+      "gold": -6
+    },
+    "terrainPatches": [
+      { "x": 9, "y": 18, "terrain": "hills" },
+      { "x": 10, "y": 18, "terrain": "hills" },
+      { "x": 11, "y": 18, "terrain": "ruins" },
+      { "x": 12, "y": 17, "terrain": "hills" },
+      { "x": 13, "y": 17, "terrain": "ruins" }
+    ],
+    "buildings": [
+      {
+        "type": "workshop",
+        "faction": "olundar",
+        "x": 9,
+        "y": 17,
+        "name": "Vanguard Siege Yard",
+        "complete": true
+      }
+    ],
+    "units": [
+      {
+        "type": "onager",
+        "faction": "olundar",
+        "x": 10,
+        "y": 16,
+        "name": "First Vanguard Onager"
+      }
+    ],
+    "victoryConditions": [
+      {
+        "id": "ironDeadworks",
+        "type": "destroyDeadworks",
+        "target": 3,
+        "label": "Crack three deadworks",
+        "text": "Use the early onager and workshop to destroy three Deadwalker strongholds."
+      },
+      {
+        "id": "ironPortal",
+        "type": "portal",
+        "label": "Breach the Bone Portal",
+        "text": "Finish the siege by destroying the Bone Portal."
+      }
+    ]
+  },
+  "mireVeil": {
+    "id": "mireVeil",
+    "name": "Mire Veil Routes",
+    "seed": "Mire-Veil-Routes",
+    "difficultyId": "standard",
+    "text": "A marsh-heavy scouting campaign with extra food, route guides, and slow approaches that reward alliances and careful terrain reading.",
+    "resourceDelta": {
+      "food": 18,
+      "wood": 10,
+      "influence": 1,
+      "iron": -6,
+      "gold": -4
+    },
+    "terrainPatches": [
+      { "x": 5, "y": 18, "terrain": "marsh" },
+      { "x": 6, "y": 18, "terrain": "marsh" },
+      { "x": 7, "y": 18, "terrain": "river" },
+      { "x": 8, "y": 19, "terrain": "marsh" },
+      { "x": 9, "y": 19, "terrain": "marsh" },
+      { "x": 10, "y": 20, "terrain": "river" }
+    ],
+    "units": [
+      {
+        "type": "scout",
+        "faction": "olundar",
+        "x": 6,
+        "y": 18,
+        "name": "Veil Route Scout"
+      }
+    ],
+    "victoryConditions": [
+      {
+        "id": "mireContacts",
+        "type": "contactFactions",
+        "target": 3,
+        "label": "Map all living routes",
+        "text": "Contact every living civilization through the marsh route web."
+      },
+      {
+        "id": "mirePacts",
+        "type": "holdPacts",
+        "target": 2,
+        "label": "Hold two marsh oaths",
+        "text": "Maintain two Survival Pacts before the portal siege."
+      },
+      {
+        "id": "mirePortal",
+        "type": "portal",
+        "label": "End the blight trail",
+        "text": "Destroy the Bone Portal after the route network is secure."
+      }
+    ]
+  },
+  "hollowEclipse": {
+    "id": "hollowEclipse",
+    "name": "Hollow Eclipse",
+    "seed": "Hollow-Eclipse",
+    "difficultyId": "hollowCrown",
+    "text": "A brutal challenge start with closer blight, a forward Rally Banner, lower morale, and an early march that tests defensive discipline immediately.",
+    "resourceDelta": {
+      "food": -18,
+      "wood": 10,
+      "stone": 10,
+      "iron": -4,
+      "morale": -1
+    },
+    "terrainPatches": [
+      { "x": 18, "y": 14, "terrain": "blight", "blight": 5 },
+      { "x": 19, "y": 14, "terrain": "blight", "blight": 5 },
+      { "x": 20, "y": 15, "terrain": "blight", "blight": 6 },
+      { "x": 21, "y": 16, "terrain": "blight", "blight": 6 },
+      { "x": 22, "y": 16, "terrain": "ruins", "blight": 3 }
+    ],
+    "buildings": [
+      {
+        "type": "rallyBanner",
+        "faction": "olundar",
+        "x": 11,
+        "y": 16,
+        "name": "Eclipse Rally Banner",
+        "complete": true
+      },
+      {
+        "type": "bonePit",
+        "faction": "dead",
+        "x": 25,
+        "y": 15,
+        "name": "Eclipse Bone Pit",
+        "complete": true
+      }
+    ],
+    "units": [
+      {
+        "type": "boneThrall",
+        "faction": "dead",
+        "x": 24,
+        "y": 16,
+        "name": "Eclipse March Thrall"
+      }
+    ],
+    "victoryConditions": [
+      {
+        "id": "eclipseSurvive",
+        "type": "surviveTurn",
+        "target": 12,
+        "label": "Survive the first eclipse",
+        "text": "Reach turn 12 with Olundar Prime standing."
+      },
+      {
+        "id": "eclipseMorale",
+        "type": "maintainMorale",
+        "target": 4,
+        "label": "Keep morale at four",
+        "text": "Do not let morale collapse below four during the opening crisis."
+      },
+      {
+        "id": "eclipsePortal",
+        "type": "portal",
+        "label": "Break the Hollow Eclipse",
+        "text": "Destroy the Bone Portal after surviving the early march."
+      }
+    ]
   }
 }

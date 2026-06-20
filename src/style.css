@@ -861,6 +861,14 @@ button:disabled {
   color: var(--muted) !important;
 }
 
+.campaign-goals {
+  margin: -0.25rem 0 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #ffe7a5;
+  overflow-wrap: anywhere;
+}
+
 .council-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(4.7rem, 1fr));

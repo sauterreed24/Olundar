@@ -428,9 +428,11 @@ function deadwalkerMapHelpChip() {
 
 function renderCouncil() {
   const council = getWarCouncil(state);
+  const scenarioGoals = (council.campaign.victoryConditions || []).slice(0, 3);
   councilPanel.innerHTML = `
     <h2>${escapeHtml(council.headline)}</h2>
     <p class="campaign-meta">${escapeHtml(council.campaign.scenarioName)} · ${escapeHtml(council.campaign.difficultyName)}</p>
+    ${scenarioGoals.length ? `<p class="campaign-goals">${scenarioGoals.map((goal) => escapeHtml(goal.label)).join(' / ')}</p>` : ''}
     <div class="council-stats">
       ${council.stats.map((stat) => `<span><b>${escapeHtml(stat.value)}</b>${escapeHtml(stat.label)}</span>`).join('')}
     </div>
@@ -4699,7 +4701,7 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
     </label>
     <h3>Scenario</h3>
     <div class="card-grid">
-      ${Object.values(SCENARIOS).map((item) => choiceCard('scenarioId', item.id, item.name, item.text, item.id === selectedScenarioId)).join('')}
+      ${Object.values(SCENARIOS).map((item) => choiceCard('scenarioId', item.id, item.name, scenarioChoiceText(item), item.id === selectedScenarioId)).join('')}
     </div>
     <h3>Difficulty</h3>
     <div class="card-grid difficulty-grid">
@@ -4723,6 +4725,11 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
       <button type="button" data-action="close-setup">Cancel</button>
     </div>
   `;
+}
+
+function scenarioChoiceText(scenario) {
+  const goals = (scenario.victoryConditions || []).slice(0, 2).map((condition) => condition.label).join(' / ');
+  return goals ? `${scenario.text} Goals: ${goals}.` : scenario.text;
 }
 
 function choiceCard(name, value, title, text, checked) {
