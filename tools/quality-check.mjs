@@ -914,6 +914,31 @@ check('pact field orders steer allied AI', () => {
   const afterSpear = harass.units.find((unit) => unit.id === spear.id);
   const afterDistance = Math.abs(afterSpear.x - bonePit.x) + Math.abs(afterSpear.y - bonePit.y);
   assert(afterDistance < beforeDistance, 'Harass Deadworks should move allied units toward Deadwalker structures.');
+
+  const intercept = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-field-order-intercept' });
+  intercept.units = [];
+  intercept.factions.dawn.discovered = true;
+  intercept.factions.olundar.pacts.dawn = true;
+  intercept.factions.dawn.pacts.olundar = true;
+  intercept.factions.olundar.relations.dawn = 45;
+  intercept.factions.dawn.relations.olundar = 45;
+  const interceptOrder = setFieldOrder(intercept, 'dawn', 'defendRoads');
+  assert(interceptOrder.ok, interceptOrder.reason || 'Intercept order setup failed.');
+  const capital = intercept.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  const ally = addUnit(intercept, 'spearGuard', 'dawn', capital.x + 7, capital.y - 1, { name: 'Dawnward Interceptor' });
+  const marcher = addUnit(intercept, 'boneThrall', 'dead', capital.x + 12, capital.y, { name: 'March Column' });
+  marcher.march = true;
+  endTurn(intercept);
+  const allyAfter = intercept.units.find((unit) => unit.id === ally.id);
+  const marcherAfter = intercept.units.find((unit) => unit.id === marcher.id);
+  assert(
+    allyAfter && marcherAfter && allyAfter.y === capital.y && allyAfter.x > capital.x && allyAfter.x < marcherAfter.x,
+    'Defend Roads should move pact allies onto the active Deadwalker march lane before it reaches Olundar Prime.'
+  );
+  assert(
+    getDiplomacyLedger(intercept).entries.find((entry) => entry.id === 'dawn').memory.records.some((record) => record.label === 'March Intercepted'),
+    'Pact interception should be recorded as fulfilled field-order memory.'
+  );
 });
 
 check('living faction war aims guide pre-pact behavior', () => {

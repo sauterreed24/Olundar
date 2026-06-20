@@ -3281,7 +3281,9 @@ function runLivingAiTurn(state, factionId) {
     const orderTarget = fieldOrderTarget(state, unit, fieldOrder);
     if (orderTarget) {
       aiMoveToward(state, unit, orderTarget.x, orderTarget.y);
-      if (fieldOrder === 'harassDeadworks') {
+      if (orderTarget.intercept) {
+        recordFieldOrderFulfillment(state, factionId, fieldOrder, 'March Intercepted', `${faction.name} moved to block a Deadwalker march lane before it reached Olundar Prime.`, 2);
+      } else if (fieldOrder === 'harassDeadworks') {
         recordFieldOrderFulfillment(state, factionId, 'harassDeadworks', 'Deadworks Harassed', `${faction.name} pushed toward Deadwalker works under pact orders.`, 2);
       } else if (fieldOrder === 'defendRoads') {
         recordFieldOrderFulfillment(state, factionId, 'defendRoads', 'Roads Patrolled', `${faction.name} honored the pact by patrolling Olundar roads and approaches.`, 1);
@@ -3357,6 +3359,8 @@ function factionWarAimTarget(state, unit, factionId, aimId) {
 
 function fieldOrderTarget(state, unit, orderId) {
   if (!orderId) return null;
+  const intercept = fieldOrderInterceptTarget(state, unit, orderId);
+  if (intercept) return intercept;
   if (orderId === 'harassDeadworks') {
     return nearestDeadwalkerStructure(state, unit.x, unit.y, 28) || nearestTargetFaction(state, unit.x, unit.y, 'dead', 18);
   }
@@ -3367,6 +3371,37 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
   }
   return null;
+}
+
+function fieldOrderInterceptTarget(state, unit, orderId) {
+  if (!['reinforceCapital', 'defendRoads'].includes(orderId)) return null;
+  const capital = olundarCapital(state);
+  if (!capital) return null;
+  const candidates = [];
+  for (const marcher of state.units.filter((target) => target.faction === 'dead' && target.march)) {
+    const goal = openApproachTile(state, marcher, capital.x, capital.y);
+    if (!goal) continue;
+    const route = findPath(state, marcher, goal.x, goal.y, Infinity);
+    if (!route?.path?.length) continue;
+    route.path
+      .map((key, index) => ({ ...xy(key), index }))
+      .filter((point) => canEnter(state, unit, point.x, point.y))
+      .forEach((point) => {
+        const capitalDistance = manhattan(point.x, point.y, capital.x, capital.y);
+        const unitDistance = manhattan(unit.x, unit.y, point.x, point.y);
+        const laneValue = orderId === 'reinforceCapital'
+          ? Math.abs(capitalDistance - 4) * 0.7
+          : Math.abs(capitalDistance - 6) * 0.45;
+        candidates.push({
+          x: point.x,
+          y: point.y,
+          intercept: true,
+          threatId: marcher.id,
+          score: unitDistance * 1.25 + laneValue + point.index * 0.15
+        });
+      });
+  }
+  return candidates.sort((a, b) => a.score - b.score)[0] || null;
 }
 
 function easternScoutTarget(state, x, y) {
