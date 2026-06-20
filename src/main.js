@@ -1991,6 +1991,23 @@ function mapIntelState(tile) {
     };
   }
 
+  const strategicImpact = battleImpact?.type === 'strategic' && battleImpact.x === tile.x && battleImpact.y === tile.y
+    ? battleImpact
+    : null;
+  if (strategicImpact) {
+    return {
+      tone: 'order diplomacy',
+      kicker: strategicImpact.strategicType === 'fieldOrder' ? 'Pact order' : 'Survival pact',
+      title: strategicImpact.title,
+      detail: strategicImpact.detail,
+      stats: [
+        ...baseStats,
+        { value: strategicImpact.label || 'pact', label: 'accord' },
+        { value: 'shared', label: 'sight' }
+      ]
+    };
+  }
+
   if (state.mode.type === 'build') {
     const def = BUILDING_TYPES[state.mode.buildingType];
     const result = canBuildOn(state, state.mode.buildingType, tile.x, tile.y);
@@ -2293,8 +2310,10 @@ function selectBuilding(id) {
 
 function runAction(action, successCue = 'ui') {
   const result = action();
-  handleResult(result, successCue);
+  const ok = handleResult(result, successCue);
   render();
+  if (ok && successCue === 'diplomacy' && window.innerWidth <= 980) scrollBattlefieldIntoView();
+  return ok;
 }
 
 function handleResult(result, successCue = null) {
@@ -2307,6 +2326,7 @@ function handleResult(result, successCue = null) {
   }
   turnReport = null;
   if (successCue === 'attack') captureBattleImpact(result);
+  if (successCue === 'diplomacy') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   return true;
@@ -2332,9 +2352,39 @@ function captureBattleImpact(result) {
   lastTile = { x: result.targetX, y: result.targetY };
 }
 
+function captureStrategicImpact(result) {
+  const impact = result?.strategicImpact;
+  if (!impact || !Number.isFinite(impact.x) || !Number.isFinite(impact.y)) return;
+  battleImpact = {
+    x: impact.x,
+    y: impact.y,
+    type: 'strategic',
+    strategicType: impact.type || 'accord',
+    tone: impact.tone || 'good',
+    label: impact.label || 'PACT',
+    title: impact.title || 'Survival Pact',
+    detail: impact.detail || 'Alliance vision and field orders are now active.',
+    factionName: impact.factionName || '',
+    color: impact.color || '#2d93aa'
+  };
+  lastTile = { x: impact.x, y: impact.y };
+  hoverTile = lastTile;
+}
+
 function battleImpactCard() {
   const card = document.createElement('article');
-  card.className = `battle-impact ${battleImpact.tone}`;
+  card.className = `battle-impact ${battleImpact.type === 'strategic' ? 'strategy' : battleImpact.tone}`;
+  if (battleImpact.type === 'strategic') {
+    card.innerHTML = `
+      <div>
+        <span>${battleImpact.strategicType === 'fieldOrder' ? 'Pact Field Order' : 'Survival Pact'}</span>
+        <strong>${escapeHtml(battleImpact.title)}</strong>
+      </div>
+      <p>${escapeHtml(battleImpact.detail)}</p>
+      <button type="button" data-action="clear-battle-impact" aria-label="Dismiss strategic impact">Close</button>
+    `;
+    return card;
+  }
   const hpText = battleImpact.portalReforms
     ? `${battleImpact.hpBefore} -> reforms to ${battleImpact.hpAfter}`
     : battleImpact.hpBefore !== null && battleImpact.hpAfter !== null
@@ -2587,9 +2637,25 @@ function executeDiplomacyOpportunity(opportunity) {
   const result = performDiplomacy(state, opportunity.entry.id, opportunity.action.id);
   if (!result.ok) return result;
   activeMapLens = 'alliance';
+  const targetTile = diplomacyOpportunityTarget(opportunity.entry.id);
+  if (targetTile) {
+    state.cameraFocusTile = { x: targetTile.x, y: targetTile.y };
+  }
+  const faction = state.factions[opportunity.entry.id] || {};
   return {
     ...result,
-    reason: `${opportunity.entry.name} signs the Survival Pact. Alliance vision is now on the map.`
+    reason: `${opportunity.entry.name} signs the Survival Pact. Alliance vision is now on the map.`,
+    strategicImpact: targetTile ? {
+      type: 'pact',
+      x: targetTile.x,
+      y: targetTile.y,
+      tone: 'good',
+      label: 'PACT',
+      title: `${opportunity.entry.name} bound to Olundar`,
+      detail: 'Shared sight opens immediately, and this ally can now receive direct field orders from the war council.',
+      factionName: opportunity.entry.name,
+      color: faction.color || '#2d93aa'
+    } : null
   };
 }
 
@@ -2706,9 +2772,25 @@ function executePactFieldOrder(entry, order) {
   const result = setFieldOrder(state, entry.id, order.id);
   if (!result.ok) return result;
   activeMapLens = 'alliance';
+  const targetTile = diplomacyOpportunityTarget(entry.id);
+  if (targetTile) {
+    state.cameraFocusTile = { x: targetTile.x, y: targetTile.y };
+  }
+  const faction = state.factions[entry.id] || {};
   return {
     ...result,
-    reason: `${entry.name}: ${order.name}. Alliance lens shows the shared front.`
+    reason: `${entry.name}: ${order.name}. Alliance lens shows the shared front.`,
+    strategicImpact: targetTile ? {
+      type: 'fieldOrder',
+      x: targetTile.x,
+      y: targetTile.y,
+      tone: 'good',
+      label: 'ORDER',
+      title: `${entry.name}: ${order.name}`,
+      detail: `${order.text} The alliance lens now centers that commitment on the map.`,
+      factionName: entry.name,
+      color: faction.color || '#2d93aa'
+    } : null
   };
 }
 
