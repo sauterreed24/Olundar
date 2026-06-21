@@ -61,6 +61,7 @@ import {
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
+import { MOD_PACK_TYPE, createModPackArchive, parseModPackArchive } from '../src/mod-packs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -1393,11 +1394,24 @@ check('scenario and difficulty presets change campaign shape', () => {
 check('mod menu exposes a validated visual scenario editor', () => {
   const mainSource = readProjectFile('src/main.js');
   const styleSource = readProjectFile('src/style.css');
+  const swSource = readProjectFile('sw.js');
   assert(mainSource.includes('function scenarioEditorMarkup') && mainSource.includes('function scenarioEditorGridMarkup') && mainSource.includes('function scenarioEditorToScenario'), 'Mod Menu should include a visual scenario editor that emits scenario JSON.');
   assert(mainSource.includes('data-action="paint-scenario-terrain"') && mainSource.includes('data-action="add-scenario-unit"') && mainSource.includes('data-action="remove-scenario-unit"') && mainSource.includes('customScenarioVictoryPreset'), 'Visual scenario editor should support terrain painting, unit placement, and victory setup.');
   assert(mainSource.includes('id="modScenarioJson"') && mainSource.includes('function parseCustomScenarioFromForm') && mainSource.includes('function validateCustomScenario') && mainSource.includes('function mergeContentTable'), 'Custom scenario JSON and content patches should be parsed, merged, and validated before loading.');
-  assert(mainSource.includes('#modTerrainPatch') && mainSource.includes('TERRAIN: mergeContentTable') && mainSource.includes('applyContentBundle(nextBundle)') && mainSource.includes('renderCampaignSetup(customScenario.id'), 'Custom units, buildings, terrain, and scenarios should flow into the content bundle without code changes.');
+  assert(mainSource.includes('#modTerrainPatch') && mainSource.includes('TERRAIN: mergeContentTable') && mainSource.includes('applyContentBundle(pack.nextBundle)') && mainSource.includes('renderCampaignSetup(pack.scenario.id'), 'Custom units, buildings, terrain, and scenarios should flow into the content bundle without code changes.');
+  assert(mainSource.includes('createModPackBlob') && mainSource.includes('readModPackArchive') && mainSource.includes('data-action="export-mod-pack"') && mainSource.includes('data-action="import-mod-pack"') && mainSource.includes('id="modPackImportInput"'), 'Mod Menu should export and import validated mod packs as ZIP files.');
   assert(styleSource.includes('.scenario-editor-grid') && styleSource.includes('.scenario-editor-cell') && styleSource.includes('.scenario-editor-roster') && styleSource.includes('.terrain-blight'), 'Scenario editor needs responsive terrain, roster, and terrain-state styling.');
+  assert(styleSource.includes('.mod-pack-actions') && swSource.includes('./src/mod-packs.js'), 'Mod pack controls should be styled and cached for the PWA shell.');
+  const samplePack = {
+    'manifest.json': JSON.stringify({ type: MOD_PACK_TYPE, files: { scenario: 'scenario.json', units: 'units.json', buildings: 'buildings.json', terrain: 'terrain.json' } }),
+    'scenario.json': JSON.stringify({ id: 'modScenario', name: 'Zip Frontier', seed: 'Zip-Frontier', difficultyId: 'standard', text: 'ZIP roundtrip scenario.', victoryConditions: [{ id: 'zipPortal', type: 'portal', label: 'Break Zip Gate', text: 'Destroy the portal.' }] }),
+    'units.json': JSON.stringify({ scout: { move: 5 } }),
+    'buildings.json': JSON.stringify({ farm: { buildTurns: 1 } }),
+    'terrain.json': JSON.stringify({})
+  };
+  const archive = createModPackArchive(samplePack);
+  const unpacked = parseModPackArchive(archive);
+  assert(JSON.parse(unpacked['manifest.json']).type === MOD_PACK_TYPE && JSON.parse(unpacked['units.json']).scout.move === 5 && JSON.parse(unpacked['scenario.json']).name === 'Zip Frontier', 'Mod pack ZIP archives should roundtrip manifest, scenario, and patch files.');
 });
 
 check('strategic path exists from Olundar toward the portal front', () => {

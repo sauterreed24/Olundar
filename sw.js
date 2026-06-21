@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v138';
+const CACHE_NAME = 'olundar-pwa-v139';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -24,6 +24,7 @@ const APP_SHELL_ASSETS = [
   "./src/engine/pixi-renderer.js",
   "./src/main.js",
   "./src/map.js",
+  "./src/mod-packs.js",
   "./src/pwa.js",
   "./src/render.js",
   "./src/rules.js",

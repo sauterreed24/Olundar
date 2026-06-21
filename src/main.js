@@ -51,6 +51,7 @@ import { audioIsEnabled, getBusVolumes, initAudioPreference, playAudioCue, setAu
 import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 import { cosmeticCatalog, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState } from './cosmetics.js';
+import { MOD_PACK_TYPE, createModPackBlob, readModPackArchive } from './mod-packs.js';
 import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
 import { getCamera } from './engine/camera.js';
 import {
@@ -162,6 +163,7 @@ const MOD_SCENARIO_GOALS = [
   }
 ];
 let scenarioEditorState = createScenarioEditorState();
+let modPatchDraft = { units: '', buildings: '', terrain: '' };
 const BUILD_DOCTRINE_GROUPS = [
   { label: 'Logistics and economy', meta: 'Roads, food, wood, iron', types: ['road', 'farm', 'lumberCamp', 'mine'] },
   { label: 'Walls and watch', meta: 'Vision, gates, frontier bases', types: ['watchtower', 'wall', 'rallyBanner', 'outpost'] },
@@ -5452,6 +5454,14 @@ function resetScenarioEditorAndRender() {
   renderCampaignSetup(scenarioId, difficultyId, seed);
 }
 
+function syncModPatchDraftFromForm(form) {
+  modPatchDraft = {
+    units: String(form.querySelector('#modUnitsPatch')?.value || '').trim(),
+    buildings: String(form.querySelector('#modBuildingsPatch')?.value || '').trim(),
+    terrain: String(form.querySelector('#modTerrainPatch')?.value || '').trim()
+  };
+}
+
 function parseModPatchTextarea(form, selector, label) {
   const raw = String(form.querySelector(selector)?.value || '').trim();
   if (!raw) return {};
@@ -5468,6 +5478,43 @@ function mergeContentTable(baseTable, patch, label) {
     next[id] = { ...(next[id] || {}), ...entry, id };
   }
   return next;
+}
+
+function buildValidatedModPackFromForm(form) {
+  syncScenarioEditorStateFromForm(form);
+  syncModPatchDraftFromForm(form);
+  const currentBundle = getContentBundle();
+  const unitsPatch = parseModPatchTextarea(form, '#modUnitsPatch', 'Unit');
+  const buildingsPatch = parseModPatchTextarea(form, '#modBuildingsPatch', 'Building');
+  const terrainPatch = parseModPatchTextarea(form, '#modTerrainPatch', 'Terrain');
+  const draftBundle = createPatchedContentBundle(currentBundle, unitsPatch, buildingsPatch, terrainPatch);
+  const scenario = parseCustomScenarioFromForm(form, draftBundle) || scenarioEditorToScenario();
+  const nextBundle = { ...draftBundle, SCENARIOS: { ...draftBundle.SCENARIOS, [scenario.id]: scenario } };
+  validateContentSchema(nextBundle);
+  validateCustomScenario(scenario, nextBundle);
+  const manifest = {
+    type: MOD_PACK_TYPE,
+    version: 1,
+    name: scenario.name,
+    scenarioId: scenario.id,
+    createdAt: new Date().toISOString(),
+    files: {
+      scenario: 'scenario.json',
+      units: 'units.json',
+      buildings: 'buildings.json',
+      terrain: 'terrain.json'
+    }
+  };
+  return { manifest, scenario, unitsPatch, buildingsPatch, terrainPatch, nextBundle };
+}
+
+function createPatchedContentBundle(currentBundle, unitsPatch, buildingsPatch, terrainPatch) {
+  return {
+    ...currentBundle,
+    UNIT_TYPES: mergeContentTable(currentBundle.UNIT_TYPES, unitsPatch, 'Unit'),
+    BUILDING_TYPES: mergeContentTable(currentBundle.BUILDING_TYPES, buildingsPatch, 'Building'),
+    TERRAIN: mergeContentTable(currentBundle.TERRAIN, terrainPatch, 'Terrain')
+  };
 }
 
 function parseCustomScenarioFromForm(form, bundle) {
@@ -5499,6 +5546,53 @@ function validateCustomScenario(scenario, bundle = getContentBundle()) {
     if (condition.target !== undefined && (!Number.isInteger(condition.target) || condition.target <= 0)) throw new Error(`Custom scenario victory target for ${condition.id} must be a positive integer.`);
   }
   return true;
+}
+
+function modPackFilesFromBundle(pack) {
+  return {
+    'manifest.json': JSON.stringify(pack.manifest, null, 2),
+    'scenario.json': JSON.stringify(pack.scenario, null, 2),
+    'units.json': JSON.stringify(pack.unitsPatch, null, 2),
+    'buildings.json': JSON.stringify(pack.buildingsPatch, null, 2),
+    'terrain.json': JSON.stringify(pack.terrainPatch, null, 2)
+  };
+}
+
+function loadScenarioIntoEditor(scenario) {
+  const terrain = Array(MOD_SCENARIO_WIDTH * MOD_SCENARIO_HEIGHT).fill('plains');
+  for (const patch of scenario.terrainPatches || []) {
+    const x = patch.x - MOD_SCENARIO_ORIGIN.x;
+    const y = patch.y - MOD_SCENARIO_ORIGIN.y;
+    if (x >= 0 && x < MOD_SCENARIO_WIDTH && y >= 0 && y < MOD_SCENARIO_HEIGHT && MOD_SCENARIO_TERRAIN.includes(patch.terrain)) {
+      terrain[scenarioEditorCellIndex(x, y)] = patch.terrain;
+    }
+  }
+  const goal = (scenario.victoryConditions || []).find((condition) => condition.type !== 'portal') || MOD_SCENARIO_GOALS[0];
+  scenarioEditorState = {
+    name: scenario.name || 'Imported Frontier',
+    seed: scenario.seed || 'Olundar-Imported-Mod',
+    text: scenario.text || 'Imported custom scenario.',
+    difficultyId: DIFFICULTY_PRESETS[scenario.difficultyId] ? scenario.difficultyId : 'standard',
+    goalType: MOD_SCENARIO_GOALS.some((item) => item.type === goal.type) ? goal.type : MOD_SCENARIO_GOALS[0].type,
+    goalTarget: clampInteger(goal.target, 1, 60, 1),
+    terrain,
+    units: (scenario.units || [])
+      .map((unit) => ({
+        type: unit.type,
+        faction: unit.faction,
+        x: unit.x - MOD_SCENARIO_ORIGIN.x,
+        y: unit.y - MOD_SCENARIO_ORIGIN.y,
+        name: unit.name || UNIT_TYPES[unit.type]?.name || unit.type
+      }))
+      .filter((unit) => UNIT_TYPES[unit.type] && FACTIONS[unit.faction] && unit.x >= 0 && unit.x < MOD_SCENARIO_WIDTH && unit.y >= 0 && unit.y < MOD_SCENARIO_HEIGHT)
+  };
+}
+
+function parseJsonFile(files, name, fallback = {}) {
+  if (!(name in files)) return fallback;
+  const parsed = JSON.parse(files[name]);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${name} must contain a JSON object.`);
+  return parsed;
 }
 
 function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 'founding', selectedDifficultyId = state.campaign?.difficultyId || SCENARIOS[selectedScenarioId]?.difficultyId || 'standard', seedOverride = null) {
@@ -5534,17 +5628,22 @@ function renderCampaignSetup(selectedScenarioId = state.campaign?.scenarioId || 
       ${scenarioEditorMarkup()}
       <label class="setup-field">
         <span>Unit stat patch (JSON)</span>
-        <textarea id="modUnitsPatch" name="modUnitsPatch" rows="4" placeholder='{"scout":{"move":5}}'></textarea>
+        <textarea id="modUnitsPatch" name="modUnitsPatch" rows="4" placeholder='{"scout":{"move":5}}'>${escapeHtml(modPatchDraft.units)}</textarea>
       </label>
       <label class="setup-field">
         <span>Building stat patch (JSON)</span>
-        <textarea id="modBuildingsPatch" name="modBuildingsPatch" rows="4" placeholder='{"farm":{"buildTurns":1}}'></textarea>
+        <textarea id="modBuildingsPatch" name="modBuildingsPatch" rows="4" placeholder='{"farm":{"buildTurns":1}}'>${escapeHtml(modPatchDraft.buildings)}</textarea>
       </label>
       <label class="setup-field">
         <span>Terrain type patch (JSON)</span>
-        <textarea id="modTerrainPatch" name="modTerrainPatch" rows="4" placeholder='{"crystal":{"name":"Crystal Fields","move":1,"passable":true}}'></textarea>
+        <textarea id="modTerrainPatch" name="modTerrainPatch" rows="4" placeholder='{"crystal":{"name":"Crystal Fields","move":1,"passable":true}}'>${escapeHtml(modPatchDraft.terrain)}</textarea>
       </label>
-      <button type="button" data-action="apply-mods">Validate and Apply Mods</button>
+      <div class="mod-pack-actions">
+        <button type="button" data-action="apply-mods">Validate and Apply Mods</button>
+        <button type="button" data-action="export-mod-pack">Export Mod ZIP</button>
+        <button type="button" data-action="import-mod-pack">Import Mod ZIP</button>
+      </div>
+      <input id="modPackImportInput" type="file" accept=".zip,application/zip" hidden />
     </details>
     <div class="setup-actions">
       <button type="submit">Start Campaign</button>
@@ -5656,30 +5755,70 @@ function playCinematicIntro(onComplete) {
 
 function applyModPatchesFromForm(form) {
   try {
-    syncScenarioEditorStateFromForm(form);
-    const currentBundle = getContentBundle();
-    const unitsPatch = parseModPatchTextarea(form, '#modUnitsPatch', 'Unit');
-    const buildingsPatch = parseModPatchTextarea(form, '#modBuildingsPatch', 'Building');
-    const terrainPatch = parseModPatchTextarea(form, '#modTerrainPatch', 'Terrain');
-    const draftBundle = {
-      ...currentBundle,
-      UNIT_TYPES: mergeContentTable(currentBundle.UNIT_TYPES, unitsPatch, 'Unit'),
-      BUILDING_TYPES: mergeContentTable(currentBundle.BUILDING_TYPES, buildingsPatch, 'Building'),
-      TERRAIN: mergeContentTable(currentBundle.TERRAIN, terrainPatch, 'Terrain')
-    };
-    const customScenario = parseCustomScenarioFromForm(form, draftBundle);
-    const nextBundle = customScenario
-      ? { ...draftBundle, SCENARIOS: { ...draftBundle.SCENARIOS, [customScenario.id]: customScenario } }
-      : draftBundle;
-    validateContentSchema(nextBundle);
-    if (customScenario) validateCustomScenario(customScenario, nextBundle);
-    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch, TERRAIN: terrainPatch });
-    applyContentBundle(nextBundle);
-    if (customScenario) renderCampaignSetup(customScenario.id, customScenario.difficultyId, customScenario.seed);
-    toast(customScenario ? `${customScenario.name} added to campaign setup.` : 'Mod patches applied.');
+    const pack = buildValidatedModPackFromForm(form);
+    setModOverrides({ UNIT_TYPES: pack.unitsPatch, BUILDING_TYPES: pack.buildingsPatch, TERRAIN: pack.terrainPatch });
+    applyContentBundle(pack.nextBundle);
+    renderCampaignSetup(pack.scenario.id, pack.scenario.difficultyId, pack.scenario.seed);
+    toast(`${pack.scenario.name} added to campaign setup.`);
     playAudioCue('ui');
   } catch (error) {
     toast(error.message || 'Invalid mod JSON.', 'bad');
+    playAudioCue('error');
+  }
+}
+
+function exportModPackFromForm(form) {
+  try {
+    const pack = buildValidatedModPackFromForm(form);
+    const blob = createModPackBlob(modPackFilesFromBundle(pack));
+    downloadBlob(blob, `${cssToken(pack.scenario.name || 'olundar-mod')}.zip`);
+    toast(`${pack.scenario.name} mod ZIP exported.`);
+    playAudioCue('save');
+  } catch (error) {
+    toast(error.message || 'Mod ZIP export failed.', 'bad');
+    playAudioCue('error');
+  }
+}
+
+function openModPackImport(form) {
+  const input = form.querySelector('#modPackImportInput');
+  if (!(input instanceof HTMLInputElement)) return;
+  input.value = '';
+  input.click();
+}
+
+async function importModPackFile(file) {
+  if (!file) return;
+  try {
+    const files = await readModPackArchive(file);
+    const manifest = parseJsonFile(files, 'manifest.json');
+    if (manifest.type !== MOD_PACK_TYPE) throw new Error('ZIP is not an Olundar mod pack.');
+    const scenarioFile = manifest.files?.scenario || 'scenario.json';
+    const unitsFile = manifest.files?.units || 'units.json';
+    const buildingsFile = manifest.files?.buildings || 'buildings.json';
+    const terrainFile = manifest.files?.terrain || 'terrain.json';
+    const scenario = parseJsonFile(files, scenarioFile);
+    const unitsPatch = parseJsonFile(files, unitsFile, {});
+    const buildingsPatch = parseJsonFile(files, buildingsFile, {});
+    const terrainPatch = parseJsonFile(files, terrainFile, {});
+    const currentBundle = getContentBundle();
+    const draftBundle = createPatchedContentBundle(currentBundle, unitsPatch, buildingsPatch, terrainPatch);
+    const nextBundle = { ...draftBundle, SCENARIOS: { ...draftBundle.SCENARIOS, [scenario.id]: scenario } };
+    validateContentSchema(nextBundle);
+    validateCustomScenario(scenario, nextBundle);
+    modPatchDraft = {
+      units: JSON.stringify(unitsPatch, null, 2),
+      buildings: JSON.stringify(buildingsPatch, null, 2),
+      terrain: JSON.stringify(terrainPatch, null, 2)
+    };
+    loadScenarioIntoEditor(scenario);
+    setModOverrides({ UNIT_TYPES: unitsPatch, BUILDING_TYPES: buildingsPatch, TERRAIN: terrainPatch });
+    applyContentBundle(nextBundle);
+    renderCampaignSetup(scenario.id, scenario.difficultyId, scenario.seed);
+    toast(`${scenario.name} imported from mod ZIP.`);
+    playAudioCue('save');
+  } catch (error) {
+    toast(error.message || 'Mod ZIP import failed.', 'bad');
     playAudioCue('error');
   }
 }
@@ -5703,6 +5842,10 @@ function exportChallengeLeaderboard() {
 
 function downloadJsonFile(contents, filename) {
   const blob = new Blob([contents], { type: 'application/json' });
+  downloadBlob(blob, filename);
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -6370,6 +6513,8 @@ campaignSetup.addEventListener('click', (event) => {
   const action = target.dataset.action;
   if (action === 'close-setup') closeCampaignSetup();
   else if (action === 'apply-mods') applyModPatchesFromForm(campaignSetup);
+  else if (action === 'export-mod-pack') exportModPackFromForm(campaignSetup);
+  else if (action === 'import-mod-pack') openModPackImport(campaignSetup);
   else if (action === 'paint-scenario-terrain') paintScenarioEditorTerrain(campaignSetup, target);
   else if (action === 'add-scenario-unit') addScenarioEditorUnit(campaignSetup);
   else if (action === 'remove-scenario-unit') removeScenarioEditorUnit(campaignSetup, target);
@@ -6382,7 +6527,11 @@ campaignSetup.addEventListener('input', (event) => {
   updateScenarioEditorJson(campaignSetup);
 });
 
-campaignSetup.addEventListener('change', (event) => {
+campaignSetup.addEventListener('change', async (event) => {
+  if (event.target instanceof HTMLInputElement && event.target.id === 'modPackImportInput') {
+    await importModPackFile(event.target.files?.[0] || null);
+    return;
+  }
   if (event.target instanceof HTMLElement && event.target.closest('.mod-menu-drawer')) {
     if (event.target.closest('.scenario-editor') && event.target.id !== 'modScenarioJson') {
       syncScenarioEditorStateFromForm(campaignSetup);

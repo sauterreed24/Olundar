@@ -8126,6 +8126,17 @@ body {
   font-size: 0.78rem;
 }
 
+.mod-pack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mod-pack-actions button {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
 .scenario-editor {
   display: grid;
   gap: 0.75rem;
