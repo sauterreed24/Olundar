@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan, neighbors4 } from './map.js';
-import { buildingAt, canBuildOn, canEnter, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, canEnter, effectiveMoveRange, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
 import { getCamera } from './engine/camera.js';
 import { isPixiReady, renderPixiFrame } from './engine/pixi-renderer.js';
 import { cosmeticStyleForUnit } from './cosmetics.js';
@@ -2758,26 +2758,27 @@ function drawTacticalActionOverlay(ctx, state, layout, hoverTile = null) {
   const unit = state.units.find((u) => u.id === state.selectedUnitId && u.faction === 'olundar');
   if (!unit || state.mode.type !== 'select') return;
   const def = getUnitDef(unit);
+  const moveRange = effectiveMoveRange(state, unit);
   drawCommandHalo(ctx, layout, unit, !unit.hasActed);
   if (unit.hasActed) return;
-  const reachable = collectReachableTiles(state, unit, def.move);
+  const reachable = collectReachableTiles(state, unit, moveRange);
   const attackTiles = collectAttackTiles(state, unit, def.range);
   const hoverMove = reachable.find((item) => sameTile(item, hoverTile)) || null;
   const streamlinedOverlay = shouldStreamlineMovementOverlay(layout, reachable, hoverMove);
   ctx.save();
-  drawMovementRadiusField(ctx, layout, reachable, def.move, hoverMove, streamlinedOverlay);
-  drawSelectedMovementCommandAegis(ctx, layout, unit, reachable, def.move, hoverMove);
-  drawCommandRangeFrontier(ctx, layout, reachable, def.move);
+  drawMovementRadiusField(ctx, layout, reachable, moveRange, hoverMove, streamlinedOverlay);
+  drawSelectedMovementCommandAegis(ctx, layout, unit, reachable, moveRange, hoverMove);
+  drawCommandRangeFrontier(ctx, layout, reachable, moveRange);
   if (!streamlinedOverlay) {
     drawMovementBlockedApproaches(ctx, state, layout, reachable);
     drawCommandSupplyMesh(ctx, layout, reachable, hoverMove);
-    drawCommandSurveyVectors(ctx, state, layout, unit, reachable, def.move, hoverMove);
+    drawCommandSurveyVectors(ctx, state, layout, unit, reachable, moveRange, hoverMove);
   }
   for (const item of reachable) {
     const bounds = tileBounds(layout, item.x, item.y);
-    drawMoveReachTile(ctx, bounds, layout, item, def.move, hoverMove);
+    drawMoveReachTile(ctx, bounds, layout, item, moveRange, hoverMove);
   }
-  drawCommandPathPreview(ctx, state, layout, unit, def.move, hoverMove);
+  drawCommandPathPreview(ctx, state, layout, unit, moveRange, hoverMove);
   for (const item of attackTiles) {
     drawAttackReachTile(ctx, tileBounds(layout, item.x, item.y), layout, item.target);
   }

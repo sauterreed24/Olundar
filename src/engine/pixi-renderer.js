@@ -6,6 +6,7 @@
 import { Application, Assets, Graphics, Text } from 'pixi.js';
 import { getCamera } from './camera.js';
 import { getParticleSystem } from './particles.js';
+import { getAmbientLifeSystem } from './ambient-life.js';
 
 const SPRITE_SHEET = './assets/sprites/olundar-sprite-sheet.svg';
 const TILE_CULL_MARGIN = 3;
@@ -161,6 +162,9 @@ export function renderPixiFrame(canvas, state, hoverTile, lensId, routeOverlay, 
   const particles = getParticleSystem();
   particles.update(dt);
   particles.draw(g, viewport?.pixel);
+  const ambient = getAmbientLifeSystem();
+  ambient.update(dt, state, layout, (layoutArg, x, y) => tileToScreen(layoutArg, x, y), isTileVisible, viewport?.tile);
+  ambient.draw(g, viewport?.pixel);
   drawFloatingTexts(dt);
   updateFogReveal(state, dt, viewport?.tile);
   updateBlightPulse(dt);
@@ -191,15 +195,38 @@ export function spawnFloatingDamage(x, y, text, color = '#ff8a8a') {
   floatingTexts.push({ x, y, text, color, life: 0.9, vy: -1.2 });
 }
 
-export function spawnCombatJuice(x, y, damage, killed = false) {
+export function spawnCombatJuice(x, y, damage, killed = false, heavy = false) {
   const layout = getLayoutFn?.(baseCanvas);
   if (layout) {
     const screen = tileToScreen(layout, x, y);
-    getParticleSystem().combatBurst(screen.x, screen.y, killed ? 'blood' : 'dust');
-    spawnFloatingDamage(screen.x, screen.y - 12, `-${damage}`, killed ? '#ff6b6b' : '#f0c866');
+    getParticleSystem().combatBurst(screen.x, screen.y, killed ? 'blood' : heavy ? 'spark' : 'dust', heavy ? 22 : 14);
+    if (heavy || killed) getAmbientLifeSystem().burst(screen.x, screen.y, killed ? 'shrine' : 'blight', killed ? 18 : 10);
+    const label = killed ? 'SLAIN' : heavy ? `-${damage}!` : `-${damage}`;
+    const color = killed ? '#ff6b6b' : heavy ? '#ffd76b' : '#f0c866';
+    spawnFloatingDamage(screen.x, screen.y - 12, label, color);
   }
-  triggerScreenShake(killed ? 6 : 3, killed ? 0.3 : 0.18);
-  if (killed) triggerHitStop(50);
+  triggerScreenShake(killed ? 8 : heavy ? 5 : 3, killed ? 0.35 : heavy ? 0.24 : 0.18);
+  if (killed || heavy) triggerHitStop(killed ? 60 : 35);
+}
+
+export function spawnDiscoveryPulse(x, y, tone = 'ally') {
+  const layout = getLayoutFn?.(baseCanvas);
+  if (!layout) return;
+  const screen = tileToScreen(layout, x, y);
+  getAmbientLifeSystem().burst(screen.x, screen.y, tone === 'dead' ? 'blight' : 'shrine', 24);
+  getParticleSystem().buildingComplete(screen.x, screen.y);
+  triggerScreenShake(4, 0.22);
+}
+
+export function spawnGloryMoment(x, y, title = 'Glory') {
+  const layout = getLayoutFn?.(baseCanvas);
+  if (!layout) return;
+  const screen = tileToScreen(layout, x, y);
+  getAmbientLifeSystem().burst(screen.x, screen.y, 'shrine', 32);
+  getParticleSystem().combatBurst(screen.x, screen.y, 'blood', 28);
+  spawnFloatingDamage(screen.x, screen.y - 24, title, '#ffe29a');
+  triggerScreenShake(10, 0.45);
+  triggerHitStop(80);
 }
 
 export function spawnMoveTrail(x, y) {

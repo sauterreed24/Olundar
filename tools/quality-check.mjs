@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AMBIENT_TILE_FADE_SECONDS, AUDIO_CUES, MUSIC_CROSSFADE_SECONDS, ambientTileTargetsForContext, musicLayerTargetsForMode, validateAudioCueRegistry } from '../src/audio.js';
-import { BUILDING_TYPES, COSMETICS, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
+import { BUILDING_TYPES, COSMETICS, CRISIS_AFTERMATH_EVENTS, CRISIS_EVENTS, DIFFICULTY_PRESETS, DIPLOMATIC_PROMISES, FIELD_ORDERS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, SCENARIOS, SUN_EDICTS, TERRAIN, UNIT_TYPES, WAR_AIMS, getContentBundle } from '../src/content.js';
 import { dataFilesExist, loadContentSync } from '../src/engine/content-loader.js';
 import { validateContentSchema } from '../src/engine/entity-factory.js';
 import {
@@ -57,7 +57,9 @@ import {
   tileAt,
   upgradeBuilding,
   updateVisibility,
-  unitAt
+  unitAt,
+  issueSunEdict,
+  effectiveMoveRange
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
@@ -1305,7 +1307,7 @@ check('canvas renderer keeps premium tactical sprites readable', () => {
   assert(mainSource.includes('function selectedCommandStrip') && mainSource.includes('function unitCommandRole') && mainSource.includes('actionPanel.appendChild(commandStrip)') && mainSource.includes('const compactRail = isCompactCommandRailMode();') && mainSource.includes('const tutorialCard = openingTutorialCard();') && mainSource.includes('const directiveSourceCard = openingDirectiveSourceCard();') && mainSource.includes('const tacticalMoveCard = tacticalMoveOrdersCard(selectedUnit);') && mainSource.includes('const deadwalkerIntent = deadwalkerIntentCard();') && mainSource.includes('const readyForcesCard = activeReadyForcesCard(selectedUnit);') && mainSource.includes('const musterCard = musterReadyCard(selectedBuilding);') && mainSource.includes('const endTurnReview = endTurnReviewCard();') && mainSource.includes('const priorityCommandCards = [tutorialCard, placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);') && normalizedMainSource.includes('if (compactRail) {\n    for (const card of priorityCommandCards) actionPanel.appendChild(card);\n    if (counselCard) actionPanel.appendChild(counselCard);') && styleSource.includes('.mobile-command-strip') && styleSource.includes('.mobile-command-strip-stats'), 'Mobile order rail should keep selected context visible while putting the tutorial gate, pending end-turn reviews, the recommended order source, immediate guided orders, terrain-aware tactical moves, Deadwalker intent, the ready-force queue, and available musters before tactical counsel on compact rails.');
   assert(mainSource.includes('function openingDirectiveSourceCard') && mainSource.includes('openingActionMatchesSelection(recommendation)') && mainSource.includes('openingActionSource(recommendation)') && mainSource.includes('Focus ${source.label}') && mainSource.includes('previewOpeningDirective(recommendation)') && styleSource.includes('.directive-source-card') && styleSource.includes('.directive-source-body') && styleSource.includes('.directive-source-actions'), 'When the current selection is not the recommended opening-order actor, the command rail should surface a compact source card before generic movement choices.');
   assert(mainSource.includes('function activeReadyForcesCard') && mainSource.includes('function readyForceRoster') && mainSource.includes('function readyForceButton') && mainSource.includes('function focusReadyForce') && mainSource.includes('ready-forces-card') && mainSource.includes('ready-force-grid') && mainSource.includes('This force is already selected') && styleSource.includes('.ready-forces-card') && styleSource.includes('.ready-force-button') && styleSource.includes('.ready-force-main') && styleSource.includes('.ready-force-meta'), 'Ready Olundaran forces should surface as direct touch targets in the primary command stack instead of hiding behind blind next-unit cycling.');
-  assert(mainSource.includes('function tacticalMoveOrdersCard') && mainSource.includes('function tacticalMoveOrders') && mainSource.includes('function tacticalMoveButton') && mainSource.includes('function executeTacticalMove') && mainSource.includes('forecastRevealGain(unit, x, y)') && mainSource.includes('visibleHostileTargets({ ...unit, x, y }, def.range)') && mainSource.includes('runCommand(moveCommand(unit.id, order.x, order.y),') && mainSource.includes('canvasCursorForTile(tile)') && mainSource.includes('findPath(state, selectedUnit, tile.x, tile.y, def.move) ?') && styleSource.includes('.tactical-move-card') && styleSource.includes('.tactical-move-button') && styleSource.includes('.tactical-move-coordinate') && styleSource.includes('.tactical-move-route'), 'Selected ready units should expose ranked terrain-aware move commands and pointer feedback so touch players can execute legal movement without inferring every route manually.');
+  assert(mainSource.includes('function tacticalMoveOrdersCard') && mainSource.includes('function tacticalMoveOrders') && mainSource.includes('function tacticalMoveButton') && mainSource.includes('function executeTacticalMove') && mainSource.includes('forecastRevealGain(unit, x, y)') && mainSource.includes('visibleHostileTargets({ ...unit, x, y }, def.range)') && mainSource.includes('runCommand(moveCommand(unit.id, order.x, order.y),') && mainSource.includes('canvasCursorForTile(tile)') && (mainSource.includes('findPath(state, selectedUnit, tile.x, tile.y, def.move) ?') || mainSource.includes('findPath(state, selectedUnit, tile.x, tile.y, unitMoveBudget(selectedUnit)) ?')) && styleSource.includes('.tactical-move-card') && styleSource.includes('.tactical-move-button') && styleSource.includes('.tactical-move-coordinate') && styleSource.includes('.tactical-move-route'), 'Selected ready units should expose ranked terrain-aware move commands and pointer feedback so touch players can execute legal movement without inferring every route manually.');
   assert(mainSource.includes('function deadwalkerIntentCard') && mainSource.includes('function deadwalkerMapHelpChip') && mainSource.includes('function currentDeadwalkerIntent') && mainSource.includes('function nextDeadwalkerSurge') && mainSource.includes('function knownDeadwalkerThreats') && mainSource.includes('function focusDeadwalkerIntent') && mainSource.includes('DIFFICULTY_PRESETS[state.campaign?.difficultyId]?.deadwalker') && mainSource.includes('Show blight lens') && mainSource.includes('Focus defender') && mainSource.includes("activeMapLens = 'blight'") && styleSource.includes('.deadwalker-directive') && styleSource.includes('.deadwalker-intent-card') && styleSource.includes('.deadwalker-intent-list') && styleSource.includes('.deadwalker-intent-actions'), 'Deadwalker cadence and known threat intent should surface as compact actionable intelligence before players commit the next turn.');
   assert(mainSource.includes('function musterReadyCard') && mainSource.includes('function musterReadyOrders') && mainSource.includes('function preferredMusterOrder') && mainSource.includes('function musterReadyButton') && mainSource.includes('function queueMusterOrder') && mainSource.includes('Muster Ready') && mainSource.includes('runCommand(trainCommand(building.id, unitType),') && styleSource.includes('.muster-ready-card') && styleSource.includes('.muster-ready-button') && styleSource.includes('.muster-ready-grid') && styleSource.includes('.muster-ready-cost'), 'Available training queues should surface as direct muster commands instead of requiring players to discover city production by selecting buildings first.');
   assert(mainSource.includes('function endTurnReviewCard') && mainSource.includes('function cancelEndTurnReview') && mainSource.includes('function focusEndTurnReviewInCompactRail') && mainSource.includes('state.pendingEndTurn === state.turn') && mainSource.includes('Confirm end turn') && mainSource.includes('Review ready forces') && mainSource.includes('state.pendingEndTurn = null;') && styleSource.includes('.end-turn-review-card') && styleSource.includes('.end-turn-review-warnings') && styleSource.includes('.end-turn-review-actions'), 'End-turn warnings should become a persistent review card with direct confirm, cancel, and ready-force actions instead of relying on a transient toast.');
@@ -1717,7 +1719,7 @@ check('All state mutations route through Command.execute()', () => {
   assert(commandsSource.includes('static execute(type, state, payload)'), 'Command.execute must centralize mutations.');
   assert(commandsSource.includes("case 'move'") && commandsSource.includes("case 'attack'") && commandsSource.includes("case 'build'"), 'Command.execute must cover move, attack, and build.');
   assert(commandsSource.includes("case 'train'") && commandsSource.includes("case 'upgrade'") && commandsSource.includes("case 'diplomacy'"), 'Command.execute must cover train, upgrade, and diplomacy.');
-  assert(commandsSource.includes("case 'crisis'") && commandsSource.includes("case 'fieldOrder'") && commandsSource.includes("case 'fortify'") && commandsSource.includes("case 'promiseDemand'"), 'Command.execute must cover crisis, field orders, fortify, and promise demands.');
+  assert(commandsSource.includes("case 'crisis'") && commandsSource.includes("case 'fieldOrder'") && commandsSource.includes("case 'fortify'") && commandsSource.includes("case 'promiseDemand'") && commandsSource.includes("case 'edict'"), 'Command.execute must cover crisis, field orders, fortify, promise demands, and edicts.');
   assert(mainSource.includes('executePlayerCommand') && mainSource.includes('runCommand('), 'Main loop must route player commands through the command history.');
   assert(mainSource.includes('getCommandHistory().undo') && mainSource.includes('getCommandHistory().redo'), 'Undo/redo must bind to command history.');
   assert(!mainSource.includes('runPlayerCommand') && !mainSource.includes('createMoveCommand'), 'Browser UI must not call removed command helper factories.');
@@ -1798,6 +1800,10 @@ check('PixiJS engine foundation is present', () => {
   assert(renderer.includes('let initPromise = null') && renderer.includes('if (getLayout) getLayoutFn = getLayout') && renderer.includes('g.clear()'), 'Pixi initialization and graphics reuse must stay idempotent and avoid per-frame overlay allocation.');
   assert(camera.includes('handleWheel') && camera.includes('edgePanMargin'), 'Camera must support wheel zoom and edge panning.');
   assert(particles.includes('dustTrail') && particles.includes('combatBurst'), 'Particle system must support movement and combat juice.');
+  assert(existsSync(path.join(root, 'src/engine/ambient-life.js')), 'Ambient life particle layer missing.');
+  const ambientLife = readProjectFile('src/engine/ambient-life.js');
+  assert(ambientLife.includes('getAmbientLifeSystem') && ambientLife.includes('firefly'), 'Ambient life must spawn environmental motion.');
+  assert(renderer.includes('getAmbientLifeSystem'), 'Pixi renderer must draw ambient life particles.');
   assert(particles.includes('borrowParticle') && particles.includes('recycleParticle') && particles.includes('isParticleInViewport') && !particles.includes('particles.splice'), 'Particle system must pool bursts and cull off-screen particle draws without per-frame splice churn.');
   assert(readProjectFile('src/render.js').includes('drawGameCore') && readProjectFile('src/render.js').includes('isPixiReady'), 'Render bridge must delegate to Pixi when ready.');
 });
@@ -1826,6 +1832,29 @@ check('audio mixer exposes per-bus volume controls', () => {
   assert(constructionAmbience.hammering > constructionAmbience.wind, 'Nearby construction should add hammering ambience.');
   assert(settings.includes('sfxVolume') && settings.includes('uiVolume'), 'Settings must persist per-bus volumes.');
   assert(main.includes('setBusVolume') && main.includes('name="sfxVolume"'), 'Settings panel must expose bus sliders.');
+});
+
+check('sun decrees issue tactical edicts with cooldown and influence cost', () => {
+  const state = createGame('quality-edicts');
+  const beforeInfluence = state.factions.olundar.resources.influence;
+  const blocked = issueSunEdict(state, 'unknown');
+  assert(!blocked.ok, 'Unknown edicts must fail.');
+  const rally = issueSunEdict(state, 'rallyCry');
+  assert(rally.ok, rally.reason || 'Rally Cry should issue.');
+  assert(state.factions.olundar.resources.influence < beforeInfluence, 'Edicts must spend influence.');
+  assert(state.edicts.active?.id === 'rallyCry', 'Active edict should be recorded.');
+  const repeat = issueSunEdict(state, 'sunBeacon');
+  assert(!repeat.ok, 'Edicts must respect cooldown.');
+  state.edicts.lastIssuedTurn = 0;
+  state.factions.olundar.resources.influence = 20;
+  const scout = state.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
+  const moveBefore = effectiveMoveRange(state, scout);
+  const march = issueSunEdict(state, 'forcedMarch');
+  assert(march.ok, march.reason || 'Forced March should issue after cooldown.');
+  assert(effectiveMoveRange(state, scout) === moveBefore + 1, 'Forced March should increase move range.');
+  for (const [id, edict] of Object.entries(SUN_EDICTS)) {
+    assert(edict.id === id && edict.name && edict.text && edict.preview, `Sun edict ${id} needs player-facing metadata.`);
+  }
 });
 
 for (const { name, fn } of checks) {

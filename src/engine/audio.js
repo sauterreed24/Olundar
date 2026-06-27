@@ -19,7 +19,10 @@ export const AUDIO_CUES = {
   error: { notes: [147, 110], duration: 0.12, spacing: 0.05, type: 'sawtooth', gain: 0.035, bus: 'ui' },
   save: { notes: [330, 392, 523], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025, bus: 'ui' },
   load: { notes: [523, 392, 330], duration: 0.08, spacing: 0.05, type: 'sine', gain: 0.025, bus: 'ui' },
-  fanfare: { notes: [262, 330, 392, 523], duration: 0.1, spacing: 0.065, type: 'triangle', gain: 0.032, bus: 'music' }
+  fanfare: { notes: [262, 330, 392, 523], duration: 0.1, spacing: 0.065, type: 'triangle', gain: 0.032, bus: 'music' },
+  decree: { notes: [392, 523, 659], duration: 0.08, spacing: 0.045, type: 'sine', gain: 0.028, bus: 'music' },
+  discovery: { notes: [330, 440, 554], duration: 0.07, spacing: 0.04, type: 'triangle', gain: 0.028, bus: 'sfx' },
+  glory: { notes: [262, 330, 392, 523], duration: 0.08, spacing: 0.05, type: 'triangle', gain: 0.032, bus: 'music' }
 };
 
 const BUS_IDS = ['master', 'sfx', 'ambient', 'music', 'ui'];

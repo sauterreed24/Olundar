@@ -1,11 +1,13 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, TERRAIN, UNIT_TYPES } from './content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, DIPLOMACY_ACTIONS, FACTIONS, MAP_HEIGHT, MAP_LENSES, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, SUN_EDICTS, TERRAIN, UNIT_TYPES } from './content.js';
 import {
   attackBuilding,
   attackUnit,
   canAfford,
   canBuildOn,
+  canIssueSunEdict,
   createGame,
   deserializeState,
+  effectiveMoveRange,
   endTurn,
   formatCost,
   forecastBuildingAttack,
@@ -22,6 +24,7 @@ import {
   getObjectiveProgress,
   getReadyOlundarUnits,
   getSiegeOperations,
+  getSunEdictStatus,
   getWeeklyChallenge,
   getWarCouncil,
   makeDiplomaticPromise,
@@ -52,7 +55,7 @@ import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 import { cosmeticCatalog, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState } from './cosmetics.js';
 import { MOD_PACK_TYPE, createModPackBlob, readModPackArchive } from './mod-packs.js';
-import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
+import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnDiscoveryPulse, spawnGloryMoment, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
 import { getCamera } from './engine/camera.js';
 import {
   executePlayerCommand,
@@ -67,7 +70,8 @@ import {
   promiseDemandCommand,
   fieldOrderCommand,
   fortifyCommand,
-  crisisCommand
+  crisisCommand,
+  edictCommand
 } from './engine/commands.js';
 import { setModOverrides, validateContentSchema } from './engine/entity-factory.js';
 
@@ -198,6 +202,10 @@ let state = createGame({ scenarioId: 'founding' });
 let activeSaveSlotId = null;
 let hoverTile = null;
 let lastTile = { x: 7, y: 16 };
+let lastResourceSnapshot = null;
+let lastDiscoveryFlags = { firstAllySeen: false, firstDeadwalkerSeen: false, bossSlain: false, portalDestroyed: false };
+let lastRenderedTurn = 1;
+let gloryOverlayTimer = null;
 let toastTimer = null;
 let idleHelpTimer = null;
 let idleHelpVisible = false;
@@ -283,6 +291,7 @@ function render() {
   renderObjectives();
   renderSelection();
   renderActions();
+  renderSunDecrees();
   renderDiplomacy();
   renderLog();
   renderTilePanel();
@@ -290,6 +299,129 @@ function render() {
   renderMode();
   renderMobileIntelDrawer();
   maybeOpenOutcomeRecap();
+  syncDiscoveryMoments();
+  syncGloryMoments();
+}
+
+function unitMoveBudget(unit) {
+  return effectiveMoveRange(state, unit);
+}
+
+function syncDiscoveryMoments() {
+  const flags = state.flags || {};
+  if (flags.firstAllySeen && !lastDiscoveryFlags.firstAllySeen) {
+    const ally = state.units.find((u) => u.faction !== 'olundar' && u.faction !== 'dead' && isVisible(state, u.x, u.y))
+      || state.buildings.find((b) => b.faction !== 'olundar' && b.faction !== 'dead' && isVisible(state, b.x, b.y));
+    if (ally) {
+      spawnDiscoveryPulse(ally.x, ally.y, 'ally');
+      playAudioCue('discovery');
+      toast('Living civilization discovered!', 'good');
+    }
+  }
+  if (flags.firstDeadwalkerSeen && !lastDiscoveryFlags.firstDeadwalkerSeen) {
+    const dead = state.units.find((u) => u.faction === 'dead' && isVisible(state, u.x, u.y))
+      || state.buildings.find((b) => b.faction === 'dead' && isVisible(state, b.x, b.y));
+    if (dead) {
+      spawnDiscoveryPulse(dead.x, dead.y, 'dead');
+      playAudioCue('warning');
+      toast('Deadwalker front sighted.', 'bad');
+    }
+  }
+  lastDiscoveryFlags = {
+    ...lastDiscoveryFlags,
+    firstAllySeen: Boolean(flags.firstAllySeen),
+    firstDeadwalkerSeen: Boolean(flags.firstDeadwalkerSeen)
+  };
+}
+
+function syncGloryMoments() {
+  const flags = state.flags || {};
+  if (flags.bossSlain && !lastDiscoveryFlags.bossSlain) {
+    const x = battleImpact?.x ?? lastTile.x;
+    const y = battleImpact?.y ?? lastTile.y;
+    spawnGloryMoment(x, y, 'Crown Broken');
+    playAudioCue('glory');
+    showGloryOverlay('Vorgath Falls', 'The Hollow Crown is ash. The Bone Portal can be destroyed.');
+  }
+  if (flags.portalDestroyed && !lastDiscoveryFlags.portalDestroyed) {
+    const portal = state.buildings.find((b) => b.type === 'portal') || { x: lastTile.x, y: lastTile.y };
+    spawnGloryMoment(portal.x, portal.y, 'Portal Shattered');
+    playAudioCue('glory');
+    showGloryOverlay('Olundar Endures', 'The invasion is broken. The living world holds.');
+  }
+  lastDiscoveryFlags = {
+    ...lastDiscoveryFlags,
+    bossSlain: Boolean(flags.bossSlain),
+    portalDestroyed: Boolean(flags.portalDestroyed)
+  };
+}
+
+function showGloryOverlay(title, detail) {
+  if (playerSettings.motion === 'reduced') return;
+  let overlay = document.querySelector('#gloryOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'gloryOverlay';
+    overlay.className = 'glory-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <article class="glory-card">
+      <div class="glory-sun">☼</div>
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(detail)}</p>
+    </article>
+  `;
+  overlay.hidden = false;
+  overlay.classList.remove('fade-out');
+  requestAnimationFrame(() => overlay.classList.add('fade-in'));
+  if (gloryOverlayTimer) window.clearTimeout(gloryOverlayTimer);
+  gloryOverlayTimer = window.setTimeout(() => {
+    overlay.classList.add('fade-out');
+    gloryOverlayTimer = window.setTimeout(() => {
+      overlay.hidden = true;
+    }, 700);
+  }, 2400);
+}
+
+function renderSunDecrees() {
+  const existing = actionPanel.querySelector('.sun-decree-card');
+  if (state.status !== 'playing') {
+    existing?.remove();
+    return;
+  }
+  const status = getSunEdictStatus(state);
+  let card = existing;
+  if (!card) {
+    card = document.createElement('article');
+    card.className = 'panel sun-decree-card';
+    const campaignSection = actionPanel.querySelector('.campaign-orders');
+    if (campaignSection) actionPanel.insertBefore(card, campaignSection);
+    else actionPanel.appendChild(card);
+  }
+  const cooldownText = status.cooldown > 0
+    ? `Sun Decree cooling down · ${status.cooldown} turn${status.cooldown === 1 ? '' : 's'}`
+    : status.activeLabel
+      ? `${status.activeLabel} active this turn`
+      : 'Issue one imperial edict per cooldown window';
+  card.innerHTML = `
+    <h2>Sun Decrees</h2>
+    <p class="sun-decree-lead">${escapeHtml(cooldownText)}</p>
+  `;
+  const grid = document.createElement('div');
+  grid.className = 'sun-decree-grid';
+  for (const edict of Object.values(SUN_EDICTS)) {
+    const check = canIssueSunEdict(state, edict.id);
+    const btn = orderButton(edict.name, `${formatCost(edict.cost)} · ${edict.preview}`, () => {
+      runCommand(edictCommand(edict.id), 'decree');
+    }, {
+      disabled: !check.ok,
+      tone: status.active?.id === edict.id ? 'primary' : 'default'
+    });
+    btn.title = edict.text;
+    grid.appendChild(btn);
+  }
+  card.appendChild(grid);
 }
 
 function syncDynamicAudio() {
@@ -382,14 +514,42 @@ function renderTopBar() {
   const resources = state.factions.olundar.resources;
   const order = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale'];
   const compactChrome = isCompactChromeMode();
-  resourceBar.innerHTML = [
+  const chips = [
     resourceChip('population', compactChrome ? 'Pop' : 'Population', `${state.factions.olundar.population}/${state.factions.olundar.housing}`, 'Population capacity'),
     ...order.map((key) => resourceChip(key, compactResourceLabel(key, compactChrome), Math.floor(resources[key] || 0), RESOURCE_NAMES[key]))
-  ].join('');
+  ];
+  resourceBar.innerHTML = chips.join('');
+  if (lastResourceSnapshot) {
+    for (const key of ['population', ...order]) {
+      const chip = resourceBar.querySelector(`[data-resource="${key}"]`);
+      if (!chip) continue;
+      const prev = key === 'population'
+        ? lastResourceSnapshot.population
+        : lastResourceSnapshot[key];
+      const next = key === 'population'
+        ? state.factions.olundar.population
+        : Math.floor(resources[key] || 0);
+      if (prev !== next) {
+        chip.classList.add(next > prev ? 'resource-gain' : 'resource-loss');
+        window.setTimeout(() => chip.classList.remove('resource-gain', 'resource-loss'), 900);
+      }
+    }
+  }
+  lastResourceSnapshot = {
+    population: state.factions.olundar.population,
+    ...Object.fromEntries(order.map((key) => [key, Math.floor(resources[key] || 0)]))
+  };
   document.querySelector('#nextUnitTop').textContent = compactChrome ? 'Next' : 'Next Unit';
   document.querySelector('#endTurnTop').textContent = compactChrome ? 'End' : 'End Turn';
   renderAudioButton();
-  turnLabel.textContent = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+  const turnText = state.status === 'playing' ? `Turn ${state.turn}` : `${state.status === 'won' ? 'Victory' : 'Defeat'} · Turn ${state.turn}`;
+  turnLabel.textContent = turnText;
+  if (state.turn !== lastRenderedTurn) {
+    turnLabel.classList.remove('turn-advance');
+    void turnLabel.offsetWidth;
+    turnLabel.classList.add('turn-advance');
+    lastRenderedTurn = state.turn;
+  }
 }
 
 function compactResourceLabel(key, compact) {
@@ -1809,7 +1969,8 @@ function renderActions() {
       buildSection.appendChild(buildDrawer);
       actionPanel.appendChild(buildSection);
     }
-    const unitSection = mobileCollapsibleActionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${def.move}, sight ${def.sight}.`, 'unit-orders');
+    const moveRange = unitMoveBudget(selectedUnit);
+    const unitSection = mobileCollapsibleActionSection(def.name, `${status} HP ${selectedUnit.hp}/${selectedUnit.maxHp}. Move ${moveRange}, sight ${def.sight}.`, 'unit-orders');
     const unitActions = commandActions('primary-orders');
     unitActions.appendChild(orderButton('Fortify position', 'Hold this tile and conserve the line', () => runCommand(fortifyCommand(selectedUnit.id), 'select'), {
       disabled: selectedUnit.hasActed || selectedUnit.faction !== 'olundar',
@@ -3206,9 +3367,10 @@ function mapIntelState(tile) {
         stats: [...baseStats, { value: `${def.move}`, label: 'move' }]
       };
     }
-    const path = findPath(state, selectedUnit, tile.x, tile.y, def.move);
+    const path = findPath(state, selectedUnit, tile.x, tile.y, unitMoveBudget(selectedUnit));
     if (path) {
-      const remaining = Math.max(0, def.move - path.cost);
+      const moveRange = unitMoveBudget(selectedUnit);
+      const remaining = Math.max(0, moveRange - path.cost);
       const logistics = road ? 'Road-linked move. Click to reposition along Olundar logistics.'
         : supplied ? 'Supplied move. This tile remains inside Olundar command reach.'
           : 'Valid move. Click to spend this unit action here.';
@@ -3217,7 +3379,7 @@ function mapIntelState(tile) {
         kicker: selectedUnit.name,
         title: terrainName,
         detail: logistics,
-        stats: [...baseStats, { value: `${path.cost}/${def.move}`, label: 'move' }, { value: `${remaining}`, label: 'left' }, { value: supplied ? 'held' : 'field', label: 'supply' }]
+        stats: [...baseStats, { value: `${path.cost}/${moveRange}`, label: 'move' }, { value: `${remaining}`, label: 'left' }, { value: supplied ? 'held' : 'field', label: 'supply' }]
       };
     }
     return {
@@ -3490,16 +3652,26 @@ function handleResult(result, successCue = null) {
   if (successCue === 'attack') {
     captureBattleImpact(result);
     notifyCombatEngaged(true);
-    spawnCombatJuice(result.targetX, result.targetY, result.damage || 0, Boolean(result.targetDestroyed || result.lethal));
-    triggerScreenShake(result.targetDestroyed || result.lethal ? 6 : 3);
+    const heavy = result.type === 'unit'
+      && Number.isFinite(result.targetHpBefore)
+      && Number.isFinite(result.damage)
+      && result.damage >= Math.ceil(result.targetHpBefore * 0.5);
+    spawnCombatJuice(
+      result.targetX,
+      result.targetY,
+      result.damage || 0,
+      Boolean(result.targetDestroyed || result.lethal),
+      heavy
+    );
   }
   if (successCue === 'move') {
-    spawnMoveTrail(result.x ?? lastTile.x, result.y ?? lastTile.y);
+    const unit = result.unitId ? state.units.find((item) => item.id === result.unitId) : null;
+    spawnMoveTrail(result.x ?? unit?.x ?? lastTile.x, result.y ?? unit?.y ?? lastTile.y);
   }
   if (successCue === 'build' && result.building) {
     spawnBuildComplete(result.building.x, result.building.y, result.building.id);
   }
-  if (successCue === 'diplomacy') captureStrategicImpact(result);
+  if (successCue === 'diplomacy' || successCue === 'decree') captureStrategicImpact(result);
   if (result.reason) toast(result.reason);
   if (successCue) playAudioCue(successCue);
   recordOpeningTutorialSuccess(successCue, result);
@@ -5707,6 +5879,9 @@ function startConfiguredCampaign(form) {
   battleImpact = null;
   turnReport = null;
   tacticalPauseVisible = false;
+  lastResourceSnapshot = null;
+  lastDiscoveryFlags = { firstAllySeen: false, firstDeadwalkerSeen: false, bossSlain: false, portalDestroyed: false };
+  lastRenderedTurn = state.turn;
   getCommandHistory().clear();
   getCamera().reset();
   focusFirstReadyUnit();
@@ -5725,20 +5900,25 @@ function playCinematicIntro(onComplete) {
     onComplete?.();
     return;
   }
+  const scenarioName = state.campaign?.scenarioName || 'Olundar';
+  const difficultyName = state.campaign?.difficultyName || 'Standard';
+  const scenarioText = SCENARIOS[state.campaign?.scenarioId]?.text || 'The imperial war table awaits your first orders.';
   let overlay = document.querySelector('#cinematicIntro');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'cinematicIntro';
     overlay.className = 'cinematic-intro';
-    overlay.innerHTML = `
-      <div class="cinematic-banner">
-        <div class="cinematic-sun">O</div>
-        <h2>Olundar</h2>
-        <p>The imperial war table awaits your first orders.</p>
-      </div>
-    `;
     document.body.appendChild(overlay);
   }
+  overlay.innerHTML = `
+    <div class="cinematic-banner">
+      <div class="cinematic-rays" aria-hidden="true"></div>
+      <div class="cinematic-sun">O</div>
+      <p class="cinematic-kicker">${escapeHtml(difficultyName)} campaign</p>
+      <h2>${escapeHtml(scenarioName)}</h2>
+      <p>${escapeHtml(scenarioText)}</p>
+    </div>
+  `;
   introPlaying = true;
   overlay.hidden = false;
   overlay.classList.remove('fade-out');
@@ -5750,7 +5930,7 @@ function playCinematicIntro(onComplete) {
       introPlaying = false;
       onComplete?.();
     }, 700);
-  }, 1800);
+  }, 2400);
 }
 
 function applyModPatchesFromForm(form) {
@@ -6274,7 +6454,7 @@ function canvasCursorForTile(tile) {
     return "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ctext y='18' font-size='18'%3E💬%3C/text%3E%3C/svg%3E\") 12 12, pointer";
   }
   const def = UNIT_TYPES[selectedUnit.type];
-  return findPath(state, selectedUnit, tile.x, tile.y, def.move) ? 'pointer' : '';
+  return findPath(state, selectedUnit, tile.x, tile.y, unitMoveBudget(selectedUnit)) ? 'pointer' : '';
 }
 
 canvas.addEventListener('click', canvasClicked);

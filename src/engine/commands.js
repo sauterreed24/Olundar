@@ -15,7 +15,8 @@ import {
   startConstruction,
   startTraining,
   upgradeBuilding,
-  makeDiplomaticPromise
+  makeDiplomaticPromise,
+  issueSunEdict
 } from '../rules.js';
 import { serializeState, deserializeState } from '../rules.js';
 
@@ -156,6 +157,8 @@ export class Command {
         return fortifyUnit(state, payload.unitId);
       case 'crisis':
         return resolveCrisis(state, payload.eventId, payload.choiceId);
+      case 'edict':
+        return issueSunEdict(state, payload.edictId);
       default:
         return { ok: false, reason: `Unknown command type: ${type}` };
     }
@@ -204,6 +207,10 @@ export function fortifyCommand(unitId) {
 
 export function crisisCommand(eventId, choiceId) {
   return new Command('crisis', { eventId, choiceId }, 'Crisis ruling');
+}
+
+export function edictCommand(edictId) {
+  return new Command('edict', { edictId }, 'Sun Decree');
 }
 
 let sharedHistory = null;

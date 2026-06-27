@@ -61,12 +61,12 @@ export class ParticleSystem {
     });
   }
 
-  combatBurst(x, y, tone = 'blood') {
-    const color = tone === 'blood' ? '#8b1e1e' : '#b8956a';
+  combatBurst(x, y, tone = 'blood', count = 14) {
+    const color = tone === 'blood' ? '#8b1e1e' : tone === 'spark' ? '#f0c866' : '#b8956a';
     this.emit({
       x,
       y,
-      count: 14,
+      count,
       vx: 0,
       vy: -1.2,
       life: 0.45,

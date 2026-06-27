@@ -1,0 +1,36 @@
+{
+  "SUN_EDICTS": {
+    "rallyCry": {
+      "id": "rallyCry",
+      "name": "Rally Cry",
+      "text": "Raise imperial morale and mend wounded legions resting beside havens.",
+      "preview": "+2 morale. Heal 1 HP to every Olundaran unit beside a city, outpost, or shrine.",
+      "cost": { "influence": 2 },
+      "cooldown": 3
+    },
+    "sunBeacon": {
+      "id": "sunBeacon",
+      "name": "Sun Beacon",
+      "text": "Kindle a pillar of light above Olundar Prime to sweep the frontier fog.",
+      "preview": "Reveal a wide radius around your capital for the rest of this turn.",
+      "cost": { "influence": 2 },
+      "cooldown": 3
+    },
+    "blightWard": {
+      "id": "blightWard",
+      "name": "Blight Ward",
+      "text": "Anoint the legions with sun-oil so grave-blight cannot bite this turn.",
+      "preview": "Living units ignore grave-blight attrition until you end the turn.",
+      "cost": { "influence": 2 },
+      "cooldown": 3
+    },
+    "forcedMarch": {
+      "id": "forcedMarch",
+      "name": "Forced March",
+      "text": "Sound the bronze horns and drive every ready cohort one league farther.",
+      "preview": "All Olundaran units gain +1 movement for the rest of this turn.",
+      "cost": { "influence": 2 },
+      "cooldown": 3
+    }
+  }
+}

@@ -14,6 +14,7 @@ import {
   OBJECTIVES,
   SCENARIOS,
   STARTING_RESOURCES,
+  SUN_EDICTS,
   TERRAIN,
   UNIT_TYPES,
   WAR_AIMS
@@ -88,6 +89,7 @@ export function createGame(seed = `Olundar-${new Date().getFullYear()}`, options
       factionPromises: {},
       promiseDemands: {}
     },
+    edicts: { lastIssuedTurn: 0, active: null },
     deadwalker: createDeadwalkerCampaignState(campaign.difficulty, campaign.scenario.deadwalkerMarch),
     diplomacyLog: [],
     diplomacyMemory: createDiplomacyMemoryState(),
@@ -411,6 +413,8 @@ function normalizeCampaignState(state) {
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
   if (!state.flags.factionPromises) state.flags.factionPromises = {};
   if (!state.flags.promiseDemands) state.flags.promiseDemands = {};
+  if (!state.edicts) state.edicts = { lastIssuedTurn: 0, active: null };
+  if (!Number.isInteger(state.edicts.lastIssuedTurn)) state.edicts.lastIssuedTurn = 0;
   if (!state.crises) state.crises = { resolved: {}, history: [] };
   if (!state.crises.resolved) state.crises.resolved = {};
   if (!Array.isArray(state.crises.history)) state.crises.history = [];
@@ -2559,6 +2563,10 @@ export function updateVisibility(state) {
   for (const source of visionSources) {
     revealRadius(state, source.x, source.y, source.sight);
   }
+  if (state.edicts?.active?.id === 'sunBeacon' && state.edicts.active.turn === state.turn) {
+    const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+    if (capital) revealRadius(state, capital.x, capital.y, 6);
+  }
   discoverVisibleFactions(state);
 }
 
@@ -2666,7 +2674,7 @@ export function moveUnit(state, unitId, x, y) {
   if (unit.faction !== 'olundar') return { ok: false, reason: 'You only command Olundar directly.' };
   if (unit.hasActed) return { ok: false, reason: `${unit.name} has already acted this turn.` };
   const def = getUnitDef(unit);
-  const path = findPath(state, unit, x, y, def.move);
+  const path = findPath(state, unit, x, y, effectiveMoveRange(state, unit));
   if (!path) return { ok: false, reason: 'No valid path within this unit’s movement.' };
   const fromX = unit.x;
   const fromY = unit.y;
@@ -2677,7 +2685,7 @@ export function moveUnit(state, unitId, x, y) {
   maybeSurveyRuin(state, unit);
   updateVisibility(state);
   updateAftermathMissions(state);
-  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, pathTiles: path.tiles };
+  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles };
 }
 
 function maybeSurveyRuin(state, unit) {
@@ -2693,6 +2701,98 @@ function maybeSurveyRuin(state, unit) {
   const reward = rewards[(unit.x + unit.y + state.turn) % rewards.length];
   gainResources(state.factions.olundar.resources, reward);
   addMessage(state, `Ruins surveyed: ${tile.rumor || 'useful records recovered'} Reward: ${formatCost(reward)}.`, 'good');
+}
+
+export function effectiveMoveRange(state, unit) {
+  const def = getUnitDef(unit);
+  let move = def.move;
+  if (unit.faction === 'olundar' && state.edicts?.active?.id === 'forcedMarch' && state.edicts.active.turn === state.turn) {
+    move += 1;
+  }
+  return move;
+}
+
+export function edictCooldownRemaining(state) {
+  const edicts = state.edicts || { lastIssuedTurn: 0 };
+  const last = edicts.lastIssuedTurn || 0;
+  if (!last) return 0;
+  const cooldown = SUN_EDICTS.rallyCry?.cooldown || 3;
+  return Math.max(0, cooldown - (state.turn - last));
+}
+
+export function getSunEdictStatus(state) {
+  const cooldown = edictCooldownRemaining(state);
+  const active = state.edicts?.active?.turn === state.turn ? state.edicts.active : null;
+  return {
+    cooldown,
+    ready: cooldown <= 0 && state.status === 'playing',
+    active,
+    activeLabel: active ? SUN_EDICTS[active.id]?.name || active.id : null
+  };
+}
+
+export function canIssueSunEdict(state, edictId) {
+  const def = SUN_EDICTS[edictId];
+  if (!def) return { ok: false, reason: 'Unknown imperial edict.' };
+  if (state.status !== 'playing') return { ok: false, reason: 'Edicts can only be issued during an active campaign.' };
+  if (edictCooldownRemaining(state) > 0) {
+    return { ok: false, reason: `Sun Decree cooling down for ${edictCooldownRemaining(state)} more turn(s).` };
+  }
+  if (!canAfford(state.factions.olundar.resources, def.cost)) {
+    return { ok: false, reason: `Need ${formatCost(def.cost)} to issue ${def.name}.` };
+  }
+  return { ok: true, def };
+}
+
+export function issueSunEdict(state, edictId) {
+  const check = canIssueSunEdict(state, edictId);
+  if (!check.ok) return check;
+  const def = check.def;
+  payCost(state.factions.olundar.resources, def.cost);
+  state.edicts.lastIssuedTurn = state.turn;
+  state.edicts.active = { id: edictId, turn: state.turn };
+  let detail = def.preview;
+
+  if (edictId === 'rallyCry') {
+    state.factions.olundar.resources.morale = Math.min(12, (state.factions.olundar.resources.morale || 0) + 2);
+    let healed = 0;
+    for (const unit of state.units) {
+      if (unit.faction !== 'olundar' || unit.hp >= unit.maxHp) continue;
+      if (!nearBuilding(state, unit.x, unit.y, 'city', 'olundar', 1)
+        && !nearBuilding(state, unit.x, unit.y, 'outpost', 'olundar', 1)
+        && !nearBuilding(state, unit.x, unit.y, 'shrine', 'olundar', 1)) continue;
+      unit.hp = Math.min(unit.maxHp, unit.hp + 1);
+      healed += 1;
+    }
+    detail = healed ? `Rally Cry mends ${healed} cohort${healed === 1 ? '' : 's'} and lifts morale.` : 'Rally Cry lifts morale across the empire.';
+    addMessage(state, detail, 'good');
+  } else if (edictId === 'sunBeacon') {
+    const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+    if (capital) revealRadius(state, capital.x, capital.y, 6);
+    detail = 'Sun Beacon sweeps the fog around Olundar Prime.';
+    addMessage(state, detail, 'good');
+  } else if (edictId === 'blightWard') {
+    detail = 'Blight Ward shields living legions from grave-blight attrition this turn.';
+    addMessage(state, detail, 'good');
+  } else if (edictId === 'forcedMarch') {
+    detail = 'Forced March grants every Olundaran cohort +1 movement this turn.';
+    addMessage(state, detail, 'good');
+  }
+
+  updateVisibility(state);
+  return {
+    ok: true,
+    reason: `${def.name} issued. ${detail}`,
+    edictId,
+    edictName: def.name,
+    detail,
+    strategicImpact: edictId === 'sunBeacon'
+      ? (() => {
+        const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+        return capital ? { type: 'beacon', x: capital.x, y: capital.y, label: 'BEACON', title: 'Sun Beacon', tone: 'good' } : null;
+      })()
+      : null
+  };
 }
 
 export function fortifyUnit(state, unitId) {
@@ -3477,6 +3577,7 @@ function processBlight(state) {
     if (tile?.terrain === 'blight') {
       if (def.faction === 'dead') unit.hp = Math.min(unit.maxHp, unit.hp + 1);
       else if (!nearBuilding(state, unit.x, unit.y, 'shrine', unit.faction, 3)) {
+        if (unit.faction !== 'dead' && state.edicts?.active?.id === 'blightWard' && state.edicts.active.turn === state.turn) continue;
         unit.hp -= 1;
         if (unit.faction === 'olundar') addMessage(state, `${unit.name} suffers grave-blight attrition.`, 'danger');
         if (unit.hp <= 0) removeUnit(state, unit.id);
