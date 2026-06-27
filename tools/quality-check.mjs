@@ -59,7 +59,9 @@ import {
   updateVisibility,
   unitAt,
   issueSunEdict,
-  effectiveMoveRange
+  effectiveMoveRange,
+  predictBlightFuseTiles,
+  getMarchAssaultVectors
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
@@ -1855,6 +1857,26 @@ check('sun decrees issue tactical edicts with cooldown and influence cost', () =
   for (const [id, edict] of Object.entries(SUN_EDICTS)) {
     assert(edict.id === id && edict.name && edict.text && edict.preview, `Sun edict ${id} needs player-facing metadata.`);
   }
+});
+
+check('blight fuse and march vectors telegraph pressure before commitment', () => {
+  const state = createGame('quality-fuse');
+  const fuse = predictBlightFuseTiles(state);
+  assert(Array.isArray(fuse), 'Blight fuse must return tile predictions.');
+  const vectors = getMarchAssaultVectors(state);
+  assert(Array.isArray(vectors), 'March assault vectors must be readable.');
+  const renderSource = readProjectFile('src/render.js');
+  assert(renderSource.includes('drawBlightFuseOverlay') && renderSource.includes('drawMarchAssaultVectors'), 'Renderer must draw blight fuse and march assault overlays.');
+});
+
+check('scarred veterans survive near-death and hold-the-line triumphs reward march breaks', () => {
+  const rulesSource = readProjectFile('src/rules.js');
+  assert(rulesSource.includes('maybeScarVeteran') && rulesSource.includes('honorScarredVeterans'), 'Scarred veteran comeback logic must exist.');
+  assert(rulesSource.includes("triumph = 'holdTheLine'"), 'Hold-the-line triumph must reward breaking marches near the capital.');
+  assert(rulesSource.includes('RUIN_WHISPER_LORE'), 'Ruin whisper discovery lore must exist.');
+  const state = createGame('quality-scar');
+  assert(Array.isArray(predictBlightFuseTiles(state)), 'Blight fuse predictions must be available during play.');
+  assert(Array.isArray(getMarchAssaultVectors(state)), 'March assault vectors must be available during play.');
 });
 
 for (const { name, fn } of checks) {

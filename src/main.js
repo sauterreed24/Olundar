@@ -55,7 +55,7 @@ import { registerPwa } from './pwa.js';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, getMapScalePreset, normalizeSettings, readSettings, saveSettings } from './settings.js';
 import { cosmeticCatalog, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState } from './cosmetics.js';
 import { MOD_PACK_TYPE, createModPackBlob, readModPackArchive } from './mod-packs.js';
-import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnDiscoveryPulse, spawnGloryMoment, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
+import { initPixiRenderer, getPixiCanvas, resizePixiRenderer, spawnCombatJuice, spawnDiscoveryPulse, spawnGloryMoment, spawnTriumphMoment, spawnMoveTrail, spawnBuildComplete, triggerScreenShake } from './engine/pixi-renderer.js';
 import { getCamera } from './engine/camera.js';
 import {
   executePlayerCommand,
@@ -3667,6 +3667,19 @@ function handleResult(result, successCue = null) {
   if (successCue === 'move') {
     const unit = result.unitId ? state.units.find((item) => item.id === result.unitId) : null;
     spawnMoveTrail(result.x ?? unit?.x ?? lastTile.x, result.y ?? unit?.y ?? lastTile.y);
+    if (result.ruinWhisper?.echo) {
+      spawnDiscoveryPulse(result.ruinWhisper.x, result.ruinWhisper.y, 'ally');
+      playAudioCue('whisper');
+      toast(`Ruin whisper: "${result.ruinWhisper.whisper}"`, 'good');
+    }
+  }
+  if (successCue === 'attack' && result.triumph === 'holdTheLine') {
+    spawnTriumphMoment(result.targetX, result.targetY, 'HOLD');
+    playAudioCue('triumph');
+    showGloryOverlay('Hold the Line', 'The march breaks before Olundar Prime. Morale rises across the legions.');
+  }
+  if (result.scarredName) {
+    toast(`${result.scarredName} scarred but fighting.`, 'info');
   }
   if (successCue === 'build' && result.building) {
     spawnBuildComplete(result.building.x, result.building.y, result.building.id);

@@ -2682,15 +2682,15 @@ export function moveUnit(state, unitId, x, y) {
   unit.y = y;
   unit.hasActed = true;
   unit.fortified = 0;
-  maybeSurveyRuin(state, unit);
+  const ruinWhisper = maybeSurveyRuin(state, unit);
   updateVisibility(state);
   updateAftermathMissions(state);
-  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles };
+  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles, ruinWhisper };
 }
 
 function maybeSurveyRuin(state, unit) {
   const tile = tileAt(state, unit.x, unit.y);
-  if (!tile || tile.terrain !== 'ruins' || tile.surveyedByOlundar) return;
+  if (!tile || tile.terrain !== 'ruins' || tile.surveyedByOlundar) return null;
   tile.surveyedByOlundar = true;
   const rewards = [
     { gold: 12, influence: 1 },
@@ -2700,7 +2700,84 @@ function maybeSurveyRuin(state, unit) {
   ];
   const reward = rewards[(unit.x + unit.y + state.turn) % rewards.length];
   gainResources(state.factions.olundar.resources, reward);
-  addMessage(state, `Ruins surveyed: ${tile.rumor || 'useful records recovered'} Reward: ${formatCost(reward)}.`, 'good');
+  const whisper = RUIN_WHISPER_LORE[(unit.x + unit.y + state.turn * 3) % RUIN_WHISPER_LORE.length];
+  const echo = (unit.x + unit.y + state.turn) % 5 === 0;
+  if (echo) {
+    gainResources(state.factions.olundar.resources, { influence: 1, morale: 1 });
+    addMessage(state, `Ruin whisper: "${whisper}" Bonus: +1 influence, +1 morale.`, 'good');
+    return { x: unit.x, y: unit.y, whisper, echo: true };
+  }
+  addMessage(state, `Ruins surveyed: ${tile.rumor || whisper} Reward: ${formatCost(reward)}.`, 'good');
+  return { x: unit.x, y: unit.y, whisper, echo: false };
+}
+
+const RUIN_WHISPER_LORE = [
+  'The dead fear sun-oil on bronze shields.',
+  'A hidden road once carried grain from Olundar Prime eastward.',
+  'Vorgath\'s crown binds the portal — break the king, break the gate.',
+  'Marsh clans buried their kings here before the blight came.',
+  'Holy ground slows grave-blight; shrines were built on older fires.',
+  'The Hollow Crown conscripts the eastern horde before each march.',
+  'Iron under these hills outlasted three empires.',
+  'Scouts who survive the first blight contact rarely panic again.'
+];
+
+export function predictBlightFuseTiles(state) {
+  const fuse = [];
+  const seen = new Set();
+  for (const building of state.buildings.filter((b) => b.faction === 'dead' && b.turnsLeft <= 0)) {
+    const radius = building.type === 'portal' ? 4 : building.type === 'necropolis' ? 3 : 2;
+    for (let y = building.y - radius; y <= building.y + radius; y += 1) {
+      for (let x = building.x - radius; x <= building.x + radius; x += 1) {
+        if (!inBounds(x, y) || manhattan(building.x, building.y, x, y) > radius) continue;
+        const tile = tileAt(state, x, y);
+        if (!tile || tile.terrain === 'mountains' || tile.terrain === 'river') continue;
+        const resistance = nearBuilding(state, x, y, 'shrine', null, 2) ? 1 : 0;
+        const nextBlight = Math.min(9, (tile.blight || 0) + 1 - resistance);
+        const willFlip = nextBlight >= 4 && tile.terrain !== 'blight';
+        const key = `${x},${y}`;
+        if (willFlip && !seen.has(key) && isRevealed(state, x, y)) {
+          seen.add(key);
+          fuse.push({ x, y, urgency: nextBlight });
+        }
+      }
+    }
+  }
+  return fuse;
+}
+
+export function getMarchAssaultVectors(state) {
+  const capital = olundarCapital(state);
+  if (!capital) return [];
+  return state.units
+    .filter((unit) => unit.faction === 'dead' && unit.march && isRevealed(state, unit.x, unit.y))
+    .map((unit) => ({
+      fromX: unit.x,
+      fromY: unit.y,
+      toX: capital.x,
+      toY: capital.y,
+      name: unit.name,
+      visible: isVisible(state, unit.x, unit.y)
+    }));
+}
+
+function maybeScarVeteran(unit) {
+  if (unit.faction !== 'olundar' || unit.scarred === 'honored' || unit.hp <= 0) return null;
+  if (unit.scarred || unit.hp > Math.ceil(unit.maxHp * 0.25)) return null;
+  unit.scarred = true;
+  unit.fortified = Math.min(2, (unit.fortified || 0) + 1);
+  if (!String(unit.name).includes('Scarred')) unit.name = `${unit.name} (Scarred)`;
+  return unit.name;
+}
+
+function honorScarredVeterans(state) {
+  for (const unit of state.units) {
+    if (unit.faction !== 'olundar' || unit.scarred !== true || unit.hp < unit.maxHp) continue;
+    unit.scarred = 'honored';
+    unit.xp = (unit.xp || 0) + 2;
+    unit.name = String(unit.name).replace(' (Scarred)', ' (Veteran)');
+    addMessage(state, `${unit.name} rallies fully — scar becomes legend. +2 veteran experience.`, 'good');
+  }
 }
 
 export function effectiveMoveRange(state, unit) {
@@ -2855,20 +2932,34 @@ export function attackUnit(state, attackerId, defenderId) {
   const attackerName = attacker.name;
   const defenderName = defender.name;
   const lethal = defender.hp <= 0;
+  let scarredName = null;
+  if (!lethal && defender.faction === 'olundar') scarredName = maybeScarVeteran(defender);
+  if (scarredName) addMessage(state, `${scarredName} is scarred but unbroken — +1 defense until fully rallied.`, 'info');
+  let triumph = null;
   if (lethal) {
     removeUnit(state, defender.id);
     attacker.xp += 1;
     if (defender.type === 'lichBoss') {
       state.flags.bossSlain = true;
       addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
-    } else if (attacker.faction === 'olundar' || defender.faction === 'olundar') {
+    } else if (attacker.faction === 'olundar' && defender.march) {
+      const capital = olundarCapital(state);
+      if (capital && manhattan(attacker.x, attacker.y, capital.x, capital.y) <= 8) {
+        triumph = 'holdTheLine';
+        state.factions.olundar.resources.morale = Math.min(12, (state.factions.olundar.resources.morale || 0) + 1);
+        addMessage(state, `${attackerName} breaks the march before Olundar Prime. The legions roar.`, 'good');
+      }
+    }
+    if (!triumph && (attacker.faction === 'olundar' || defender.faction === 'olundar')) {
       addMessage(state, `${attackerName} destroyed ${defenderName}.`, attacker.faction === 'olundar' ? 'good' : 'danger');
+    } else if (triumph) {
+      addMessage(state, `${attackerName} destroyed ${defenderName}.`, 'good');
     }
   } else if (attacker.faction === 'olundar' || defender.faction === 'olundar') {
     addMessage(state, `${attackerName} hits ${defenderName} for ${damage}.`, attacker.faction === 'olundar' ? 'info' : 'danger');
   }
   updateVisibility(state);
-  return { ...forecast, ok: true, damage, targetDestroyed: lethal };
+  return { ...forecast, ok: true, damage, targetDestroyed: lethal, triumph, scarredName };
 }
 
 export function forecastBuildingAttack(state, attackerId, buildingId) {
@@ -2952,6 +3043,8 @@ function calculateUnitDamage(state, attacker, defender) {
   damage -= dDef.armor;
   damage -= TERRAIN[defenderTile.terrain].defense || 0;
   damage -= defender.fortified || 0;
+  if (defender.scarred === true && defender.faction === 'olundar') damage -= 1;
+  if (defender.scarred === 'honored' && defender.faction === 'olundar') damage -= 1;
   if (aDef.range > 1 && attackerTile.terrain === 'hills') damage += 1;
   if (aDef.tags.includes('spear') && dDef.tags.includes('mounted')) damage += 3;
   if (aDef.tags.includes('undead') && defenderTile.terrain === 'blight') damage += 1;
@@ -3611,6 +3704,7 @@ function processOlundarRecovery(state) {
       unit.hp = Math.min(unit.maxHp, unit.hp + rally);
     }
   }
+  honorScarredVeterans(state);
 }
 
 function rallyHealAmount(state, unit) {

@@ -229,6 +229,10 @@ export function spawnGloryMoment(x, y, title = 'Glory') {
   triggerHitStop(80);
 }
 
+export function spawnTriumphMoment(x, y, title = 'Hold the Line') {
+  spawnGloryMoment(x, y, title);
+}
+
 export function spawnMoveTrail(x, y) {
   const layout = getLayoutFn?.(baseCanvas);
   if (!layout) return;

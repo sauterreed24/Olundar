@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan, neighbors4 } from './map.js';
-import { buildingAt, canBuildOn, canEnter, effectiveMoveRange, findPath, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, canEnter, effectiveMoveRange, findPath, getMarchAssaultVectors, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, predictBlightFuseTiles, tileAt, unitAt } from './rules.js';
 import { getCamera } from './engine/camera.js';
 import { isPixiReady, renderPixiFrame } from './engine/pixi-renderer.js';
 import { cosmeticStyleForUnit } from './cosmetics.js';
@@ -258,6 +258,8 @@ export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal',
   drawWorldLight(ctx, state, layout);
   drawStrategicLens(ctx, state, layout, lensId);
   drawDeadwalkerPressureTelegraph(ctx, state, layout);
+  drawMarchAssaultVectors(ctx, state, layout);
+  drawBlightFuseOverlay(ctx, state, layout);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
   const placementFocusMode = state.mode.type === 'build';
   if (!placementFocusMode) {
@@ -7110,6 +7112,56 @@ function drawHollowCrownCompass(ctx, state, layout) {
   ctx.restore();
 }
 
+function drawMarchAssaultVectors(ctx, state, layout) {
+  if (state.status !== 'playing') return;
+  const vectors = getMarchAssaultVectors(state);
+  if (!vectors.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.setLineDash([layout.tileSize * 0.12, layout.tileSize * 0.08]);
+  for (const vector of vectors) {
+    const from = tileBounds(layout, vector.fromX, vector.fromY);
+    const to = tileBounds(layout, vector.toX, vector.toY);
+    const pulse = 0.55 + Math.sin(performance.now() * 0.004 + vector.fromX) * 0.25;
+    ctx.strokeStyle = vector.visible ? `rgba(156, 243, 138, ${0.35 + pulse * 0.25})` : `rgba(156, 243, 138, ${0.18 + pulse * 0.12})`;
+    ctx.lineWidth = Math.max(1.5, layout.tileSize * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(from.x + from.s * 0.5, from.y + from.s * 0.5);
+    ctx.lineTo(to.x + to.s * 0.5, to.y + to.s * 0.5);
+    ctx.stroke();
+    if (vector.visible) {
+      ctx.fillStyle = 'rgba(156, 243, 138, 0.75)';
+      ctx.beginPath();
+      ctx.arc(to.x + to.s * 0.5, to.y + to.s * 0.5, layout.tileSize * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawBlightFuseOverlay(ctx, state, layout) {
+  if (state.status !== 'playing') return;
+  const fuseTiles = predictBlightFuseTiles(state);
+  if (!fuseTiles.length) return;
+  const now = performance.now();
+  ctx.save();
+  for (const tile of fuseTiles) {
+    if (!isVisible(state, tile.x, tile.y)) continue;
+    const bounds = tileBounds(layout, tile.x, tile.y);
+    const pulse = 0.35 + Math.sin(now * 0.005 + tile.x + tile.y) * 0.2;
+    ctx.globalAlpha = pulse;
+    strokeTileDiamond(ctx, bounds, 'rgba(156, 243, 138, 0.85)', Math.max(2, bounds.s * 0.07), bounds.s * 0.1);
+    fillTileDiamond(ctx, bounds, 'rgba(103, 91, 134, 0.22)', bounds.s * 0.12);
+    ctx.fillStyle = 'rgba(255, 244, 188, 0.92)';
+    ctx.font = `900 ${Math.max(7, bounds.s * 0.16)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FUSE', bounds.x + bounds.s * 0.5, bounds.y + bounds.s * 0.5);
+  }
+  ctx.restore();
+}
+
 function drawDeadwalkerPressureTelegraph(ctx, state, layout) {
   if (state.status !== 'playing' || state.flags?.portalDestroyed) return;
   const data = deadwalkerPressureTelegraphData(state, layout);
@@ -7602,10 +7654,16 @@ export function describeSelection(state) {
   const unit = state.units.find((u) => u.id === state.selectedUnitId);
   if (unit) {
     const def = UNIT_TYPES[unit.type];
+    const moveRange = effectiveMoveRange(state, unit);
+    const scarLine = unit.scarred === true
+      ? ' Scarred: +1 defense until fully rallied.'
+      : unit.scarred === 'honored'
+        ? ' Veteran: battle-scarred and unbreakable.'
+        : '';
     return {
       title: `${unit.name}`,
       subtitle: `${FACTIONS[unit.faction].name} · ${def.role}`,
-      body: `${def.text} HP ${unit.hp}/${unit.maxHp}. Move ${def.move}, attack ${def.attack}, range ${def.range}, sight ${def.sight}.`,
+      body: `${def.text} HP ${unit.hp}/${unit.maxHp}. Move ${moveRange}, attack ${def.attack}, range ${def.range}, sight ${def.sight}.${scarLine}`,
       faction: unit.faction,
       unit,
       building: null
