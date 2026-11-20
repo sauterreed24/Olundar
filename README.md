@@ -82,12 +82,13 @@ Browsers that support installation will expose an **Install** button after the a
 - Imported campaigns open a recap with the current status, milestones, and best next moves.
 - Use the **Map lens** controls above the canvas to inspect normal terrain, blight, roads, supply reach, alliance vision, and active aftermath missions.
 - When the **Crisis Council** appears, choose one ruling per event; some rulings create delayed aftermath cards a few turns later, unaffordable choices are disabled, and recent rulings stay visible for a few turns.
-- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; completed dispatches show a compact result banner with the reward and follow-up marker when one opens; the completed list can switch between recent outcomes and older archived outcomes, archive outcomes can be filtered by repair, escort, raid, or accord site type, searched by text/turn/reward, sorted newest-first or oldest-first, and grouped by route chain or origin ruling; grouped archives can switch between full details and summary-only review, ruling groups keep compact reward and follow-up marker totals visible, **Site** refocuses a completed outcome on the Missions lens, and the tile panel shows the completed-site receipt; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
+- When **Aftermath Missions** appear, use **Focus** on a mission card or the Missions lens to inspect the marked site; route previews name the recommended unit, whether it can complete the task this turn, **Unit** jumps to that unit, and **Dispatch** moves it immediately when the route is reachable; focused missions draw a revealed map route from the unit to the target; completed dispatches show a compact result banner with the reward and follow-up marker when one opens; the completed list can switch between recent outcomes and older archived outcomes, archive outcomes can be filtered by repair, escort, raid, or accord site type, searched by text/turn/reward, sorted newest-first or oldest-first, and grouped by route chain or origin ruling; grouped archives can switch between full details and summary-only review, ruling groups keep compact reward and follow-up marker totals visible, **Copy chronicle** copies that exact filtered review as plain text, **Site** refocuses a completed outcome on the Missions lens, and the tile panel shows the completed-site receipt; camps, raider sites, accord waystations, and repair scars have distinct map art, some routes reveal a second waypoint, and each site pays a terrain-specific reward.
 - The Diplomacy Ledger shows relation posture, war aims, active accords, recent diplomatic outcomes, and action availability for every living civilization.
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
 - Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
 - Promise Demands can appear a few turns after a faction promise; answer them to deepen trust and gain practical help, or ignore them to save resources and accept a recorded grievance.
-- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement.
+- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement. Defend Roads and Reinforce Capital draw a bronze intercept lane when a pact ally is moving to block a known Deadwalker march.
+- Select a Rally Banner, or a unit inside its radius, to see the laurel healing ring. Wounded unit dossiers say how much they will rally, or why they will not.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
 - Click **Audio Off/On** to opt into lightweight audio feedback.
@@ -165,12 +166,14 @@ olundar_game/
 - Combat damages units and enforces the boss-before-portal rule.
 - Deadwalker marches dispatch on schedule, tag the horde to hunt Olundar Prime, respect their difficulty size cap, and deliver real pressure to the capital.
 - Deadwalker pressure scales coherently with difficulty: marches arrive sooner on harder presets, and a neglected capital falls sooner on Hollow Crown than on Chronicle.
-- Wounded living units rally and heal near friendly havens, clamp exactly to max HP, and gain nothing from resting in the open.
+- Pact allies on Defend Roads or Reinforce Capital preview an intercept lane toward a marching thrall, and allies without a pact do not.
+- Wounded living units rally and heal near friendly havens and completed Rally Banners, clamp exactly to max HP, and gain nothing from resting in the open. Dossiers forecast that heal, or name blight, enemy contact, or missing cover as the reason it will not happen.
+- The mission archive chronicle follows the active filter, sort, and grouping, includes reward totals, and stays readable when no tasks match.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.
 
 ## Suggested next production steps
 
-1. Let allied field orders intercept incoming marches so a coalition can physically blunt the Hollow Crown's columns before they reach Olundar.
-2. Add a forward "rally banner" or field-hospital structure that extends rally healing to frontier kill-boxes for players who push the siege line east.
-3. Add archived mission export text that copies the filtered/grouped archive review into a concise campaign chronicle.
+1. Give Bone Pits, Grave Forges, and Necropolises distinct silhouettes so the dead civilization does not read as one repeated green structure.
+2. Show a field-command card for every active Survival Pact, so a second ally is not hidden behind the first recommendation.
+3. Add a tribute or hostage exchange that spends real resources for a delayed allied muster.

@@ -13,7 +13,9 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   findPath,
+  formatCampaignChronicle,
   getAftermathMissions,
+  getCoalitionInterceptLanes,
   getCampaignRecap,
   getChallengeLeaderboardExport,
   getCrisisCouncil,
@@ -642,6 +644,8 @@ function renderMapHelp() {
       '<span>Laurels mark supplied ground</span>',
       '<span>Hover previews route cost</span>',
       '<span>Red rim marks attack reach</span>',
+      '<span>Bronze dashes mark pact intercept lanes</span>',
+      '<span>Laurel rings mark Rally Banner healing</span>',
       '<span>E ends turn | Esc cancels build</span>'
     ];
   const chips = [
@@ -1255,6 +1259,7 @@ function missionHistoryMarkup(missions) {
       ${filter === 'archive' && groupMode !== 'flat' ? missionArchiveDetailMarkup(detailMode) : ''}
       ${history.length ? historyMarkup : '<p class="history-empty">No completed field tasks match this filter.</p>'}
       ${archiveNote}
+      ${filter === 'archive' ? '<button type="button" class="mission-chronicle-copy" data-action="copy-campaign-chronicle">Copy chronicle</button>' : ''}
     </div>
   `;
 }
@@ -4083,6 +4088,7 @@ function pactFieldCommandCard() {
     </div>
     <strong>${escapeHtml(entry.name)}: ${escapeHtml(activeOrder?.name || 'Awaiting order')}</strong>
     <p>${escapeHtml(compact ? compactPactCommandDetail(recommendation, activeOrder) : opportunity.detail)}</p>
+    ${pactInterceptNotice(entry.id) ? `<small class="pact-intercept-note">${escapeHtml(pactInterceptNotice(entry.id))}</small>` : ''}
     <small>${escapeHtml(opportunity.phase)}</small>
     <div class="doctrine-recommendation">
       <span>Recommended Pact Order</span>
@@ -4141,6 +4147,18 @@ function appendPactOrderButtons(actions, entry, recommendation) {
       tone: order.id === recommendation.id ? 'primary' : 'secondary'
     }));
   }
+}
+
+function pactInterceptNotice(factionId) {
+  const lanes = getCoalitionInterceptLanes(state).filter((lane) => lane.factionId === factionId && lane.marchKnown);
+  if (!lanes.length) return '';
+  const visible = lanes.filter((lane) => lane.revealed);
+  const hidden = lanes.filter((lane) => !lane.revealed);
+  const sentences = [];
+  if (visible.length === 1) sentences.push(`${visible[0].unitName} holds the march lane at ${visible[0].x},${visible[0].y}.`);
+  else if (visible.length > 1) sentences.push(`${visible.length} pact units hold revealed march lanes.`);
+  if (hidden.length) sentences.push('A pact intercept is forming against the known march, beyond current sight.');
+  return sentences.join(' ');
 }
 
 function compactPactCommandDetail(recommendation, activeOrder) {
@@ -6251,11 +6269,13 @@ function buildingPortraitSvg(building) {
       `);
     case 'rallyBanner':
       return portraitSvg(`
-        <path class="portrait-hill" d="M7 51c12-7 24-8 50-4v10H7z"/>
-        <path class="portrait-tower" d="M30 18h5v35h-5z"/>
-        <path class="portrait-banner" d="M35 18h18l-5 6 5 6H35z"/>
-        <path class="portrait-weapon-rack" d="M18 53l7-16M47 53l-7-16M22 43h21"/>
-        <path class="portrait-window" d="M27 32h11v7H27z"/>
+        <path class="portrait-hill" d="M7 52c12-8 24-9 50-4v9H7z"/>
+        <path class="portrait-tower" d="M24 16h4v36h-4z"/>
+        <path class="portrait-roof" d="M28 16h22l-6 8 6 8H28z"/>
+        <path class="portrait-banner" d="M30 18h16l-4 6 4 6H30z"/>
+        <circle class="portrait-sun" cx="38" cy="24" r="3"/>
+        <path class="portrait-rays" d="M38 18v2M38 28v2M32 24h2M42 24h2"/>
+        <path class="portrait-tree" d="M18 50c4-8 8-10 12-10M34 50c-4-8-8-10-12-10"/>
       `);
     case 'wall':
       return portraitSvg(`
@@ -6411,6 +6431,58 @@ function subheading(text) {
   const h = document.createElement('h3');
   h.textContent = text;
   return h;
+}
+
+function copyCampaignChronicle() {
+  const text = formatCampaignChronicle(getAftermathMissions(state).archive, {
+    type: selectedMissionArchiveType(),
+    search: normalizedMissionArchiveSearch(),
+    sort: selectedMissionArchiveSortOrder(),
+    group: selectedMissionArchiveGroupMode(),
+    detail: selectedMissionArchiveDetailMode()
+  });
+  copyChronicleText(text);
+}
+
+async function copyChronicleText(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      toast('Campaign chronicle copied.', 'good');
+      return;
+    }
+  } catch {
+    // The browser blocked the clipboard, so the selected field below stays available.
+  }
+  const host = missionPanel.querySelector('.mission-history');
+  if (!host) {
+    toast('Open the archive to copy the chronicle.', 'bad');
+    return;
+  }
+  let field = host.querySelector('.mission-chronicle-fallback');
+  if (!(field instanceof HTMLTextAreaElement)) {
+    field = document.createElement('textarea');
+    field.className = 'mission-chronicle-fallback';
+    field.readOnly = true;
+    field.rows = 8;
+    field.setAttribute('aria-label', 'Campaign chronicle');
+    host.appendChild(field);
+  }
+  field.value = text;
+  field.focus();
+  field.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  }
+  if (copied) {
+    field.remove();
+    toast('Campaign chronicle copied.', 'good');
+    return;
+  }
+  toast('Chronicle selected. Copy the highlighted text.', 'info');
 }
 
 function toast(text, tone = 'good') {
@@ -6671,6 +6743,9 @@ missionPanel.addEventListener('click', (event) => {
   else if (target.dataset.action === 'close-mission-result') {
     missionResultBanner = null;
     render();
+  }
+  else if (target.dataset.action === 'copy-campaign-chronicle') {
+    copyCampaignChronicle();
   }
 });
 

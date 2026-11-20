@@ -1,6 +1,6 @@
 import { BUILDING_TYPES, DIFFICULTY_PRESETS, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from './content.js';
 import { idx, manhattan, neighbors4 } from './map.js';
-import { buildingAt, canBuildOn, canEnter, effectiveMoveRange, findPath, getMarchAssaultVectors, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, predictBlightFuseTiles, tileAt, unitAt } from './rules.js';
+import { buildingAt, canBuildOn, canEnter, effectiveMoveRange, findPath, getCoalitionInterceptLanes, getMarchAssaultVectors, getRallyForecast, getStrategicMapLens, getTileSummary, getUnitDef, isEnemy, isRevealed, isTileSupplied, isVisible, moveCostFor, predictBlightFuseTiles, tileAt, unitAt } from './rules.js';
 import { getCamera } from './engine/camera.js';
 import { isPixiReady, renderPixiFrame } from './engine/pixi-renderer.js';
 import { cosmeticStyleForUnit } from './cosmetics.js';
@@ -259,6 +259,7 @@ export function drawGameCore(canvas, state, hoverTile = null, lensId = 'normal',
   drawStrategicLens(ctx, state, layout, lensId);
   drawDeadwalkerPressureTelegraph(ctx, state, layout);
   drawMarchAssaultVectors(ctx, state, layout);
+  drawCoalitionInterceptLanes(ctx, state, layout);
   drawBlightFuseOverlay(ctx, state, layout);
   drawTacticalActionOverlay(ctx, state, layout, hoverTile);
   const placementFocusMode = state.mode.type === 'build';
@@ -5347,6 +5348,8 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     drawShrine(ctx, x, y, s, color);
   } else if (building.type === 'outpost') {
     drawOutpost(ctx, x, y, s, color);
+  } else if (building.type === 'rallyBanner') {
+    drawRallyBanner(ctx, x, y, s, color);
   } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
     drawNecroStructure(ctx, building, x, y, s);
   } else {
@@ -5714,6 +5717,54 @@ function drawShrine(ctx, x, y, s, color) {
   ctx.beginPath();
   ctx.arc(x + s * 0.50, y + s * 0.27, s * 0.055, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawRallyBanner(ctx, x, y, s, color) {
+  const poleX = x + s * 0.36;
+  ctx.strokeStyle = '#8a5a2b';
+  ctx.lineWidth = Math.max(2, s * 0.05);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(poleX, y + s * 0.14);
+  ctx.lineTo(poleX, y + s * 0.8);
+  ctx.stroke();
+  ctx.fillStyle = '#e7c56a';
+  ctx.beginPath();
+  ctx.arc(poleX, y + s * 0.13, Math.max(1.5, s * 0.035), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#8f2418';
+  ctx.beginPath();
+  ctx.moveTo(poleX, y + s * 0.18);
+  ctx.lineTo(x + s * 0.8, y + s * 0.25);
+  ctx.lineTo(x + s * 0.7, y + s * 0.42);
+  ctx.lineTo(poleX, y + s * 0.36);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#f0c866';
+  ctx.lineWidth = Math.max(1, s * 0.02);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillRect(poleX, y + s * 0.36, s * 0.05, s * 0.07);
+  ctx.fillStyle = '#f6d46f';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.56, y + s * 0.3, Math.max(1.4, s * 0.038), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#f6d46f';
+  ctx.lineWidth = Math.max(1, s * 0.016);
+  for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.56 + Math.cos(angle) * s * 0.05, y + s * 0.3 + Math.sin(angle) * s * 0.05);
+    ctx.lineTo(x + s * 0.56 + Math.cos(angle) * s * 0.08, y + s * 0.3 + Math.sin(angle) * s * 0.08);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#3d8b6e';
+  ctx.lineWidth = Math.max(1, s * 0.028);
+  ctx.beginPath();
+  ctx.arc(poleX, y + s * 0.74, s * 0.13, Math.PI * 0.2, Math.PI * 0.85, true);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(poleX, y + s * 0.74, s * 0.13, Math.PI * 1.15, Math.PI * 1.8, true);
+  ctx.stroke();
 }
 
 function drawOutpost(ctx, x, y, s, color) {
@@ -6853,6 +6904,7 @@ function drawImperialMapFrame(ctx, layout) {
 }
 
 function drawSelection(ctx, state, layout, hoverTile) {
+  drawRallyRadius(ctx, state, layout);
   const drawBox = (x, y, stroke, width = 3) => {
     const bounds = tileBounds(layout, x, y);
     strokeTileDiamond(ctx, bounds, 'rgba(42, 22, 12, 0.76)', width + 2, 2);
@@ -7109,6 +7161,125 @@ function drawHollowCrownCompass(ctx, state, layout) {
   const cy = y + h * 0.50;
   drawHollowCrownDial(ctx, cx, cy, h * 0.36, direction, located);
   drawHollowCrownCompassText(ctx, x + h * 0.92, y, w - h * 1.02, h, status, pressure, distance, located, compact);
+  ctx.restore();
+}
+
+function drawCoalitionInterceptLanes(ctx, state, layout) {
+  if (state.status !== 'playing') return;
+  const lanes = getCoalitionInterceptLanes(state).filter((lane) => lane.revealed);
+  if (!lanes.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const lane of lanes) {
+    const hold = tileBounds(layout, lane.x, lane.y);
+    const bronze = 'rgba(184, 115, 51, 0.92)';
+    const faction = lane.color || '#f0c866';
+    if (lane.allyRevealed) {
+      const from = tileBounds(layout, lane.fromX, lane.fromY);
+      const startX = from.x + from.s * 0.5;
+      const startY = from.y + from.s * 0.5;
+      const endX = hold.x + hold.s * 0.5;
+      const endY = hold.y + hold.s * 0.5;
+      ctx.setLineDash([layout.tileSize * 0.12, layout.tileSize * 0.08]);
+      ctx.strokeStyle = bronze;
+      ctx.lineWidth = Math.max(2, layout.tileSize * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.strokeStyle = faction;
+      ctx.lineWidth = Math.max(1, layout.tileSize * 0.028);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawInterceptShield(ctx, hold, faction);
+  }
+  ctx.restore();
+}
+
+function drawInterceptShield(ctx, bounds, color) {
+  const cx = bounds.x + bounds.s * 0.5;
+  const cy = bounds.y + bounds.s * 0.46;
+  const w = bounds.s * 0.16;
+  const h = bounds.s * 0.2;
+  ctx.save();
+  ctx.fillStyle = '#b87333';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h * 0.55);
+  ctx.lineTo(cx + w, cy - h * 0.15);
+  ctx.lineTo(cx + w * 0.72, cy + h * 0.55);
+  ctx.lineTo(cx, cy + h * 0.78);
+  ctx.lineTo(cx - w * 0.72, cy + h * 0.55);
+  ctx.lineTo(cx - w, cy - h * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h * 0.32);
+  ctx.lineTo(cx + w * 0.58, cy - h * 0.04);
+  ctx.lineTo(cx + w * 0.4, cy + h * 0.36);
+  ctx.lineTo(cx, cy + h * 0.5);
+  ctx.lineTo(cx - w * 0.4, cy + h * 0.36);
+  ctx.lineTo(cx - w * 0.58, cy - h * 0.04);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRallyRadius(ctx, state, layout) {
+  const banners = selectedRallyBanners(state);
+  if (!banners.length) return;
+  ctx.save();
+  for (const banner of banners) {
+    const radius = rallyBannerRadius(banner);
+    for (let y = banner.y - radius; y <= banner.y + radius; y += 1) {
+      for (let x = banner.x - radius; x <= banner.x + radius; x += 1) {
+        const dist = manhattan(banner.x, banner.y, x, y);
+        if (!inMap(x, y) || dist === 0 || dist > radius || !isRevealed(state, x, y)) continue;
+        const bounds = tileBounds(layout, x, y);
+        const edge = dist === radius;
+        if (!edge) fillTileDiamond(ctx, bounds, 'rgba(240, 200, 102, 0.12)', bounds.s * 0.14);
+        strokeTileDiamond(
+          ctx,
+          bounds,
+          edge ? 'rgba(61, 139, 110, 0.88)' : 'rgba(240, 200, 102, 0.34)',
+          edge ? Math.max(1.5, bounds.s * 0.04) : Math.max(1, bounds.s * 0.02),
+          bounds.s * 0.1
+        );
+        if (edge) drawLaurelTick(ctx, bounds);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function selectedRallyBanners(state) {
+  const banners = state.buildings.filter((building) => building.faction === 'olundar' && building.type === 'rallyBanner' && building.turnsLeft <= 0);
+  if (state.selectedBuildingId) {
+    const selected = banners.find((building) => building.id === state.selectedBuildingId);
+    return selected ? [selected] : [];
+  }
+  const unit = state.units.find((candidate) => candidate.id === state.selectedUnitId);
+  if (!unit) return [];
+  return banners.filter((building) => manhattan(building.x, building.y, unit.x, unit.y) <= rallyBannerRadius(building));
+}
+
+function rallyBannerRadius(building) {
+  return (Number(BUILDING_TYPES.rallyBanner.rally?.radius) || 0) + (building.upgraded || 0);
+}
+
+function drawLaurelTick(ctx, bounds) {
+  const cx = bounds.x + bounds.s * 0.5;
+  const cy = bounds.y + bounds.s * 0.5;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(61, 139, 110, 0.9)';
+  ctx.lineWidth = Math.max(1, bounds.s * 0.03);
+  ctx.beginPath();
+  ctx.arc(cx, cy, bounds.s * 0.08, Math.PI * 1.05, Math.PI * 1.7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, bounds.s * 0.08, Math.PI * 1.35, Math.PI * 0.05, true);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -7660,10 +7831,11 @@ export function describeSelection(state) {
       : unit.scarred === 'honored'
         ? ' Veteran: battle-scarred and unbreakable.'
         : '';
+    const rallyLine = rallyForecastLine(state, unit);
     return {
       title: `${unit.name}`,
       subtitle: `${FACTIONS[unit.faction].name} · ${def.role}`,
-      body: `${def.text} HP ${unit.hp}/${unit.maxHp}. Move ${moveRange}, attack ${def.attack}, range ${def.range}, sight ${def.sight}.${scarLine}`,
+      body: `${def.text} HP ${unit.hp}/${unit.maxHp}. Move ${moveRange}, attack ${def.attack}, range ${def.range}, sight ${def.sight}.${scarLine}${rallyLine}`,
       faction: unit.faction,
       unit,
       building: null
@@ -7673,10 +7845,11 @@ export function describeSelection(state) {
   if (building) {
     const def = BUILDING_TYPES[building.type];
     const queue = building.queue?.length ? ` Queue: ${building.queue.map((item) => `${UNIT_TYPES[item.unitType].name} ${item.turnsLeft}t`).join(', ')}.` : '';
+    const rallyLine = rallyBannerDossierLine(building, def);
     return {
       title: `${building.name}`,
       subtitle: `${FACTIONS[building.faction].name} · ${def.name} · Tier ${(building.upgraded || 0) + 1}`,
-      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${formatTurnCount(building.turnsLeft)}.` : ' Upgrades improve durability, vision, and strategic output.'}${queue}`,
+      body: `${def.text} HP ${building.hp}/${building.maxHp}.${building.turnsLeft > 0 ? ` Completes in ${formatTurnCount(building.turnsLeft)}.` : ' Upgrades improve durability, vision, and strategic output.'}${rallyLine}${queue}`,
       faction: building.faction,
       unit: null,
       building
@@ -7694,6 +7867,23 @@ export function describeTilePanel(state, x, y) {
   const blight = summary.blight ? `<p><strong>Blight:</strong> ${summary.blight}/9</p>` : '';
   const road = summary.road ? '<p><strong>Road:</strong> movement network present.</p>' : '';
   return `<h3>${summary.title}</h3><p>${summary.text}</p><p><strong>Elevation:</strong> ${summary.elevation} · <strong>Moisture:</strong> ${summary.moisture}</p>${blight}${road}${unit}${building}`;
+}
+
+function rallyForecastLine(state, unit) {
+  const forecast = getRallyForecast(state, unit);
+  if (!forecast || forecast.reason === 'full') return '';
+  if (forecast.reason === 'rally') return ` Rallies for ${forecast.heal} next turn.`;
+  if (forecast.reason === 'blight') return ' Grave-blight blocks rally healing this turn.';
+  if (forecast.reason === 'contact') return ' Enemy contact prevents rally healing this turn.';
+  return ' No haven or Rally Banner is close enough to rally next turn.';
+}
+
+function rallyBannerDossierLine(building, def) {
+  if (building.type !== 'rallyBanner' || !def.rally) return '';
+  const radius = (Number(def.rally.radius) || 0) + (building.upgraded || 0);
+  const heal = Number(def.rally.heal) || 0;
+  if (building.turnsLeft > 0) return ` The standard heals ${heal} HP within ${radius} tiles once it is raised.`;
+  return ` Wounded Olundar units within ${radius} tiles rally for ${heal} HP.`;
 }
 
 function formatTurnCount(turns) {

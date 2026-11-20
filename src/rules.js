@@ -856,6 +856,160 @@ export function getAftermathMissions(state) {
   };
 }
 
+const CHRONICLE_TYPE_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'repair', label: 'Repairs' },
+  { id: 'escort', label: 'Escorts' },
+  { id: 'raid', label: 'Raids' },
+  { id: 'accord', label: 'Accords' }
+];
+
+export function formatCampaignChronicle(missions = [], filters = {}) {
+  const records = Array.isArray(missions) ? missions : [];
+  const type = CHRONICLE_TYPE_FILTERS.some((item) => item.id === filters.type) ? filters.type : 'all';
+  const search = String(filters.search || '').trim().toLowerCase().slice(0, 40);
+  const sort = filters.sort === 'oldest' ? 'oldest' : 'newest';
+  const group = filters.group === 'routes' || filters.group === 'rulings' ? filters.group : 'flat';
+  const detail = filters.detail === 'summary' ? 'summary' : 'details';
+  const typeLabel = CHRONICLE_TYPE_FILTERS.find((item) => item.id === type)?.label || 'All';
+  const filterLabel = [type !== 'all' ? typeLabel : '', search ? `"${search}"` : ''].filter(Boolean).join(' + ');
+  const matched = sortChronicleRecords(filterChronicleRecords(records, type, search), sort);
+  const lines = [
+    'Olundar Campaign Chronicle',
+    [
+      `Filtered: ${filterLabel || 'none'}`,
+      `Sorted: ${sort === 'oldest' ? 'oldest first' : 'newest first'}`,
+      `Grouped: ${group === 'routes' ? 'route groups' : group === 'rulings' ? 'ruling groups' : 'flat list'}`,
+      group === 'flat' ? '' : `Detail: ${detail === 'summary' ? 'summary only' : 'full details'}`
+    ].filter(Boolean).join('; ')
+  ];
+  if (!matched.length) {
+    lines.push('No completed field tasks match this filter.');
+    return lines.join('\n');
+  }
+  lines.push(chronicleRewardLine(matched));
+  if (group === 'flat') {
+    for (const mission of matched) lines.push(chronicleMissionLine(mission));
+    return lines.join('\n');
+  }
+  for (const entry of chronicleGroups(matched, group)) {
+    lines.push('');
+    lines.push(entry.title);
+    if (entry.detail) lines.push(entry.detail);
+    lines.push(`${entry.range}. ${chronicleRewardLine(entry.records)}`);
+    if (detail !== 'summary') {
+      for (const mission of entry.records) lines.push(chronicleMissionLine(mission));
+    }
+  }
+  return lines.join('\n');
+}
+
+function filterChronicleRecords(records, type, search) {
+  const typed = type === 'all' ? records : records.filter((mission) => mission.type === type);
+  if (!search) return typed;
+  return typed.filter((mission) => chronicleSearchText(mission).includes(search));
+}
+
+function sortChronicleRecords(records, sort) {
+  const sorted = records.slice().sort((a, b) => (b.completedTurn || 0) - (a.completedTurn || 0) || String(b.id).localeCompare(String(a.id)));
+  return sort === 'oldest' ? sorted.reverse() : sorted;
+}
+
+function chronicleSearchText(mission) {
+  return [
+    mission.name,
+    mission.context,
+    mission.reward,
+    mission.completedBy,
+    mission.site,
+    mission.terrain,
+    mission.routeName,
+    mission.chainTag,
+    mission.originLabel,
+    mission.originSourceLabel,
+    mission.type,
+    `t${mission.completedTurn}`
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function chronicleGroups(records, group) {
+  const groups = new Map();
+  for (const mission of records) {
+    const key = chronicleGroupKey(mission, group);
+    if (!groups.has(key.id)) groups.set(key.id, { ...key, records: [] });
+    groups.get(key.id).records.push(mission);
+  }
+  return Array.from(groups.values()).map((entry) => {
+    const turns = entry.records.map((mission) => mission.completedTurn || 0).filter(Boolean);
+    const low = Math.min(...turns);
+    const high = Math.max(...turns);
+    const range = `${entry.records.length} task${entry.records.length === 1 ? '' : 's'}${turns.length ? ` / T${low}${low === high ? '' : `-T${high}`}` : ''}`;
+    return { ...entry, range };
+  });
+}
+
+function chronicleGroupKey(mission, group) {
+  if (group === 'rulings') {
+    if (mission.originLabel) {
+      return {
+        id: `ruling:${mission.originEventId || ''}:${mission.originChoiceId || mission.originLabel}`,
+        title: mission.originLabel,
+        detail: mission.originSourceLabel || ''
+      };
+    }
+    return { id: `ruling:legacy:${mission.type || 'field'}`, title: 'Unlabeled Field Rulings', detail: 'Legacy archive' };
+  }
+  if (mission.routeName || mission.chainTag) {
+    const title = mission.routeName || String(mission.chainTag).replace(/([a-z])([A-Z])/g, '$1 $2');
+    return { id: `route:${mission.chainTag || title}`, title, detail: '' };
+  }
+  const typeLabel = CHRONICLE_TYPE_FILTERS.find((item) => item.id === mission.type)?.label || 'Field';
+  return { id: `standalone:${mission.type || 'field'}`, title: `${typeLabel} Field Work`, detail: '' };
+}
+
+function chronicleRewardLine(records) {
+  const summary = chronicleRewardSummary(records);
+  return `${summary.rewards}. ${summary.followUps}.`;
+}
+
+function chronicleRewardSummary(records) {
+  const terrainCaches = records.filter((mission) => /site yields/i.test(mission.reward || '')).length;
+  const followUps = records.reduce((sum, mission) => sum + chronicleFollowUpCount(mission.reward), 0);
+  const tagPatterns = [
+    ['influence', /influence|trust|relation/i],
+    ['morale', /morale/i],
+    ['gold', /gold|coin/i],
+    ['field XP', /experience|xp/i],
+    ['fortification', /holdings|repaired|reinforce/i],
+    ['supplies', /supplies|stores|caches|resources/i]
+  ];
+  const tags = tagPatterns
+    .map(([label, pattern]) => [label, records.filter((mission) => pattern.test(mission.reward || '')).length])
+    .filter((entry) => entry[1] > 0)
+    .slice(0, 4)
+    .map(([label, count]) => `${count} ${label}`);
+  const rewardParts = [`Rewards: ${records.length} field reward${records.length === 1 ? '' : 's'}`];
+  if (terrainCaches) rewardParts.push(`${terrainCaches} terrain cache${terrainCaches === 1 ? '' : 's'}`);
+  rewardParts.push(...tags);
+  return {
+    rewards: rewardParts.join(', '),
+    followUps: `Follow-ups: ${followUps || 'no'} marker${followUps === 1 ? '' : 's'}`
+  };
+}
+
+function chronicleFollowUpCount(text = '') {
+  return (String(text).match(/follow-up marker opens/gi) || []).length;
+}
+
+function chronicleMissionLine(mission) {
+  const site = mission.site || mission.name || 'Field site';
+  const place = mission.target ? ` at ${mission.target}` : '';
+  const actor = mission.completedBy || 'unknown unit';
+  const reward = mission.reward || 'Reward unrecorded.';
+  const follow = chronicleFollowUpCount(reward) ? 'Follow-up: marker opens.' : 'Follow-up: none.';
+  return `T${mission.completedTurn || '?'} ${site}${place} — ${actor} — ${reward} ${follow}`;
+}
+
 function missionView(state, mission) {
   const tile = tileAt(state, mission.x, mission.y);
   const terrain = TERRAIN[mission.terrain || tile?.terrain];
@@ -3707,6 +3861,17 @@ function processOlundarRecovery(state) {
   honorScarredVeterans(state);
 }
 
+export function getRallyForecast(state, unit) {
+  if (!unit || unit.faction !== 'olundar') return null;
+  if (unit.hp >= unit.maxHp) return { heal: 0, reason: 'full' };
+  const tile = tileAt(state, unit.x, unit.y);
+  if (tile?.terrain === 'blight') return { heal: 0, reason: 'blight' };
+  if (enemyAdjacent(state, unit)) return { heal: 0, reason: 'contact' };
+  const heal = rallyHealAmount(state, unit);
+  if (heal > 0) return { heal, reason: 'rally' };
+  return { heal: 0, reason: 'exposed' };
+}
+
 function rallyHealAmount(state, unit) {
   let rally = 0;
   if (nearFriendlyHaven(state, unit.x, unit.y)) rally += 2;
@@ -4120,6 +4285,60 @@ function fieldOrderTarget(state, unit, orderId) {
     return nearestThreatToFactionAssets(state, unit.x, unit.y, 'olundar', 8) || nearestFactionBuilding(state, unit.x, unit.y, 'olundar', ['road', 'watchtower', 'outpost', 'city']);
   }
   return null;
+}
+
+const coalitionInterceptCache = new WeakMap();
+
+export function getCoalitionInterceptLanes(state) {
+  normalizeCampaignState(state);
+  const key = coalitionInterceptCacheKey(state);
+  const cached = coalitionInterceptCache.get(state);
+  if (cached?.key === key) return cached.lanes;
+  const lanes = [];
+  for (const factionId of LIVING_DIPLOMACY_FACTIONS) {
+    const orderId = activeFieldOrder(state, factionId);
+    if (!['reinforceCapital', 'defendRoads'].includes(orderId)) continue;
+    const faction = state.factions[factionId];
+    for (const unit of state.units.filter((candidate) => candidate.faction === factionId)) {
+      const target = fieldOrderInterceptTarget(state, unit, orderId);
+      if (!target) continue;
+      const marcher = state.units.find((candidate) => candidate.id === target.threatId);
+      if (!marcher) continue;
+      lanes.push({
+        factionId,
+        factionName: faction?.name || factionId,
+        color: faction?.color || '#b87333',
+        orderId,
+        unitId: unit.id,
+        unitName: unit.name,
+        fromX: unit.x,
+        fromY: unit.y,
+        x: target.x,
+        y: target.y,
+        marcherId: marcher.id,
+        marcherName: marcher.name,
+        marcherX: marcher.x,
+        marcherY: marcher.y,
+        revealed: isRevealed(state, target.x, target.y),
+        allyRevealed: isRevealed(state, unit.x, unit.y),
+        marchKnown: isRevealed(state, marcher.x, marcher.y)
+      });
+    }
+  }
+  coalitionInterceptCache.set(state, { key, lanes });
+  return lanes;
+}
+
+function coalitionInterceptCacheKey(state) {
+  const orders = LIVING_DIPLOMACY_FACTIONS
+    .map((id) => `${id}:${activeFieldOrder(state, id) || ''}:${state.factions.olundar.pacts?.[id] ? 1 : 0}`)
+    .join('|');
+  const pieces = state.units
+    .filter((unit) => unit.march || LIVING_DIPLOMACY_FACTIONS.includes(unit.faction))
+    .map((unit) => `${unit.id}:${unit.x},${unit.y}:${unit.march ? 1 : 0}`)
+    .join('|');
+  const seen = state.revealed.reduce((sum, flag) => sum + (flag ? 1 : 0), 0);
+  return `${state.turn}|${seen}|${orders}|${pieces}`;
 }
 
 function fieldOrderInterceptTarget(state, unit, orderId) {

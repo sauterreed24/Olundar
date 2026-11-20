@@ -1414,6 +1414,31 @@ button:disabled {
   background: rgba(186, 245, 140, 0.12);
 }
 
+.mission-chronicle-copy {
+  width: 100%;
+  min-height: 2.6rem;
+  margin-top: 0.45rem;
+}
+
+.mission-chronicle-fallback {
+  width: 100%;
+  min-height: 8.5rem;
+  margin-top: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(168, 101, 24, 0.45);
+  border-radius: 8px;
+  background: rgba(255, 248, 225, 0.96);
+  color: var(--vellum-ink);
+  font: 0.78rem/1.35 ui-sans-serif, system-ui, sans-serif;
+  resize: vertical;
+}
+
+.pact-intercept-note {
+  display: block;
+  margin-top: 0.28rem;
+  color: var(--gold);
+}
+
 .mission-type-filter {
   display: flex;
   flex-wrap: wrap;

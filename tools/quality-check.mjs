@@ -61,7 +61,10 @@ import {
   issueSunEdict,
   effectiveMoveRange,
   predictBlightFuseTiles,
-  getMarchAssaultVectors
+  getMarchAssaultVectors,
+  getCoalitionInterceptLanes,
+  getRallyForecast,
+  formatCampaignChronicle
 } from '../src/rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
 import { importSaveSnapshot, importedSlotName } from '../src/saveTransfer.js';
@@ -1857,6 +1860,116 @@ check('sun decrees issue tactical edicts with cooldown and influence cost', () =
   for (const [id, edict] of Object.entries(SUN_EDICTS)) {
     assert(edict.id === id && edict.name && edict.text && edict.preview, `Sun edict ${id} needs player-facing metadata.`);
   }
+});
+
+check('coalition intercept lanes preview pact march blocks', () => {
+  const quiet = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-intercept-preview' });
+  const capital = quiet.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  addUnit(quiet, 'spearGuard', 'dawn', capital.x + 7, capital.y - 1, { name: 'Unbound Spear' });
+  const quietMarcher = addUnit(quiet, 'boneThrall', 'dead', capital.x + 12, capital.y, { name: 'Unseen Column' });
+  quietMarcher.march = true;
+  assert(getCoalitionInterceptLanes(quiet).length === 0, 'A non-pact ally should not produce an intercept lane.');
+
+  quiet.factions.dawn.discovered = true;
+  quiet.factions.olundar.pacts.dawn = true;
+  quiet.factions.dawn.pacts.olundar = true;
+  quiet.factions.olundar.relations.dawn = 45;
+  quiet.factions.dawn.relations.olundar = 45;
+  const order = setFieldOrder(quiet, 'dawn', 'defendRoads');
+  assert(order.ok, order.reason || 'Intercept preview order failed.');
+  const lanes = getCoalitionInterceptLanes(quiet);
+  assert(lanes.some((lane) => lane.factionId === 'dawn' && lane.marcherId === quietMarcher.id), 'A pact ally on road defense should preview a lane toward the marching thrall.');
+  assert(lanes.every((lane) => Number.isInteger(lane.x) && Number.isInteger(lane.y) && typeof lane.revealed === 'boolean' && typeof lane.marchKnown === 'boolean'), 'Intercept lanes should name the hold tile and whether it is revealed.');
+  const harass = setFieldOrder(quiet, 'dawn', 'harassDeadworks');
+  assert(harass.ok, harass.reason || 'Harass order failed.');
+  assert(getCoalitionInterceptLanes(quiet).length === 0, 'Harassment orders should not invent march intercept lanes.');
+
+  const renderSource = readProjectFile('src/render.js');
+  const mainSource = readProjectFile('src/main.js');
+  assert(renderSource.includes('function drawCoalitionInterceptLanes') && renderSource.includes('drawCoalitionInterceptLanes(ctx, state, layout);') && renderSource.includes('function drawInterceptShield'), 'The map should draw bronze pact intercept lanes and hold-point shields.');
+  assert(renderSource.includes('lane.revealed') && mainSource.includes('beyond current sight'), 'Hidden intercept tiles stay off the map and are mentioned only when the march is already known.');
+});
+
+check('rally banners forecast healing and draw a dedicated standard', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'chronicle', seed: 'quality-rally-forecast' });
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  const wounded = state.units.find((unit) => unit.faction === 'olundar');
+  const haven = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dy]) => ({ x: capital.x + dx, y: capital.y + dy }))
+    .find((spot) => tileAt(state, spot.x, spot.y)?.terrain !== 'blight');
+  wounded.x = haven.x;
+  wounded.y = haven.y;
+  wounded.hp = Math.max(1, wounded.maxHp - 3);
+  const besideCapital = getRallyForecast(state, wounded);
+  assert(besideCapital?.reason === 'rally' && besideCapital.heal >= 2, 'A wounded unit beside the capital should forecast rally healing.');
+  const tile = tileAt(state, wounded.x, wounded.y);
+  const previousTerrain = tile.terrain;
+  tile.terrain = 'blight';
+  assert(getRallyForecast(state, wounded).reason === 'blight', 'Grave-blight should block the rally forecast.');
+  tile.terrain = previousTerrain;
+  addUnit(state, 'boneThrall', 'dead', wounded.x + 1, wounded.y, { name: 'Pressing Thrall' });
+  assert(getRallyForecast(state, wounded).reason === 'contact', 'Adjacent enemies should block the rally forecast.');
+  const far = state.map.tiles.find((candidate) => candidate.terrain === 'plains' && Math.abs(candidate.x - capital.x) + Math.abs(candidate.y - capital.y) > 12);
+  const exposed = addUnit(state, 'spearGuard', 'olundar', far.x, far.y, { name: 'Exposed Spear' });
+  exposed.hp = 4;
+  assert(getRallyForecast(state, exposed).reason === 'exposed', 'A wounded unit away from havens and banners should forecast no rally.');
+  const banner = addBuilding(state, 'rallyBanner', 'olundar', far.x, far.y + 1, { complete: true, name: 'Forecast Banner' });
+  const bannerGuard = addUnit(state, 'spearGuard', 'olundar', banner.x + 1, banner.y, { name: 'Banner Forecast' });
+  bannerGuard.hp = 4;
+  const bannerForecast = getRallyForecast(state, bannerGuard);
+  assert(bannerForecast.reason === 'rally' && bannerForecast.heal >= 2, 'A completed Rally Banner should forecast healing inside its radius.');
+
+  const renderSource = readProjectFile('src/render.js');
+  assert(renderSource.includes("building.type === 'rallyBanner'") && renderSource.includes('function drawRallyBanner') && renderSource.includes('function drawRallyRadius'), 'Rally Banners need a dedicated sprite and a selection radius.');
+  assert(renderSource.includes('Rallies for') && renderSource.includes('Grave-blight blocks rally healing this turn.') && renderSource.includes('Enemy contact prevents rally healing this turn.') && renderSource.includes('No haven or Rally Banner is close enough to rally next turn.') && renderSource.includes('Wounded Olundar units within'), 'The dossier should explain the next rally or why it will not happen.');
+});
+
+check('campaign chronicle copies the filtered archive view', () => {
+  const archive = [
+    {
+      id: 'scar',
+      type: 'repair',
+      name: 'Mend the east road',
+      site: 'Raid scar',
+      target: '12,8',
+      terrain: 'Forest',
+      completedTurn: 9,
+      completedBy: 'Vera',
+      reward: 'The site yields iron. A follow-up marker opens on the road.',
+      originLabel: 'Night watch',
+      originSourceLabel: 'City raid',
+      originEventId: 'cityRaid',
+      originChoiceId: 'nightWatch',
+      routeName: 'East road',
+      chainTag: 'eastRoad'
+    },
+    {
+      id: 'camp',
+      type: 'escort',
+      name: 'Guide the caravan',
+      site: 'Road camp',
+      target: '5,6',
+      terrain: 'Plains',
+      completedTurn: 6,
+      completedBy: 'Marcus',
+      reward: 'Influence rises.',
+      originLabel: 'Shelter the refugees',
+      routeName: 'West road',
+      chainTag: 'westRoad'
+    }
+  ];
+  const empty = formatCampaignChronicle([], {});
+  assert(empty.includes('Filtered: none') && empty.includes('No completed field tasks match this filter.'), 'An empty archive chronicle should say that no field tasks match.');
+  const repair = formatCampaignChronicle(archive, { type: 'repair', search: 'vera', sort: 'oldest', group: 'rulings', detail: 'summary' });
+  assert(repair.includes('Filtered: Repairs + "vera"') && repair.includes('Night watch') && repair.includes('Rewards:') && repair.includes('Follow-ups:'), 'Chronicle text should follow the active filter, ruling group, and reward totals.');
+  assert(!repair.includes('Road camp') && !repair.includes('Marcus') && !repair.includes('— Vera —'), 'Summary chronicle text should omit unrelated sites and individual receipts.');
+  const details = formatCampaignChronicle(archive, { type: 'all', sort: 'oldest', group: 'routes', detail: 'details' });
+  assert(details.includes('East road') && details.includes('West road') && details.includes('T6 Road camp at 5,6 — Marcus —') && details.includes('Follow-up: marker opens.') && details.includes('Follow-up: none.'), 'Detailed route groups should name each site, actor, turn, reward, and follow-up.');
+  assert(details.indexOf('T6') < details.indexOf('T9'), 'Oldest-first chronicle order should put the earlier task first.');
+  const mainSource = readProjectFile('src/main.js');
+  const styleSource = readProjectFile('src/style.css');
+  assert(mainSource.includes('formatCampaignChronicle') && mainSource.includes('data-action="copy-campaign-chronicle"') && mainSource.includes('mission-chronicle-fallback'), 'The archive view should copy the chronicle and keep a selected fallback field.');
+  assert(styleSource.includes('.mission-chronicle-copy') && styleSource.includes('min-height: 2.6rem'), 'The chronicle control should keep a large tap target.');
 });
 
 check('blight fuse and march vectors telegraph pressure before commitment', () => {
