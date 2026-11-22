@@ -87,7 +87,8 @@ Browsers that support installation will expose an **Install** button after the a
 - Diplomatic Memory inside the ledger shows promises, grievances, and fulfilled pact commitments that affect advice.
 - Faction Promises inside the ledger let Olundar make one-time civilization-specific commitments: guard Dawnward walls, fund Veyr caravans, or scout Mireclan marsh routes.
 - Promise Demands can appear a few turns after a faction promise; answer them to deepen trust and gain practical help, or ignore them to save resources and accept a recorded grievance.
-- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement. Defend Roads and Reinforce Capital draw a bronze intercept lane when a pact ally is moving to block a known Deadwalker march.
+- Survival Pacts unlock field orders that steer allied AI without direct unit micromanagement. Each active pact keeps its own field-command card. Defend Roads and Reinforce Capital draw a bronze intercept lane when a pact ally is moving to block a known Deadwalker march.
+- **Send Hostage Tribute** spends gold, food, and one city envoy. Three turns later that civilization musters a company under its own banner, unless rivalry voids the exchange.
 - Select a Rally Banner, or a unit inside its radius, to see the laurel healing ring. Wounded unit dossiers say how much they will rally, or why they will not.
 - Press `Ctrl/Cmd + S` to quick-save into the active named slot.
 - Press `Ctrl/Cmd + L` to open the load slots panel.
@@ -169,11 +170,13 @@ olundar_game/
 - Pact allies on Defend Roads or Reinforce Capital preview an intercept lane toward a marching thrall, and allies without a pact do not.
 - Wounded living units rally and heal near friendly havens and completed Rally Banners, clamp exactly to max HP, and gain nothing from resting in the open. Dossiers forecast that heal, or name blight, enemy contact, or missing cover as the reason it will not happen.
 - The mission archive chronicle follows the active filter, sort, and grouping, includes reward totals, and stays readable when no tasks match.
+- Hostage tribute spends gold, food, and population, blocks a second gift while one is on the road, musters the promised allied company on the due turn, and voids that company if the faction becomes a rival.
+- Every discovered Survival Pact gets its own field-command card.
 - A 24-turn simulation keeps state invariants stable.
 - Source files contain no TODO/FIXME leftovers.
 
 ## Suggested next production steps
 
-1. Give Bone Pits, Grave Forges, and Necropolises distinct silhouettes so the dead civilization does not read as one repeated green structure.
-2. Show a field-command card for every active Survival Pact, so a second ally is not hidden behind the first recommendation.
-3. Add a tribute or hostage exchange that spends real resources for a delayed allied muster.
+1. Mark the map tile where a hostage company will arrive on the turn before it musters, so the delay is a place as well as a ledger line.
+2. Give Dawnward, Veyr, and Mireclan troops their own formation silhouettes instead of a recolored Olundaran kit.
+3. Let a revealed Grave Forge read as hotter than a Bone Pit even through parchment fog, using the forge ember rather than only the shared necrotic glow.

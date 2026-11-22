@@ -5350,8 +5350,12 @@ function drawBuildingSprite(ctx, building, x, y, s) {
     drawOutpost(ctx, x, y, s, color);
   } else if (building.type === 'rallyBanner') {
     drawRallyBanner(ctx, x, y, s, color);
-  } else if (['bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
-    drawNecroStructure(ctx, building, x, y, s);
+  } else if (building.type === 'bonePit') {
+    drawBonePit(ctx, x, y, s);
+  } else if (building.type === 'graveForge') {
+    drawGraveForge(ctx, x, y, s);
+  } else if (building.type === 'necropolis') {
+    drawNecropolis(ctx, x, y, s);
   } else {
     ctx.fillStyle = '#493728';
     ctx.fillRect(x + s * 0.22, y + s * 0.48, s * 0.56, s * 0.3);
@@ -5454,31 +5458,138 @@ function drawPortalSprite(ctx, x, y, s) {
 }
 
 function drawNecroStructure(ctx, building, x, y, s) {
-  const elite = building.type === 'necropolis';
-  ctx.fillStyle = '#161d18';
-  ctx.fillRect(x + s * 0.20, y + s * 0.42, s * 0.60, s * 0.34);
-  ctx.fillStyle = elite ? '#2b3037' : '#20271f';
-  roof(ctx, x + s * 0.17, y + s * 0.42, s * 0.66, s * 0.20);
+  if (building.type === 'graveForge') return drawGraveForge(ctx, x, y, s);
+  if (building.type === 'necropolis') return drawNecropolis(ctx, x, y, s);
+  return drawBonePit(ctx, x, y, s);
+}
+
+function drawBonePit(ctx, x, y, s) {
+  const mouth = ctx.createRadialGradient(x + s * 0.5, y + s * 0.58, s * 0.04, x + s * 0.5, y + s * 0.58, s * 0.34);
+  mouth.addColorStop(0, 'rgba(156, 243, 138, 0.85)');
+  mouth.addColorStop(0.45, 'rgba(34, 74, 42, 0.9)');
+  mouth.addColorStop(1, 'rgba(8, 12, 10, 0.2)');
+  ctx.fillStyle = mouth;
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.5, y + s * 0.62, s * 0.34, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#070b09';
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.5, y + s * 0.64, s * 0.2, s * 0.11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#e7e0cc';
+  ctx.lineWidth = Math.max(1.4, s * 0.035);
+  ctx.lineCap = 'round';
+  for (const [rx, ry, radius, start, end] of [
+    [0.5, 0.58, 0.28, Math.PI * 1.05, Math.PI * 1.95],
+    [0.5, 0.6, 0.2, Math.PI * 1.15, Math.PI * 1.85],
+    [0.34, 0.66, 0.1, Math.PI * 0.2, Math.PI * 0.9],
+    [0.66, 0.66, 0.1, Math.PI * 0.1, Math.PI * 0.8]
+  ]) {
+    ctx.beginPath();
+    ctx.arc(x + s * rx, y + s * ry, s * radius, start, end);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#f4efe0';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.5, y + s * 0.46, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111814';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.475, y + s * 0.45, s * 0.015, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.525, y + s * 0.45, s * 0.015, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#9cf38a';
+  ctx.lineWidth = Math.max(1, s * 0.02);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.22, y + s * 0.5);
+  ctx.lineTo(x + s * 0.16, y + s * 0.28);
+  ctx.moveTo(x + s * 0.78, y + s * 0.5);
+  ctx.lineTo(x + s * 0.86, y + s * 0.3);
+  ctx.stroke();
+}
+
+function drawGraveForge(ctx, x, y, s) {
+  ctx.fillStyle = '#1b211c';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.22, y + s * 0.78);
+  ctx.lineTo(x + s * 0.28, y + s * 0.4);
+  ctx.lineTo(x + s * 0.72, y + s * 0.4);
+  ctx.lineTo(x + s * 0.78, y + s * 0.78);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#d9d3c2';
+  ctx.fillRect(x + s * 0.46, y + s * 0.16, s * 0.08, s * 0.26);
+  ctx.strokeStyle = '#9aa394';
+  ctx.lineWidth = Math.max(1, s * 0.02);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.45, y + s * (0.22 + i * 0.07));
+    ctx.lineTo(x + s * 0.55, y + s * (0.22 + i * 0.07));
+    ctx.stroke();
+  }
+  const kiln = ctx.createRadialGradient(x + s * 0.5, y + s * 0.58, s * 0.02, x + s * 0.5, y + s * 0.58, s * 0.16);
+  kiln.addColorStop(0, '#fff1c2');
+  kiln.addColorStop(0.45, '#ff8a62');
+  kiln.addColorStop(1, 'rgba(156, 243, 138, 0.15)');
+  ctx.fillStyle = kiln;
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.5, y + s * 0.6, s * 0.14, s * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a241c';
+  ctx.fillRect(x + s * 0.18, y + s * 0.68, s * 0.16, s * 0.08);
+  ctx.fillRect(x + s * 0.2, y + s * 0.62, s * 0.05, s * 0.1);
+  ctx.strokeStyle = '#c7b496';
+  ctx.lineWidth = Math.max(1.2, s * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.74, y + s * 0.74);
+  ctx.quadraticCurveTo(x + s * 0.9, y + s * 0.5, x + s * 0.7, y + s * 0.42);
+  ctx.stroke();
   ctx.fillStyle = '#9cf38a';
   ctx.beginPath();
-  ctx.arc(x + s * 0.5, y + s * 0.36, s * (elite ? 0.18 : 0.14), 0, Math.PI * 2);
+  ctx.arc(x + s * 0.68, y + s * 0.36, s * 0.025, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.74, y + s * 0.3, s * 0.018, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#050608';
-  ctx.fillRect(x + s * 0.42, y + s * 0.48, s * 0.16, s * 0.28);
-  ctx.strokeStyle = 'rgba(156, 243, 138, 0.8)';
-  ctx.lineWidth = Math.max(1, s * 0.03);
-  ctx.beginPath();
-  ctx.moveTo(x + s * 0.28, y + s * 0.35);
-  ctx.lineTo(x + s * 0.20, y + s * 0.18);
-  ctx.moveTo(x + s * 0.72, y + s * 0.35);
-  ctx.lineTo(x + s * 0.82, y + s * 0.18);
-  ctx.stroke();
-  if (building.type === 'graveForge') {
-    ctx.fillStyle = '#ff8a62';
+}
+
+function drawNecropolis(ctx, x, y, s) {
+  ctx.fillStyle = '#101612';
+  ctx.fillRect(x + s * 0.1, y + s * 0.66, s * 0.8, s * 0.14);
+  ctx.fillStyle = '#efe6d2';
+  for (const px of [0.14, 0.28, 0.42, 0.56, 0.7]) ctx.fillRect(x + s * px, y + s * 0.6, s * 0.07, s * 0.08);
+  const spires = [[0.24, 0.28, 0.11], [0.5, 0.08, 0.13], [0.76, 0.24, 0.11]];
+  for (const [px, py, w] of spires) {
+    ctx.fillStyle = '#24302a';
     ctx.beginPath();
-    ctx.arc(x + s * 0.66, y + s * 0.62, s * 0.07, 0, Math.PI * 2);
+    ctx.moveTo(x + s * (px - w), y + s * 0.66);
+    ctx.lineTo(x + s * px, y + s * py);
+    ctx.lineTo(x + s * (px + w), y + s * 0.66);
+    ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = '#f3ead4';
+    ctx.lineWidth = Math.max(1.4, s * 0.028);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(156, 243, 138, 0.9)';
+    ctx.lineWidth = Math.max(1, s * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(x + s * px, y + s * (py + 0.08));
+    ctx.lineTo(x + s * px, y + s * 0.62);
+    ctx.stroke();
   }
+  ctx.fillStyle = '#f0e6c4';
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.4, y + s * 0.16);
+  ctx.lineTo(x + s * 0.45, y + s * 0.06);
+  ctx.lineTo(x + s * 0.5, y + s * 0.12);
+  ctx.lineTo(x + s * 0.56, y + s * 0.02);
+  ctx.lineTo(x + s * 0.62, y + s * 0.16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#9cf38a';
+  ctx.beginPath();
+  ctx.arc(x + s * 0.5, y + s * 0.4, s * 0.04, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#050806';
+  ctx.fillRect(x + s * 0.45, y + s * 0.5, s * 0.1, s * 0.16);
 }
 
 function drawFarmstead(ctx, x, y, s, color) {

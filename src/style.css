@@ -4583,6 +4583,18 @@ button:hover:not(:disabled) {
     radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.88), transparent 8rem);
 }
 
+.pact-command.faction-dawn {
+  box-shadow: inset 4px 0 0 #6ea2e6;
+}
+
+.pact-command.faction-veyr {
+  box-shadow: inset 4px 0 0 #b07adf;
+}
+
+.pact-command.faction-mire {
+  box-shadow: inset 4px 0 0 #5eae62;
+}
+
 .pact-command .pact-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

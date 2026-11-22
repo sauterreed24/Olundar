@@ -1919,9 +1919,9 @@ function renderActions() {
   const musterCard = musterReadyCard(selectedBuilding);
   const endTurnReview = endTurnReviewCard();
   const envoyCard = diplomacyOpportunityCard();
-  const pactCommandCard = pactFieldCommandCard();
+  const pactCommandCards = pactFieldCommandCards();
   const tutorialCard = openingTutorialCard();
-  const priorityCommandCards = [tutorialCard, placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, pactCommandCard].filter(Boolean);
+  const priorityCommandCards = [tutorialCard, placementCard, directiveSourceCard, endTurnReview, doctrineCard, tacticalMoveCard, deadwalkerIntent, readyForcesCard, musterCard, envoyCard, ...pactCommandCards].filter(Boolean);
   if (compactRail) {
     for (const card of priorityCommandCards) actionPanel.appendChild(card);
     if (counselCard) actionPanel.appendChild(counselCard);
@@ -4073,14 +4073,18 @@ function focusDiplomacyOpportunity(factionId) {
   target?.scrollIntoView({ block: 'start', behavior: playerSettings.motion === 'reduced' ? 'auto' : 'smooth' });
 }
 
-function pactFieldCommandCard() {
-  const opportunity = currentPactFieldCommand();
+function pactFieldCommandCards() {
+  if (state.status !== 'playing') return [];
+  return currentPactFieldCommands().map((opportunity) => pactFieldCommandCard(opportunity)).filter(Boolean);
+}
+
+function pactFieldCommandCard(opportunity = currentPactFieldCommand()) {
   if (!opportunity || state.status !== 'playing') return null;
   const { entry, recommendation } = opportunity;
   const compact = isCompactCommandRailMode();
   const activeOrder = entry.fieldOrder || entry.fieldOrders.find((order) => order.active);
   const card = document.createElement('article');
-  card.className = `opening-doctrine diplomacy-doctrine pact-command ${compact ? 'compact-pact-command' : ''}`.trim();
+  card.className = `opening-doctrine diplomacy-doctrine pact-command faction-${escapeHtml(entry.id)} ${compact ? 'compact-pact-command' : ''}`.trim();
   card.innerHTML = `
     <div class="opening-doctrine-head">
       <span>Pact Field Command</span>
@@ -4170,29 +4174,35 @@ function compactPactCommandDetail(recommendation, activeOrder) {
 }
 
 function currentPactFieldCommand() {
+  return currentPactFieldCommands()[0] || null;
+}
+
+function currentPactFieldCommands() {
   const ledger = getDiplomacyLedger(state);
   const pactEntries = ledger.entries
     .filter((entry) => entry.discovered && entry.pact && !entry.atWar && entry.fieldOrders.length)
     .sort((a, b) => {
       const aRecommended = recommendedPactFieldOrderId(a);
       const bRecommended = recommendedPactFieldOrderId(b);
-      return Number(a.fieldOrder?.id === aRecommended) - Number(b.fieldOrder?.id === bRecommended);
+      return Number(a.fieldOrder?.id === aRecommended) - Number(b.fieldOrder?.id === bRecommended) || a.name.localeCompare(b.name);
     });
-  const entry = pactEntries[0];
-  if (!entry) return null;
-  const recommendationId = recommendedPactFieldOrderId(entry);
-  const recommendation = entry.fieldOrders.find((order) => order.id === recommendationId)
-    || entry.fieldOrders.find((order) => !order.active)
-    || entry.fieldOrders[0];
-  return {
-    entry,
-    recommendation,
-    badge: `${pactEntries.length} pact${pactEntries.length === 1 ? '' : 's'}`,
-    phase: pactCommandKnownDeadPressure() ? 'Alliance into warfront' : 'Alliance into patrols',
-    detail: pactCommandKnownDeadPressure()
-      ? 'Deadwalker pressure is visible. Give this ally a live field order so shared vision becomes coordinated movement.'
-      : 'A Survival Pact is active. Set the allied behavior now so this civilization protects roads, reinforces Olundar, or prepares the eastern push.'
-  };
+  return pactEntries.map((entry, index) => {
+    const recommendationId = recommendedPactFieldOrderId(entry);
+    const recommendation = entry.fieldOrders.find((order) => order.id === recommendationId)
+      || entry.fieldOrders.find((order) => !order.active)
+      || entry.fieldOrders[0];
+    return {
+      entry,
+      recommendation,
+      badge: `${index + 1}/${pactEntries.length}`,
+      phase: pactCommandKnownDeadPressure() ? 'Alliance into warfront' : 'Alliance into patrols',
+      detail: index === 0
+        ? (pactCommandKnownDeadPressure()
+          ? 'Deadwalker pressure is visible. Give this ally a live field order so shared vision becomes coordinated movement.'
+          : 'A Survival Pact is active. Set the allied behavior now so this civilization protects roads, reinforces Olundar, or prepares the eastern push.')
+        : `${entry.name} keeps a separate pact order. Retask this ally without leaving the command rail.`
+    };
+  });
 }
 
 function recommendedPactFieldOrderId(entry) {
@@ -6300,15 +6310,34 @@ function buildingPortraitSvg(building) {
         <path class="portrait-plinth" d="M16 52h32M20 34h24"/>
       `);
     case 'portal':
+      return portraitSvg(`
+        <path class="portrait-blight" d="M7 50c14-10 28-11 50-5v12H7z"/>
+        <path class="portrait-aura" d="M18 52c0-23 6-38 14-38s14 15 14 38z"/>
+        <path class="portrait-portal" d="M24 51c0-17 4-27 8-27s8 10 8 27z"/>
+        <path class="portrait-ribs" d="M20 40h24M23 46h18"/>
+      `);
     case 'bonePit':
+      return portraitSvg(`
+        <path class="portrait-blight" d="M7 50c14-10 28-11 50-5v12H7z"/>
+        <path class="portrait-portal" d="M16 40c6 14 26 16 32 0"/>
+        <path class="portrait-ribs" d="M18 38c8-16 20-16 28 0M22 44c5-8 15-8 20 0"/>
+        <circle class="portrait-skull" cx="32" cy="30" r="5"/>
+      `);
     case 'graveForge':
+      return portraitSvg(`
+        <path class="portrait-blight" d="M7 50c14-10 28-11 50-5v12H7z"/>
+        <path class="portrait-necro" d="M18 52V30h28v22"/>
+        <path class="portrait-tower" d="M29 30V12h6v18"/>
+        <path class="portrait-portal" d="M24 48c0-10 4-16 8-16s8 6 8 16"/>
+        <path class="portrait-weapon" d="M14 50h12M16 44v6"/>
+      `);
     case 'necropolis':
       return portraitSvg(`
         <path class="portrait-blight" d="M7 50c14-10 28-11 50-5v12H7z"/>
-        <path class="portrait-necro" d="M17 52V31l15-14 15 14v21z"/>
-        <path class="portrait-portal" d="M24 51c0-17 4-27 8-27s8 10 8 27z"/>
-        <path class="portrait-ribs" d="M20 40h24M23 46h18"/>
-        <path class="portrait-aura" d="M18 52c0-23 6-38 14-38s14 15 14 38z"/>
+        <path class="portrait-necro" d="M14 52l8-24 10-12 10 12 8 24z"/>
+        <path class="portrait-tower" d="M20 52l6-20M44 52l-6-20"/>
+        <path class="portrait-ribs" d="M22 16h20M26 12l6 6 6-8"/>
+        <circle class="portrait-skull" cx="32" cy="34" r="4"/>
       `);
     default:
       return portraitSvg(`

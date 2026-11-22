@@ -413,6 +413,7 @@ function normalizeCampaignState(state) {
   if (!state.flags.warAimNotices) state.flags.warAimNotices = {};
   if (!state.flags.factionPromises) state.flags.factionPromises = {};
   if (!state.flags.promiseDemands) state.flags.promiseDemands = {};
+  if (!state.flags.tributeExchanges || typeof state.flags.tributeExchanges !== 'object') state.flags.tributeExchanges = {};
   if (!state.edicts) state.edicts = { lastIssuedTurn: 0, active: null };
   if (!Number.isInteger(state.edicts.lastIssuedTurn)) state.edicts.lastIssuedTurn = 0;
   if (!state.crises) state.crises = { resolved: {}, history: [] };
@@ -1276,7 +1277,7 @@ function diplomacyLedgerEntry(state, actor, id) {
     fieldOrder,
     warAim,
     memory,
-    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder, warAim, memory),
+    tags: diplomacyTags(discovered, relation, pact, trade, atWar, fieldOrder, warAim, memory).concat(tributeLedgerTag(state, id)),
     advice: diplomacyAdvice(state, id, relation, discovered, pact, trade, atWar, warAim, memory),
     recent,
     actions: Object.keys(DIPLOMACY_ACTIONS).map((actionId) => diplomacyActionView(state, id, actionId, relation, discovered, pact, trade, atWar)),
@@ -1386,6 +1387,8 @@ function diplomacyActionView(state, factionId, actionId, relation, discovered, p
   else if (atWar) disabledReason = 'At war.';
   else if (actionId === 'pact' && pact) disabledReason = 'Pact active.';
   else if (actionId === 'trade' && trade) disabledReason = 'Trade active.';
+  else if (actionId === 'tribute' && activeTributeExchange(state, factionId)) disabledReason = 'Tribute already on the road.';
+  else if (actionId === 'tribute' && (state.factions.olundar.population || 0) < 8) disabledReason = 'Need 8 population to spare an envoy.';
   else if (!canAfford(state.factions.olundar.resources, action.cost)) disabledReason = `Need ${formatCost(missingCost(state.factions.olundar.resources, action.cost))}.`;
   const note = actionId === 'aid' && relation < 20 && !disabledReason ? 'Likely refused below 20 relation.' : action.text;
   return {
@@ -3365,6 +3368,53 @@ function nearSupply(state, x, y) {
   return state.buildings.some((b) => b.faction === 'olundar' && b.turnsLeft <= 0 && ['city', 'outpost', 'road'].includes(b.type) && manhattan(b.x, b.y, x, y) <= 6);
 }
 
+function tributeLedgerTag(state, factionId) {
+  const exchange = activeTributeExchange(state, factionId);
+  return exchange ? [`Tribute due T${exchange.dueTurn}`] : [];
+}
+
+function activeTributeExchange(state, factionId) {
+  const exchange = state.flags?.tributeExchanges?.[factionId];
+  if (!exchange || exchange.resolved) return null;
+  return exchange;
+}
+
+function resolveTributeExchanges(state) {
+  const pending = state.flags?.tributeExchanges;
+  if (!pending) return;
+  for (const [factionId, exchange] of Object.entries(pending)) {
+    if (!exchange || exchange.resolved || state.turn < exchange.dueTurn) continue;
+    const target = state.factions[factionId];
+    const actor = state.factions.olundar;
+    exchange.resolved = true;
+    if (!target || actor.atWar?.[factionId] || target.atWar?.olundar) {
+      addMessage(state, `${target?.name || 'The faction'} keeps the tribute. Rivalry voids the hostage return.`, 'danger');
+      recordDiplomaticMemory(state, factionId, 'grievance', 'Tribute Voided', 'Open rivalry ended the hostage exchange before the company could muster.', 1);
+      continue;
+    }
+    const muster = tributeMusterFor(factionId);
+    const anchor = actor.pacts?.[factionId]
+      ? state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city')
+      : state.buildings.find((building) => building.faction === factionId && building.type === 'city');
+    const spawn = anchor ? findSpawnNear(state, anchor.x, anchor.y, factionId) : null;
+    if (!spawn) {
+      addMessage(state, `${target.name} honors the tribute, but no open ground remains for the company.`, 'info');
+      recordDiplomaticMemory(state, factionId, 'fulfilled', 'Hostage Honored', `${target.name} accepted the tribute, but the company had no open muster ground.`, 1);
+      continue;
+    }
+    addUnit(state, muster.type, factionId, spawn.x, spawn.y, { name: muster.name });
+    addMessage(state, `${target.name} honors the hostage tribute. ${muster.name} takes the field.`, 'good');
+    recordDiplomacy(state, factionId, 'tribute', 'Hostage company mustered', `${muster.name} arrived from the tribute exchange.`, 'good');
+    recordDiplomaticMemory(state, factionId, 'fulfilled', 'Hostage Returned', `${target.name} returned the hostage tribute with ${muster.name}.`, 2);
+  }
+}
+
+function tributeMusterFor(factionId) {
+  if (factionId === 'veyr') return { type: 'cavalry', name: 'Veyr Hostage-Rider' };
+  if (factionId === 'mire') return { type: 'archer', name: 'Mire Hostage-Archer' };
+  return { type: 'spearGuard', name: 'Dawnward Hostage-Spear' };
+}
+
 export function performDiplomacy(state, targetFaction, actionId) {
   normalizeCampaignState(state);
   const actor = state.factions.olundar;
@@ -3375,6 +3425,8 @@ export function performDiplomacy(state, targetFaction, actionId) {
   if (actor.atWar?.[targetFaction] || target.atWar?.olundar) return { ok: false, reason: `${target.name} is openly hostile. Diplomacy is closed.` };
   if (actionId === 'pact' && actor.pacts[targetFaction]) return { ok: false, reason: 'A Survival Pact is already active.' };
   if (actionId === 'trade' && actor.trades[targetFaction]) return { ok: false, reason: 'Trade is already open.' };
+  if (actionId === 'tribute' && activeTributeExchange(state, targetFaction)) return { ok: false, reason: 'A hostage tribute is already on the road.' };
+  if (actionId === 'tribute' && (actor.population || 0) < 8) return { ok: false, reason: 'Need 8 population to spare an envoy.' };
   if (!canAfford(actor.resources, action.cost)) return { ok: false, reason: `Need ${formatCost(missingCost(actor.resources, action.cost))}.` };
   payCost(actor.resources, action.cost);
   actor.relations[targetFaction] = clampRelation((actor.relations[targetFaction] ?? 0) + action.relation);
@@ -3436,6 +3488,13 @@ export function performDiplomacy(state, targetFaction, actionId) {
       recordDiplomacy(state, targetFaction, actionId, 'Pressure extracted supplies', 'Olundar gained food and gold at a serious trust cost.', 'danger');
       recordDiplomaticMemory(state, targetFaction, 'grievance', 'Supplies Pressured', 'Olundar took food and gold under duress; future requests will carry this resentment.', 3);
     }
+  } else if (actionId === 'tribute') {
+    actor.population = Math.max(1, (actor.population || 0) - 1);
+    const dueTurn = state.turn + 3;
+    state.flags.tributeExchanges[targetFaction] = { dueTurn, resolved: false };
+    addMessage(state, `${target.name} accepts the hostage tribute. Their company is due on turn ${dueTurn}.`, 'good');
+    recordDiplomacy(state, targetFaction, actionId, 'Hostage tribute sent', `Gold, food, and an envoy are on the road. A company musters on turn ${dueTurn}.`, 'good');
+    recordDiplomaticMemory(state, targetFaction, 'promise', 'Hostage Tribute', `Olundar sent stores and a living envoy. ${target.name} promised a company on turn ${dueTurn}.`, 2);
   }
   updateVisibility(state);
   return { ok: true };
@@ -3691,6 +3750,7 @@ function recordFieldOrderFulfillment(state, factionId, orderId, label, detail, a
 export function endTurn(state) {
   if (state.status !== 'playing') return state;
   state.turn += 1;
+  resolveTributeExchanges(state);
   processConstructionAndTraining(state);
   processEconomy(state);
   processBlight(state);

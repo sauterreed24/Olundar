@@ -139,9 +139,9 @@ The prototype uses a simple readable model:
 ### Deadwalker buildings
 
 - **Bone Portal:** invasion source and victory target.
-- **Bone Pit:** spawns thralls and spreads blight.
-- **Grave Forge:** creates stronger undead.
-- **Necropolis:** undead city, often replacing fallen living settlements.
+- **Bone Pit:** an open grave with a rib arch and skull. It spawns thralls and spreads blight.
+- **Grave Forge:** a kiln, bone chimney, and ember mouth. It creates stronger undead.
+- **Necropolis:** a crowned tomb-city with three spires, often replacing fallen living settlements.
 
 ## Diplomacy design
 
@@ -158,7 +158,9 @@ Diplomatic Memory adds continuity beyond the recent log. Trade, pact offers, ans
 
 War aims show what each discovered civilization is already trying to do without Olundar's orders. They make allies, opportunists, and suspicious scouts legible before the player has enough trust for a Survival Pact.
 
-Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures.
+Survival Pacts unlock broad allied field orders instead of direct micromanagement: allies can defend Olundar roads and outposts, reinforce Olundar Prime, or harass revealed Deadwalker structures. Each active pact keeps its own command card, so a second ally is not hidden behind the first recommendation.
+
+A hostage tribute spends gold, food, and one envoy from Olundar's population. Three turns later that civilization musters a company under its own banner: Dawnward spears, Veyr riders, or Mireclan archers. A second tribute waits until the first company arrives. If the faction becomes a rival before the due turn, the company never takes the field.
 
 Faction promises add a more personal layer before diplomacy becomes generic. Dawnward asks for wall guards and reinforced hillforts, Veyr responds to funded caravans and practical supply profit, and Mireclan trusts food, respect, and marsh-route scouting. Each promise costs Olundar real resources and creates visible memory so the ledger shows the political price of building a coalition.
 

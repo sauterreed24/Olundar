@@ -32,6 +32,15 @@
       },
       "relation": -18,
       "text": "Try to extract resources quickly at a diplomatic cost."
+    },
+    "tribute": {
+      "name": "Send Hostage Tribute",
+      "cost": {
+        "gold": 14,
+        "food": 10
+      },
+      "relation": 6,
+      "text": "Spend gold, food, and one envoy from the city. Three turns later that civilization musters a company under its own banner."
     }
   },
   "DIPLOMATIC_PROMISES": {

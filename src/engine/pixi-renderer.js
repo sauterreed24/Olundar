@@ -302,7 +302,16 @@ function drawStructureGlow(g, state, layout, viewport) {
       g.circle(x, y, s * 1.4);
       g.fill({ color: IMPERIAL_PALETTE.shrineGlow, alpha: 0.12 + Math.sin(performance.now() * 0.003) * 0.04 });
     }
-    if (['portal', 'bonePit', 'graveForge', 'necropolis'].includes(building.type)) {
+    if (building.type === 'bonePit') {
+      g.circle(x, y + s * 0.2, s * 1.15);
+      g.fill({ color: 0x9cf38a, alpha: 0.1 + Math.sin(performance.now() * 0.004 + building.x) * 0.04 });
+    } else if (building.type === 'graveForge') {
+      g.circle(x, y, s * 1.25);
+      g.fill({ color: 0xff8a62, alpha: 0.12 + Math.sin(performance.now() * 0.006 + building.y) * 0.05 });
+    } else if (building.type === 'necropolis') {
+      g.circle(x, y, s * 2.1);
+      g.fill({ color: 0xc6ff93, alpha: 0.1 + Math.sin(performance.now() * 0.003 + building.x) * 0.04 });
+    } else if (building.type === 'portal') {
       g.circle(x, y, s * 1.6);
       g.fill({ color: IMPERIAL_PALETTE.deadGlow, alpha: 0.1 + Math.sin(performance.now() * 0.004 + building.x) * 0.05 });
     }
