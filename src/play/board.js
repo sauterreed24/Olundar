@@ -18,14 +18,14 @@ import {
 } from '../rules.js';
 
 const TERRAIN_INK = {
-  plains: ['#c9dc86', '#e7f3b4', '#b7cf72'],
-  forest: ['#1f7a45', '#39a864', '#145c32'],
-  hills: ['#c48d45', '#e2bc78', '#a87432'],
-  mountains: ['#8ea0ab', '#d5e0e6', '#6d808b'],
-  river: ['#2b93cf', '#8fd7f5', '#166f9e'],
-  marsh: ['#5c9d55', '#b7d98a', '#3f7540'],
-  ruins: ['#c3ad86', '#efe2c4', '#9a8460'],
-  blight: ['#5a4d78', '#8d7eab', '#3c3254']
+  plains: ['#d7e392', '#f4f8c8', '#b7cf68'],
+  forest: ['#2c8a4e', '#63c47a', '#145c32'],
+  hills: ['#d7a45a', '#f0d092', '#a56b32'],
+  mountains: ['#b7c4c8', '#f4f7f4', '#7d9098'],
+  river: ['#3aa6d4', '#dff6ff', '#1d7eab'],
+  marsh: ['#7eae62', '#d7ec9a', '#4d7a42'],
+  ruins: ['#d2bc96', '#f6ead0', '#8d7350'],
+  blight: ['#6a587f', '#b7a4cf', '#3e324f']
 };
 
 const FACTION_INK = Object.fromEntries(Object.values(FACTIONS).map((faction) => [faction.id, faction.color || '#f0c866']));
@@ -173,10 +173,12 @@ export function createBoard(canvas) {
 }
 
 function paintTerrain(surface, state, frame) {
-  surface.width = frame ? surface.width : surface.width;
   const ctx = surface.getContext('2d');
   ctx.clearRect(0, 0, surface.width, surface.height);
-  ctx.fillStyle = '#141b24';
+  const wash = ctx.createLinearGradient(0, 0, 0, surface.height);
+  wash.addColorStop(0, '#efe2c4');
+  wash.addColorStop(1, '#cbb892');
+  ctx.fillStyle = wash;
   ctx.fillRect(0, 0, surface.width, surface.height);
   const x0 = Math.floor(frame.camX);
   const y0 = Math.floor(frame.camY);
@@ -185,24 +187,53 @@ function paintTerrain(surface, state, frame) {
       if (!inBounds(x, y)) continue;
       const rect = tileRect(frame, x, y);
       if (!isRevealed(state, x, y)) {
-        ctx.fillStyle = '#1a2230';
-        ctx.fillRect(rect.x, rect.y, rect.s + 0.5, rect.s + 0.5);
+        drawFogTile(ctx, rect, x, y);
         continue;
       }
       const tile = tileAt(state, x, y);
-      const palette = TERRAIN_INK[tile.terrain] || TERRAIN_INK.plains;
       const seen = isVisible(state, x, y);
-      ctx.fillStyle = seen ? palette[0] : shade(palette[0], 0.55);
-      ctx.fillRect(rect.x, rect.y, rect.s + 0.5, rect.s + 0.5);
-      ctx.fillStyle = seen ? palette[1] : shade(palette[1], 0.45);
-      ctx.fillRect(rect.x + rect.s * 0.08, rect.y + rect.s * 0.08, rect.s * 0.28, rect.s * 0.08);
-      if (tile.terrain === 'forest') drawCanopy(ctx, rect, seen);
-      if (tile.terrain === 'hills' || tile.terrain === 'mountains') drawRidge(ctx, rect, palette[2], seen);
-      if (tile.terrain === 'river') drawRiver(ctx, rect, seen);
+      drawTerrainFace(ctx, rect, tile, seen, x, y);
       if (tile.road) drawRoad(ctx, state, tile, rect, seen);
       if ((tile.blight || 0) > 0 && tile.terrain !== 'blight') drawBlightSpeck(ctx, rect, tile.blight);
     }
   }
+}
+
+function drawFogTile(ctx, rect, x, y) {
+  const ink = hash(x, y) % 2 === 0 ? '#3a3126' : '#32291f';
+  ctx.fillStyle = ink;
+  ctx.fillRect(rect.x, rect.y, rect.s + 0.6, rect.s + 0.6);
+  ctx.strokeStyle = 'rgba(232, 214, 176, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + rect.s * 0.15, rect.y + rect.s * 0.72);
+  ctx.lineTo(rect.x + rect.s * 0.82, rect.y + rect.s * 0.28);
+  ctx.stroke();
+}
+
+function drawTerrainFace(ctx, rect, tile, seen, x, y) {
+  const palette = TERRAIN_INK[tile.terrain] || TERRAIN_INK.plains;
+  const gap = Math.max(1, rect.s * 0.035);
+  const face = { x: rect.x + gap, y: rect.y + gap, s: rect.s - gap * 2 };
+  const gradient = ctx.createLinearGradient(face.x, face.y, face.x, face.y + face.s);
+  gradient.addColorStop(0, seen ? palette[1] : shade(palette[1], 0.62));
+  gradient.addColorStop(0.55, seen ? palette[0] : shade(palette[0], 0.58));
+  gradient.addColorStop(1, seen ? palette[2] : shade(palette[2], 0.5));
+  ctx.fillStyle = gradient;
+  roundRect(ctx, face.x, face.y, face.s, face.s, face.s * 0.12);
+  ctx.fill();
+  const specks = hash(x, y);
+  ctx.fillStyle = seen ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.arc(face.x + face.s * (0.22 + (specks % 5) * 0.03), face.y + face.s * 0.28, face.s * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+  if (tile.terrain === 'forest') drawCanopy(ctx, face, seen);
+  if (tile.terrain === 'hills') drawRidge(ctx, face, palette[2], seen);
+  if (tile.terrain === 'mountains') drawPeak(ctx, face, seen);
+  if (tile.terrain === 'river') drawRiver(ctx, face, seen);
+  if (tile.terrain === 'marsh') drawMarsh(ctx, face, seen);
+  if (tile.terrain === 'ruins') drawRuinStones(ctx, face, seen);
+  if (tile.terrain === 'blight') drawBlightGround(ctx, face, seen);
 }
 
 function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType }) {
@@ -217,8 +248,12 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const [x, y] = id.split(',').map(Number);
     if (x < x0 || y < y0 || x >= x1 || y >= y1) continue;
     const rect = tileRect(frame, x, y);
-    ctx.fillStyle = cost <= 1 ? 'rgba(240, 200, 102, 0.38)' : 'rgba(240, 200, 102, 0.22)';
-    ctx.fillRect(rect.x + 2, rect.y + 2, rect.s - 4, rect.s - 4);
+    ctx.fillStyle = cost <= 1 ? 'rgba(240, 200, 102, 0.42)' : 'rgba(240, 200, 102, 0.24)';
+    roundRect(ctx, rect.x + rect.s * 0.12, rect.y + rect.s * 0.12, rect.s * 0.76, rect.s * 0.76, rect.s * 0.18);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(143, 90, 20, 0.55)';
+    ctx.lineWidth = Math.max(1.5, frame.tile * 0.035);
+    ctx.stroke();
   }
   if (buildType) {
     for (const id of sites) {
@@ -246,9 +281,10 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   paintMarches(ctx, state, frame);
   if (hover) {
     const rect = tileRect(frame, hover.x, hover.y);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(2, frame.tile * 0.05);
-    ctx.strokeRect(rect.x + 1.5, rect.y + 1.5, rect.s - 3, rect.s - 3);
+    ctx.strokeStyle = 'rgba(255, 248, 220, 0.95)';
+    ctx.lineWidth = Math.max(2, frame.tile * 0.045);
+    roundRect(ctx, rect.x + rect.s * 0.08, rect.y + rect.s * 0.08, rect.s * 0.84, rect.s * 0.84, rect.s * 0.16);
+    ctx.stroke();
   }
 }
 
@@ -277,17 +313,21 @@ function paintMinimap(ctx, state, frame) {
   const x0 = ctx.canvas.width - width - pad;
   const y0 = pad;
   ctx.save();
-  ctx.fillStyle = 'rgba(20, 27, 36, 0.92)';
-  ctx.fillRect(x0 - 4, y0 - 4, width + 8, height + 8);
+  ctx.fillStyle = 'rgba(244, 232, 204, 0.94)';
+  roundRect(ctx, x0 - 6, y0 - 6, width + 12, height + 12, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 78, 36, 0.45)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
   for (let y = 0; y < MAP_HEIGHT; y += 1) {
     for (let x = 0; x < MAP_WIDTH; x += 1) {
       const tile = tileAt(state, x, y);
-      if (!isRevealed(state, x, y)) ctx.fillStyle = '#2c3644';
-      else ctx.fillStyle = isVisible(state, x, y) ? (TERRAIN_INK[tile.terrain]?.[0] || '#ccc') : '#6d7884';
+      if (!isRevealed(state, x, y)) ctx.fillStyle = '#d7c7a4';
+      else ctx.fillStyle = isVisible(state, x, y) ? (TERRAIN_INK[tile.terrain]?.[0] || '#ccc') : '#b7a888';
       ctx.fillRect(x0 + x * scale, y0 + y * scale, scale, scale);
     }
   }
-  ctx.strokeStyle = '#f0c866';
+  ctx.strokeStyle = '#8f2418';
   ctx.lineWidth = 2;
   ctx.strokeRect(x0 + frame.camX * scale, y0 + frame.camY * scale, (ctx.canvas.clientWidth / Math.max(1, frame.tile / frame.dpr)) * scale, (ctx.canvas.clientHeight / Math.max(1, frame.tile / frame.dpr)) * scale);
   ctx.restore();
@@ -295,108 +335,406 @@ function paintMinimap(ctx, state, frame) {
 
 function drawBuilding(ctx, frame, building, selected, seen) {
   const rect = tileRect(frame, building.x, building.y);
-  const color = FACTION_INK[building.faction] || '#ddd';
+  const color = FACTION_INK[building.faction] || '#f0c866';
   const s = rect.s;
   ctx.save();
-  ctx.globalAlpha = seen ? 1 : 0.55;
+  ctx.globalAlpha = seen ? 1 : 0.5;
   ctx.translate(rect.x, rect.y);
-  ctx.fillStyle = building.faction === 'dead' ? '#18211c' : '#f4efe2';
-  roundRect(ctx, s * 0.22, s * 0.28, s * 0.56, s * 0.42, s * 0.08);
-  ctx.fill();
-  ctx.fillStyle = color;
+  ctx.fillStyle = 'rgba(48, 28, 12, 0.22)';
   ctx.beginPath();
-  ctx.moveTo(s * 0.18, s * 0.34);
-  ctx.lineTo(s * 0.5, s * 0.14);
-  ctx.lineTo(s * 0.82, s * 0.34);
-  ctx.closePath();
+  ctx.ellipse(s * 0.5, s * 0.78, s * 0.32, s * 0.08, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (building.type === 'portal' || building.type === 'bonePit' || building.type === 'graveForge' || building.type === 'necropolis') {
-    ctx.fillStyle = building.type === 'graveForge' ? '#ff8a62' : '#9cf38a';
+  if (building.faction === 'dead') drawDeadWork(ctx, building, s);
+  else drawLivingWork(ctx, building, s, color);
+  drawHealthPip(ctx, s * 0.26, s * 0.84, s * 0.48, s * 0.055, building.hp / building.maxHp);
+  if (selected) drawSelectRing(ctx, s);
+  ctx.restore();
+}
+
+function drawLivingWork(ctx, building, s, color) {
+  if (building.type === 'farm') {
+    ctx.fillStyle = '#8faf45';
+    for (let i = 0; i < 3; i += 1) ctx.fillRect(s * 0.18, s * (0.42 + i * 0.1), s * 0.4, s * 0.05);
+    ctx.fillStyle = '#f4efe2';
+    ctx.fillRect(s * 0.52, s * 0.4, s * 0.26, s * 0.28);
+    ctx.fillStyle = '#8f2418';
+    roof(ctx, s * 0.48, s * 0.4, s * 0.34, s * 0.16);
+    return;
+  }
+  if (building.type === 'lumberCamp') {
+    ctx.fillStyle = '#1f6b3a';
     ctx.beginPath();
-    ctx.arc(s * 0.5, s * 0.48, s * (building.type === 'necropolis' ? 0.16 : 0.1), 0, Math.PI * 2);
+    ctx.moveTo(s * 0.28, s * 0.62);
+    ctx.lineTo(s * 0.4, s * 0.28);
+    ctx.lineTo(s * 0.52, s * 0.62);
     ctx.fill();
+    ctx.fillStyle = '#6b4428';
+    ctx.fillRect(s * 0.54, s * 0.5, s * 0.26, s * 0.08);
+    ctx.fillRect(s * 0.5, s * 0.58, s * 0.3, s * 0.08);
+    return;
+  }
+  if (building.type === 'mine') {
+    ctx.fillStyle = '#8d8072';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.16, s * 0.72);
+    ctx.lineTo(s * 0.38, s * 0.32);
+    ctx.lineTo(s * 0.62, s * 0.5);
+    ctx.lineTo(s * 0.84, s * 0.72);
+    ctx.fill();
+    ctx.fillStyle = '#241910';
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, s * 0.66, s * 0.14, s * 0.1, 0, Math.PI, 0);
+    ctx.fill();
+    return;
+  }
+  if (building.type === 'watchtower' || building.type === 'outpost') {
+    ctx.fillStyle = '#6e5438';
+    ctx.fillRect(s * 0.42, s * 0.28, s * 0.16, s * 0.46);
+    ctx.fillStyle = color;
+    roof(ctx, s * 0.32, s * 0.28, s * 0.36, s * 0.16);
+    drawPennon(ctx, s * 0.58, s * 0.16, s * 0.22, color);
+    return;
+  }
+  if (building.type === 'wall') {
+    ctx.fillStyle = '#c5c8c4';
+    for (let i = 0; i < 4; i += 1) ctx.fillRect(s * (0.12 + i * 0.2), s * 0.4, s * 0.14, s * 0.32);
+    ctx.fillStyle = '#f4f1ea';
+    for (let i = 0; i < 4; i += 1) ctx.fillRect(s * (0.12 + i * 0.2), s * 0.34, s * 0.14, s * 0.08);
+    return;
+  }
+  if (building.type === 'shrine' || building.type === 'rallyBanner') {
+    ctx.strokeStyle = '#8a5a2b';
+    ctx.lineWidth = Math.max(2, s * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(s * 0.38, s * 0.18);
+    ctx.lineTo(s * 0.38, s * 0.74);
+    ctx.stroke();
+    ctx.fillStyle = building.type === 'shrine' ? '#f0c866' : '#8f2418';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.38, s * 0.18);
+    ctx.lineTo(s * 0.72, s * 0.28);
+    ctx.lineTo(s * 0.62, s * 0.4);
+    ctx.lineTo(s * 0.38, s * 0.34);
+    ctx.fill();
+    if (building.type === 'shrine') {
+      ctx.fillStyle = '#fff1b0';
+      ctx.beginPath();
+      ctx.arc(s * 0.55, s * 0.28, s * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return;
+  }
+  ctx.fillStyle = '#f6f0e4';
+  ctx.fillRect(s * 0.24, s * 0.4, s * 0.52, s * 0.32);
+  ctx.fillStyle = building.type === 'city' ? '#8f2418' : color;
+  roof(ctx, s * 0.16, s * 0.4, s * 0.68, s * 0.2);
+  if (building.type === 'city') {
+    ctx.fillStyle = '#efe6d2';
+    ctx.fillRect(s * 0.32, s * 0.46, s * 0.06, s * 0.16);
+    ctx.fillRect(s * 0.46, s * 0.46, s * 0.06, s * 0.16);
+    ctx.fillRect(s * 0.6, s * 0.46, s * 0.06, s * 0.16);
+    drawPennon(ctx, s * 0.72, s * 0.16, s * 0.24, color);
   }
   if (building.turnsLeft > 0) {
-    ctx.fillStyle = '#24170f';
-    ctx.fillRect(s * 0.3, s * 0.62, s * 0.4, s * 0.12);
-    ctx.fillStyle = '#f0c866';
-    ctx.fillRect(s * 0.3, s * 0.62, s * 0.4 * (1 - building.turnsLeft / Math.max(1, BUILDING_TYPES[building.type]?.buildTurns || 1)), s * 0.12);
+    ctx.strokeStyle = 'rgba(70, 42, 22, 0.7)';
+    ctx.lineWidth = Math.max(1, s * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(s * 0.22, s * 0.72);
+    ctx.lineTo(s * 0.78, s * 0.28);
+    ctx.moveTo(s * 0.22, s * 0.28);
+    ctx.lineTo(s * 0.78, s * 0.72);
+    ctx.stroke();
   }
-  ctx.fillStyle = '#2a2118';
-  ctx.fillRect(s * 0.28, s * 0.78, s * 0.44, s * 0.07);
-  ctx.fillStyle = building.hp / building.maxHp > 0.45 ? '#67b15a' : '#d4543c';
-  ctx.fillRect(s * 0.28, s * 0.78, s * 0.44 * (building.hp / building.maxHp), s * 0.07);
-  if (selected) {
-    ctx.strokeStyle = '#f0c866';
+}
+
+function drawDeadWork(ctx, building, s) {
+  if (building.type === 'graveForge') {
+    ctx.fillStyle = '#1c2420';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.24, s * 0.74);
+    ctx.lineTo(s * 0.32, s * 0.36);
+    ctx.lineTo(s * 0.68, s * 0.36);
+    ctx.lineTo(s * 0.76, s * 0.74);
+    ctx.fill();
+    ctx.fillStyle = '#ffb066';
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.56, s * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  if (building.type === 'necropolis') {
+    ctx.fillStyle = '#24302a';
+    for (const [px, top] of [[0.28, 0.34], [0.5, 0.16], [0.72, 0.3]]) {
+      ctx.beginPath();
+      ctx.moveTo(s * (px - 0.1), s * 0.72);
+      ctx.lineTo(s * px, s * top);
+      ctx.lineTo(s * (px + 0.1), s * 0.72);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#f3ead4';
+    ctx.lineWidth = Math.max(1.4, s * 0.03);
+    ctx.stroke();
+    return;
+  }
+  if (building.type === 'portal') {
+    ctx.strokeStyle = '#9cf38a';
     ctx.lineWidth = Math.max(3, s * 0.07);
-    ctx.strokeRect(s * 0.08, s * 0.08, s * 0.84, s * 0.84);
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, s * 0.48, s * 0.18, s * 0.26, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(156, 243, 138, 0.35)';
+    ctx.fill();
+    return;
   }
-  ctx.restore();
+  ctx.fillStyle = '#101612';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.58, s * 0.24, s * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#e7e0cc';
+  ctx.lineWidth = Math.max(1.5, s * 0.035);
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.52, s * 0.22, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.stroke();
+  ctx.fillStyle = '#9cf38a';
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.56, s * 0.05, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawUnit(ctx, frame, unit, selected, attack) {
   const rect = tileRect(frame, unit.x, unit.y);
-  const def = UNIT_TYPES[unit.type];
-  const color = FACTION_INK[unit.faction] || '#eee';
+  const color = FACTION_INK[unit.faction] || '#f0c866';
   const s = rect.s;
   ctx.save();
   ctx.translate(rect.x, rect.y);
-  ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.62 : 1;
-  ctx.fillStyle = unit.faction === 'dead' ? '#101612' : '#f7f1e2';
-  roundRect(ctx, s * 0.2, s * 0.22, s * 0.6, s * 0.52, s * 0.16);
+  ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.58 : 1;
+  ctx.fillStyle = 'rgba(40, 24, 10, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.8, s * 0.26, s * 0.07, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = Math.max(3, s * 0.07);
-  ctx.strokeStyle = attack ? '#b42318' : color;
-  roundRect(ctx, s * 0.2, s * 0.22, s * 0.6, s * 0.52, s * 0.16);
-  ctx.stroke();
-  ctx.fillStyle = unit.faction === 'dead' ? '#d7ffe0' : '#2a2118';
-  ctx.font = `700 ${Math.max(10, s * 0.22)}px system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(shortCode(def?.role || unit.type), s * 0.5, s * 0.48);
-  ctx.fillStyle = '#24170f';
-  ctx.fillRect(s * 0.24, s * 0.78, s * 0.52, s * 0.08);
-  ctx.fillStyle = unit.hp / unit.maxHp > 0.5 ? '#67b15a' : '#d4543c';
-  ctx.fillRect(s * 0.24, s * 0.78, s * 0.52 * (unit.hp / unit.maxHp), s * 0.08);
-  if (selected) {
-    ctx.strokeStyle = '#fff6d0';
-    ctx.lineWidth = Math.max(3, s * 0.08);
-    ctx.strokeRect(s * 0.08, s * 0.08, s * 0.84, s * 0.84);
+  if (unit.faction === 'dead' || UNIT_TYPES[unit.type]?.tags?.includes('undead')) drawUndeadToken(ctx, unit, s, color);
+  else if (unit.type === 'cavalry') drawCavalryToken(ctx, s, color);
+  else if (unit.type === 'archer') drawArcherToken(ctx, s, color);
+  else if (unit.type === 'onager') drawOnagerToken(ctx, s, color);
+  else if (unit.type === 'engineer') drawEngineerToken(ctx, s, color);
+  else if (unit.type === 'scout') drawScoutToken(ctx, s, color);
+  else drawInfantryToken(ctx, s, color, unit.type === 'spearGuard');
+  drawHealthPip(ctx, s * 0.28, s * 0.86, s * 0.44, s * 0.05, unit.hp / unit.maxHp);
+  if (attack) {
+    ctx.strokeStyle = '#b42318';
+    ctx.lineWidth = Math.max(2, s * 0.05);
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.48, s * 0.34, 0, Math.PI * 2);
+    ctx.stroke();
   }
+  if (selected) drawSelectRing(ctx, s);
   ctx.restore();
 }
 
-function drawCanopy(ctx, rect, seen) {
-  ctx.fillStyle = seen ? '#145c32' : '#3d5c45';
-  for (const [px, py] of [[0.3, 0.42], [0.55, 0.36], [0.68, 0.58]]) {
+function drawScoutToken(ctx, s, color) {
+  ctx.fillStyle = '#4e704f';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.5, s * 0.22);
+  ctx.lineTo(s * 0.28, s * 0.7);
+  ctx.quadraticCurveTo(s * 0.5, s * 0.78, s * 0.72, s * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#f0c88a';
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.32, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  drawPennon(ctx, s * 0.62, s * 0.2, s * 0.16, color);
+}
+
+function drawInfantryToken(ctx, s, color, spear) {
+  ctx.fillStyle = '#d7c4a2';
+  ctx.fillRect(s * 0.4, s * 0.34, s * 0.2, s * 0.28);
+  ctx.fillStyle = '#8f2418';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.34, s * 0.42);
+  ctx.lineTo(s * 0.5, s * 0.24);
+  ctx.lineTo(s * 0.66, s * 0.42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = spear ? '#e6d38c' : '#f4f7f8';
+  ctx.lineWidth = Math.max(2, s * 0.045);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.62, s * 0.2);
+  ctx.lineTo(s * 0.62, s * 0.72);
+  ctx.stroke();
+  drawPennon(ctx, s * 0.66, s * 0.16, s * 0.14, color);
+}
+
+function drawArcherToken(ctx, s, color) {
+  drawInfantryToken(ctx, s, color, false);
+  ctx.strokeStyle = '#6b3f22';
+  ctx.lineWidth = Math.max(1.5, s * 0.03);
+  ctx.beginPath();
+  ctx.arc(s * 0.34, s * 0.48, s * 0.12, -1.2, 1.2);
+  ctx.stroke();
+}
+
+function drawCavalryToken(ctx, s, color) {
+  ctx.fillStyle = '#8a5a32';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.48, s * 0.58, s * 0.24, s * 0.12, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#f0c88a';
+  ctx.beginPath();
+  ctx.arc(s * 0.62, s * 0.36, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a22';
+  ctx.lineWidth = Math.max(2, s * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.32, s * 0.66);
+  ctx.lineTo(s * 0.24, s * 0.78);
+  ctx.moveTo(s * 0.58, s * 0.66);
+  ctx.lineTo(s * 0.7, s * 0.78);
+  ctx.stroke();
+  drawPennon(ctx, s * 0.7, s * 0.18, s * 0.16, color);
+}
+
+function drawEngineerToken(ctx, s, color) {
+  ctx.fillStyle = '#c4b090';
+  ctx.fillRect(s * 0.4, s * 0.34, s * 0.2, s * 0.3);
+  ctx.strokeStyle = '#6b4428';
+  ctx.lineWidth = Math.max(2, s * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.28, s * 0.7);
+  ctx.lineTo(s * 0.7, s * 0.32);
+  ctx.stroke();
+  drawPennon(ctx, s * 0.66, s * 0.18, s * 0.14, color);
+}
+
+function drawOnagerToken(ctx, s, color) {
+  ctx.strokeStyle = '#6b4428';
+  ctx.lineWidth = Math.max(2, s * 0.045);
+  ctx.strokeRect(s * 0.26, s * 0.48, s * 0.48, s * 0.16);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.36, s * 0.5);
+  ctx.lineTo(s * 0.7, s * 0.24);
+  ctx.stroke();
+  ctx.fillStyle = '#8f2418';
+  ctx.beginPath();
+  ctx.arc(s * 0.7, s * 0.24, s * 0.045, 0, Math.PI * 2);
+  ctx.fill();
+  drawPennon(ctx, s * 0.74, s * 0.16, s * 0.12, color);
+}
+
+function drawUndeadToken(ctx, unit, s, color) {
+  ctx.fillStyle = '#dfe8df';
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.34, s * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#101612';
+  ctx.beginPath();
+  ctx.arc(s * 0.46, s * 0.33, s * 0.02, 0, Math.PI * 2);
+  ctx.arc(s * 0.54, s * 0.33, s * 0.02, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#dfe8df';
+  ctx.lineWidth = Math.max(2, s * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.5, s * 0.44);
+  ctx.lineTo(s * 0.5, s * 0.68);
+  ctx.moveTo(s * 0.34, s * 0.52);
+  ctx.lineTo(s * 0.66, s * 0.52);
+  ctx.stroke();
+  if (unit.type === 'graveKnight' || unit.type === 'lichBoss') {
+    ctx.strokeStyle = color;
     ctx.beginPath();
-    ctx.arc(rect.x + rect.s * px, rect.y + rect.s * py, rect.s * 0.14, 0, Math.PI * 2);
+    ctx.arc(s * 0.5, s * 0.34, s * 0.14, Math.PI, 0);
+    ctx.stroke();
+  }
+}
+
+function drawCanopy(ctx, face, seen) {
+  ctx.fillStyle = seen ? '#14663a' : '#3d5a44';
+  for (const [px, py, r] of [[0.32, 0.58, 0.16], [0.55, 0.42, 0.18], [0.72, 0.62, 0.13]]) {
+    ctx.beginPath();
+    ctx.arc(face.x + face.s * px, face.y + face.s * py, face.s * r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = seen ? '#5c3a22' : '#4a4034';
+  ctx.fillRect(face.x + face.s * 0.5, face.y + face.s * 0.55, face.s * 0.06, face.s * 0.22);
+}
+
+function drawRidge(ctx, face, color, seen) {
+  ctx.fillStyle = seen ? color : shade(color, 0.62);
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.12, face.y + face.s * 0.78);
+  ctx.lineTo(face.x + face.s * 0.4, face.y + face.s * 0.28);
+  ctx.lineTo(face.x + face.s * 0.62, face.y + face.s * 0.58);
+  ctx.lineTo(face.x + face.s * 0.88, face.y + face.s * 0.78);
+  ctx.fill();
+  ctx.fillStyle = seen ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.1)';
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.4, face.y + face.s * 0.28);
+  ctx.lineTo(face.x + face.s * 0.48, face.y + face.s * 0.5);
+  ctx.lineTo(face.x + face.s * 0.36, face.y + face.s * 0.48);
+  ctx.fill();
+}
+
+function drawPeak(ctx, face, seen) {
+  ctx.fillStyle = seen ? '#d5dee2' : '#8ea0a6';
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.16, face.y + face.s * 0.8);
+  ctx.lineTo(face.x + face.s * 0.42, face.y + face.s * 0.22);
+  ctx.lineTo(face.x + face.s * 0.58, face.y + face.s * 0.48);
+  ctx.lineTo(face.x + face.s * 0.84, face.y + face.s * 0.8);
+  ctx.fill();
+  ctx.fillStyle = '#f7fbff';
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.42, face.y + face.s * 0.22);
+  ctx.lineTo(face.x + face.s * 0.48, face.y + face.s * 0.4);
+  ctx.lineTo(face.x + face.s * 0.36, face.y + face.s * 0.38);
+  ctx.fill();
+}
+
+function drawRiver(ctx, face, seen) {
+  ctx.fillStyle = seen ? '#7fd4f2' : '#6f93a4';
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.08, face.y);
+  ctx.quadraticCurveTo(face.x + face.s * 0.7, face.y + face.s * 0.35, face.x + face.s * 0.2, face.y + face.s);
+  ctx.lineTo(face.x + face.s * 0.48, face.y + face.s);
+  ctx.quadraticCurveTo(face.x + face.s * 0.95, face.y + face.s * 0.4, face.x + face.s * 0.36, face.y);
+  ctx.fill();
+  ctx.strokeStyle = seen ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = Math.max(1.5, face.s * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.s * 0.22, face.y + face.s * 0.12);
+  ctx.quadraticCurveTo(face.x + face.s * 0.62, face.y + face.s * 0.4, face.x + face.s * 0.3, face.y + face.s * 0.88);
+  ctx.stroke();
+}
+
+function drawMarsh(ctx, face, seen) {
+  ctx.fillStyle = seen ? 'rgba(40, 90, 50, 0.35)' : 'rgba(40, 60, 40, 0.35)';
+  for (const [px, py, rx] of [[0.32, 0.58, 0.16], [0.66, 0.42, 0.12]]) {
+    ctx.beginPath();
+    ctx.ellipse(face.x + face.s * px, face.y + face.s * py, face.s * rx, face.s * rx * 0.55, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function drawRidge(ctx, rect, color, seen) {
-  ctx.fillStyle = seen ? color : shade(color, 0.6);
-  ctx.beginPath();
-  ctx.moveTo(rect.x + rect.s * 0.18, rect.y + rect.s * 0.72);
-  ctx.lineTo(rect.x + rect.s * 0.42, rect.y + rect.s * 0.28);
-  ctx.lineTo(rect.x + rect.s * 0.7, rect.y + rect.s * 0.72);
-  ctx.fill();
+function drawRuinStones(ctx, face, seen) {
+  ctx.fillStyle = seen ? '#efe6d2' : '#b3a890';
+  ctx.fillRect(face.x + face.s * 0.22, face.y + face.s * 0.38, face.s * 0.1, face.s * 0.36);
+  ctx.fillRect(face.x + face.s * 0.46, face.y + face.s * 0.28, face.s * 0.12, face.s * 0.46);
+  ctx.fillRect(face.x + face.s * 0.2, face.y + face.s * 0.32, face.s * 0.4, face.s * 0.08);
 }
 
-function drawRiver(ctx, rect, seen) {
-  ctx.strokeStyle = seen ? '#e9fbff' : '#9eb8c4';
-  ctx.lineWidth = Math.max(2, rect.s * 0.08);
+function drawBlightGround(ctx, face, seen) {
+  ctx.strokeStyle = seen ? 'rgba(156, 243, 138, 0.7)' : 'rgba(120, 150, 110, 0.4)';
+  ctx.lineWidth = Math.max(1, face.s * 0.03);
   ctx.beginPath();
-  ctx.moveTo(rect.x + rect.s * 0.2, rect.y + rect.s * 0.15);
-  ctx.quadraticCurveTo(rect.x + rect.s * 0.7, rect.y + rect.s * 0.45, rect.x + rect.s * 0.3, rect.y + rect.s * 0.85);
+  ctx.moveTo(face.x + face.s * 0.2, face.y + face.s * 0.7);
+  ctx.quadraticCurveTo(face.x + face.s * 0.5, face.y + face.s * 0.3, face.x + face.s * 0.78, face.y + face.s * 0.62);
   ctx.stroke();
 }
 
 function drawRoad(ctx, state, tile, rect, seen) {
-  ctx.strokeStyle = seen ? 'rgba(255, 236, 190, 0.92)' : 'rgba(180, 164, 130, 0.75)';
-  ctx.lineWidth = Math.max(3, rect.s * 0.18);
-  ctx.lineCap = 'square';
+  ctx.strokeStyle = seen ? '#f4e2b0' : '#b7a888';
+  ctx.lineWidth = Math.max(4, rect.s * 0.16);
+  ctx.lineCap = 'butt';
   const cx = rect.x + rect.s * 0.5;
   const cy = rect.y + rect.s * 0.5;
   ctx.beginPath();
@@ -409,17 +747,68 @@ function drawRoad(ctx, state, tile, rect, seen) {
     arms += 1;
   }
   if (!arms) {
-    ctx.moveTo(cx - rect.s * 0.16, cy);
-    ctx.lineTo(cx + rect.s * 0.16, cy);
+    ctx.moveTo(cx - rect.s * 0.18, cy);
+    ctx.lineTo(cx + rect.s * 0.18, cy);
   }
+  ctx.stroke();
+  ctx.strokeStyle = seen ? 'rgba(120, 78, 36, 0.35)' : 'rgba(80, 60, 30, 0.25)';
+  ctx.lineWidth = Math.max(1, rect.s * 0.03);
   ctx.stroke();
 }
 
 function drawBlightSpeck(ctx, rect, blight) {
-  ctx.fillStyle = `rgba(90, 60, 120, ${Math.min(0.45, blight / 12)})`;
+  ctx.fillStyle = `rgba(70, 40, 110, ${Math.min(0.4, blight / 14)})`;
   ctx.beginPath();
-  ctx.arc(rect.x + rect.s * 0.72, rect.y + rect.s * 0.28, rect.s * 0.12, 0, Math.PI * 2);
+  ctx.arc(rect.x + rect.s * 0.72, rect.y + rect.s * 0.28, rect.s * 0.1, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function roof(ctx, x, y, w, h) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w * 0.5, y - h);
+  ctx.lineTo(x + w, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPennon(ctx, x, y, h, color) {
+  ctx.strokeStyle = '#5a3a22';
+  ctx.lineWidth = Math.max(1, h * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y + h);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + h * 0.55, y + h * 0.18);
+  ctx.lineTo(x, y + h * 0.36);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawHealthPip(ctx, x, y, w, h, pct) {
+  ctx.fillStyle = 'rgba(30, 18, 10, 0.55)';
+  roundRect(ctx, x, y, w, h, h);
+  ctx.fill();
+  ctx.fillStyle = pct > 0.5 ? '#7dbe57' : '#d4543c';
+  roundRect(ctx, x, y, Math.max(h, w * pct), h, h);
+  ctx.fill();
+}
+
+function drawSelectRing(ctx, s) {
+  ctx.strokeStyle = '#f0c866';
+  ctx.lineWidth = Math.max(2.5, s * 0.055);
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.48, s * 0.38, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function hash(x, y) {
+  let n = Math.imul(x + 19, 374761393) + Math.imul(y + 7, 668265263);
+  n = (n ^ (n >>> 13)) >>> 0;
+  return n;
 }
 
 function tileRect(frame, x, y) {
@@ -428,19 +817,6 @@ function tileRect(frame, x, y) {
     y: (y - frame.camY) * frame.tile,
     s: frame.tile
   };
-}
-
-function shortCode(role) {
-  const text = String(role || '').toUpperCase();
-  if (text.includes('RECON') || text.includes('SCOUT')) return 'SCT';
-  if (text.includes('RANG')) return 'BOW';
-  if (text.includes('CAV')) return 'CAV';
-  if (text.includes('SIEGE') || text.includes('ONAGER')) return 'SEG';
-  if (text.includes('BUILD') || text.includes('ENG')) return 'ENG';
-  if (text.includes('SPEAR')) return 'SPR';
-  if (text.includes('BOSS') || text.includes('CROWN')) return 'BOSS';
-  if (text.includes('UNDEAD') || text.includes('THRALL') || text.includes('BONE')) return 'DED';
-  return text.slice(0, 3) || 'UNT';
 }
 
 function isAttackTarget(state, attacker, target) {
