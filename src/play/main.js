@@ -36,7 +36,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { createBoard, hoverSummary } from './board.js';
+import { createBoard, hoverSummary, loadUnitSprites } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -59,6 +59,9 @@ let pointer = null;
 initAudioPreference();
 registerPwa();
 boot();
+loadUnitSprites().then((ready) => {
+  if (ready) paint();
+});
 
 function boot() {
   const fit = () => {

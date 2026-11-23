@@ -1241,6 +1241,11 @@ check('play board stays fast and readable', () => {
   assert(index.includes('src="./src/play/main.js"') && index.includes('id="board"') && index.includes('id="dock"') && index.includes('id="endTurn"'), 'The played page should boot the square board and a single command dock.');
   assert(!index.includes('class="map-help"') && !index.includes('id="mapIntel"') && !index.includes('id="mapTurnReport"'), 'The map should not carry a second stack of help, intel, and turn-report overlays.');
   assert(board.includes('const terrain = document.createElement(\'canvas\')') && board.includes('if (terrainKey !== view.cacheKey)') && board.includes('function paintTerrain') && board.includes('export function movementField'), 'Terrain should be cached, and movement reach should be a flood fill rather than a path search per hover.');
+  const atlas = readProjectFile('assets/sprites/unit-atlas.svg');
+  for (const id of ['scout', 'legionary', 'spearGuard', 'archer', 'cavalry', 'engineer', 'onager', 'boneThrall', 'corpseArcher', 'graveKnight', 'lichBoss']) {
+    assert(atlas.includes(`id="${id}"`) && board.includes(`'${id}'`), `Unit ${id} needs its own sprite frame.`);
+  }
+  assert(board.includes('ctx.drawImage') && board.includes('unit-atlas.svg') && play.includes('loadUnitSprites'), 'The board should draw each unit from the unit atlas.');
   assert(play.includes('function renderGlance') && play.includes('if (!same)') && play.includes('executePlayerCommand'), 'Hover should update one status line and the piece layer, and orders should go through the command history.');
   assert(css.includes('grid-template-columns: minmax(0, 1fr) 340px') && css.includes('touch-action: none'), 'The board should own the viewport, with the dock beside it instead of on top of it.');
   const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-board' });

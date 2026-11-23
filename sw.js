@@ -1,10 +1,11 @@
-const CACHE_NAME = 'olundar-pwa-v142';
+const CACHE_NAME = 'olundar-pwa-v144';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./assets/icons/olundar-icon.svg",
   "./assets/sprites/olundar-sprite-sheet.svg",
+  "./assets/sprites/unit-atlas.svg",
   "./data/meta.json",
   "./data/units.json",
   "./data/buildings.json",

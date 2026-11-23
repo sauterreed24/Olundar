@@ -29,6 +29,26 @@ const TERRAIN_INK = {
 };
 
 const FACTION_INK = Object.fromEntries(Object.values(FACTIONS).map((faction) => [faction.id, faction.color || '#f0c866']));
+const UNIT_SPRITE_ORDER = ['scout', 'legionary', 'spearGuard', 'archer', 'cavalry', 'engineer', 'onager', 'boneThrall', 'corpseArcher', 'graveKnight', 'lichBoss'];
+const SPRITE_CELL = { width: 160, height: 200 };
+const SPRITE_URL = new URL('../../assets/sprites/unit-atlas.svg', import.meta.url);
+
+let unitAtlas = null;
+let unitAtlasReady = false;
+
+export function loadUnitSprites() {
+  if (typeof Image === 'undefined') return Promise.resolve(false);
+  if (unitAtlasReady) return Promise.resolve(true);
+  unitAtlas = new Image();
+  return new Promise((resolve) => {
+    unitAtlas.onload = () => {
+      unitAtlasReady = true;
+      resolve(true);
+    };
+    unitAtlas.onerror = () => resolve(false);
+    unitAtlas.src = SPRITE_URL.href;
+  });
+}
 
 export function movementField(state, unit) {
   if (!unit || unit.hasActed) return new Map();
@@ -508,143 +528,36 @@ function drawUnit(ctx, frame, unit, selected, attack) {
   ctx.save();
   ctx.translate(rect.x, rect.y);
   ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.58 : 1;
-  ctx.fillStyle = 'rgba(40, 24, 10, 0.28)';
-  ctx.beginPath();
-  ctx.ellipse(s * 0.5, s * 0.8, s * 0.26, s * 0.07, 0, 0, Math.PI * 2);
-  ctx.fill();
-  if (unit.faction === 'dead' || UNIT_TYPES[unit.type]?.tags?.includes('undead')) drawUndeadToken(ctx, unit, s, color);
-  else if (unit.type === 'cavalry') drawCavalryToken(ctx, s, color);
-  else if (unit.type === 'archer') drawArcherToken(ctx, s, color);
-  else if (unit.type === 'onager') drawOnagerToken(ctx, s, color);
-  else if (unit.type === 'engineer') drawEngineerToken(ctx, s, color);
-  else if (unit.type === 'scout') drawScoutToken(ctx, s, color);
-  else drawInfantryToken(ctx, s, color, unit.type === 'spearGuard');
-  drawHealthPip(ctx, s * 0.28, s * 0.86, s * 0.44, s * 0.05, unit.hp / unit.maxHp);
+  drawUnitSprite(ctx, unit, s);
+  if (unit.faction !== 'dead') drawPennon(ctx, s * 0.7, s * 0.08, s * 0.18, color);
+  drawHealthPip(ctx, s * 0.28, s * 0.9, s * 0.44, s * 0.045, unit.hp / unit.maxHp);
   if (attack) {
     ctx.strokeStyle = '#b42318';
     ctx.lineWidth = Math.max(2, s * 0.05);
     ctx.beginPath();
-    ctx.arc(s * 0.5, s * 0.48, s * 0.34, 0, Math.PI * 2);
+    ctx.arc(s * 0.5, s * 0.46, s * 0.4, 0, Math.PI * 2);
     ctx.stroke();
   }
   if (selected) drawSelectRing(ctx, s);
   ctx.restore();
 }
 
-function drawScoutToken(ctx, s, color) {
-  ctx.fillStyle = '#4e704f';
-  ctx.beginPath();
-  ctx.moveTo(s * 0.5, s * 0.22);
-  ctx.lineTo(s * 0.28, s * 0.7);
-  ctx.quadraticCurveTo(s * 0.5, s * 0.78, s * 0.72, s * 0.7);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#f0c88a';
-  ctx.beginPath();
-  ctx.arc(s * 0.5, s * 0.32, s * 0.07, 0, Math.PI * 2);
-  ctx.fill();
-  drawPennon(ctx, s * 0.62, s * 0.2, s * 0.16, color);
-}
-
-function drawInfantryToken(ctx, s, color, spear) {
-  ctx.fillStyle = '#d7c4a2';
-  ctx.fillRect(s * 0.4, s * 0.34, s * 0.2, s * 0.28);
-  ctx.fillStyle = '#8f2418';
-  ctx.beginPath();
-  ctx.moveTo(s * 0.34, s * 0.42);
-  ctx.lineTo(s * 0.5, s * 0.24);
-  ctx.lineTo(s * 0.66, s * 0.42);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = spear ? '#e6d38c' : '#f4f7f8';
-  ctx.lineWidth = Math.max(2, s * 0.045);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.62, s * 0.2);
-  ctx.lineTo(s * 0.62, s * 0.72);
-  ctx.stroke();
-  drawPennon(ctx, s * 0.66, s * 0.16, s * 0.14, color);
-}
-
-function drawArcherToken(ctx, s, color) {
-  drawInfantryToken(ctx, s, color, false);
-  ctx.strokeStyle = '#6b3f22';
-  ctx.lineWidth = Math.max(1.5, s * 0.03);
-  ctx.beginPath();
-  ctx.arc(s * 0.34, s * 0.48, s * 0.12, -1.2, 1.2);
-  ctx.stroke();
-}
-
-function drawCavalryToken(ctx, s, color) {
-  ctx.fillStyle = '#8a5a32';
-  ctx.beginPath();
-  ctx.ellipse(s * 0.48, s * 0.58, s * 0.24, s * 0.12, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#f0c88a';
-  ctx.beginPath();
-  ctx.arc(s * 0.62, s * 0.36, s * 0.07, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#5a3a22';
-  ctx.lineWidth = Math.max(2, s * 0.04);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.32, s * 0.66);
-  ctx.lineTo(s * 0.24, s * 0.78);
-  ctx.moveTo(s * 0.58, s * 0.66);
-  ctx.lineTo(s * 0.7, s * 0.78);
-  ctx.stroke();
-  drawPennon(ctx, s * 0.7, s * 0.18, s * 0.16, color);
-}
-
-function drawEngineerToken(ctx, s, color) {
-  ctx.fillStyle = '#c4b090';
-  ctx.fillRect(s * 0.4, s * 0.34, s * 0.2, s * 0.3);
-  ctx.strokeStyle = '#6b4428';
-  ctx.lineWidth = Math.max(2, s * 0.04);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.28, s * 0.7);
-  ctx.lineTo(s * 0.7, s * 0.32);
-  ctx.stroke();
-  drawPennon(ctx, s * 0.66, s * 0.18, s * 0.14, color);
-}
-
-function drawOnagerToken(ctx, s, color) {
-  ctx.strokeStyle = '#6b4428';
-  ctx.lineWidth = Math.max(2, s * 0.045);
-  ctx.strokeRect(s * 0.26, s * 0.48, s * 0.48, s * 0.16);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.36, s * 0.5);
-  ctx.lineTo(s * 0.7, s * 0.24);
-  ctx.stroke();
-  ctx.fillStyle = '#8f2418';
-  ctx.beginPath();
-  ctx.arc(s * 0.7, s * 0.24, s * 0.045, 0, Math.PI * 2);
-  ctx.fill();
-  drawPennon(ctx, s * 0.74, s * 0.16, s * 0.12, color);
-}
-
-function drawUndeadToken(ctx, unit, s, color) {
-  ctx.fillStyle = '#dfe8df';
-  ctx.beginPath();
-  ctx.arc(s * 0.5, s * 0.34, s * 0.1, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#101612';
-  ctx.beginPath();
-  ctx.arc(s * 0.46, s * 0.33, s * 0.02, 0, Math.PI * 2);
-  ctx.arc(s * 0.54, s * 0.33, s * 0.02, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#dfe8df';
-  ctx.lineWidth = Math.max(2, s * 0.04);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.5, s * 0.44);
-  ctx.lineTo(s * 0.5, s * 0.68);
-  ctx.moveTo(s * 0.34, s * 0.52);
-  ctx.lineTo(s * 0.66, s * 0.52);
-  ctx.stroke();
-  if (unit.type === 'graveKnight' || unit.type === 'lichBoss') {
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    ctx.arc(s * 0.5, s * 0.34, s * 0.14, Math.PI, 0);
-    ctx.stroke();
-  }
+function drawUnitSprite(ctx, unit, s) {
+  const index = UNIT_SPRITE_ORDER.indexOf(unit.type);
+  if (!unitAtlasReady || !unitAtlas || index < 0) return;
+  const height = s * 1.28;
+  const width = height * (SPRITE_CELL.width / SPRITE_CELL.height);
+  ctx.drawImage(
+    unitAtlas,
+    index * SPRITE_CELL.width,
+    0,
+    SPRITE_CELL.width,
+    SPRITE_CELL.height,
+    (s - width) / 2,
+    s - height + s * 0.12,
+    width,
+    height
+  );
 }
 
 function drawCanopy(ctx, face, seen) {

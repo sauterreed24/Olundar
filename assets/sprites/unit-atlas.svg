@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="200" viewBox="0 0 1760 200" role="img" aria-labelledby="title">
+  <title id="title">Olundar unit sprites</title>
+  <style>
+    g path, g rect, g circle, g ellipse {
+      stroke: #24170f;
+      stroke-width: 2.4;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      paint-order: stroke fill;
+    }
+  </style>
+  <defs>
+    <linearGradient id="skin" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f3d2a8"/>
+      <stop offset="1" stop-color="#c98958"/>
+    </linearGradient>
+    <linearGradient id="cloth" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#c44738"/>
+      <stop offset="1" stop-color="#7d1d16"/>
+    </linearGradient>
+    <linearGradient id="iron" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7f4ee"/>
+      <stop offset="0.45" stop-color="#b7c0c6"/>
+      <stop offset="1" stop-color="#5d686e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff1b8"/>
+      <stop offset="1" stop-color="#c8962e"/>
+    </linearGradient>
+    <linearGradient id="leather" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#a56b3c"/>
+      <stop offset="1" stop-color="#5a341c"/>
+    </linearGradient>
+    <linearGradient id="cloak" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#3f8a58"/>
+      <stop offset="1" stop-color="#1c4d30"/>
+    </linearGradient>
+    <linearGradient id="horse" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#a56b43"/>
+      <stop offset="1" stop-color="#4a2c18"/>
+    </linearGradient>
+    <linearGradient id="bone" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7f3e6"/>
+      <stop offset="1" stop-color="#b7b09a"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#c4894f"/>
+      <stop offset="1" stop-color="#6a3d1e"/>
+    </linearGradient>
+  </defs>
+
+  <g id="scout" transform="translate(0 0)">
+    <ellipse cx="80" cy="176" rx="34" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M58 168c2-18 8-28 22-28s20 10 22 28" fill="#3a2416"/>
+    <path d="M46 78c2 30 8 62 10 78h48c2-18 8-50 12-78-8 10-22 14-35 14s-27-4-35-14z" fill="url(#cloak)"/>
+    <path d="M62 70c8-28 28-28 36 0l-4 16H66z" fill="#234833"/>
+    <circle cx="80" cy="62" r="11" fill="url(#skin)"/>
+    <path d="M70 58c2-8 18-8 20 0" fill="none" stroke="#234833" stroke-width="3"/>
+    <path d="M98 48c14 8 16 28 8 40" fill="none" stroke="#5a341c" stroke-width="4" stroke-linecap="round"/>
+    <path d="M104 46v42" stroke="#efe6cf" stroke-width="1.6"/>
+    <path d="M108 86h10l-3 5 3 5h-10z" fill="#c8962e"/>
+  </g>
+
+  <g id="legionary" transform="translate(160 0)">
+    <ellipse cx="80" cy="176" rx="36" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M58 150h12l2 22h-10zm22 0h12l-2 22h-12z" fill="#5c4030"/>
+    <path d="M56 92h36v58H56z" fill="url(#cloth)"/>
+    <path d="M58 96h32v10H58z" fill="url(#gold)"/>
+    <path d="M64 70h20v24H64z" fill="url(#iron)"/>
+    <path d="M60 70c4-18 28-18 32 0v6H60z" fill="#8d2420"/>
+    <circle cx="74" cy="78" r="4" fill="url(#skin)"/>
+    <path d="M28 86l18-8 8 34-22 10z" fill="url(#iron)" stroke="#2a2118" stroke-width="2"/>
+    <circle cx="40" cy="108" r="5" fill="url(#gold)"/>
+    <path d="M108 58v92" stroke="#2a2118" stroke-width="4" stroke-linecap="round"/>
+    <path d="M100 58h16l-8-14z" fill="#d7dde2"/>
+  </g>
+
+  <g id="spearGuard" transform="translate(320 0)">
+    <ellipse cx="80" cy="176" rx="34" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M60 150h10l2 22H62zm20 0h10l-2 22H80z" fill="#5c4030"/>
+    <path d="M58 94h32v56H58z" fill="#245c86"/>
+    <path d="M60 98h28v8H60z" fill="url(#gold)"/>
+    <path d="M66 72h16v24H66z" fill="url(#iron)"/>
+    <path d="M62 72c4-16 24-16 28 0v4H62z" fill="#1d4664"/>
+    <path d="M30 92c10-16 28-10 30 8-12 6-24 8-34 2-4-2-2-8 4-10z" fill="#e6d38c" stroke="#2a2118" stroke-width="2"/>
+    <path d="M112 28v128" stroke="#6b4428" stroke-width="4"/>
+    <path d="M104 28h16l-8-16z" fill="#efe6cf"/>
+  </g>
+
+  <g id="archer" transform="translate(480 0)">
+    <ellipse cx="78" cy="176" rx="32" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M58 150h10l2 22H60zm18 0h10l-2 22H76z" fill="#5c4030"/>
+    <path d="M54 96h30v54H54z" fill="#8d5a32"/>
+    <path d="M60 74h18v24H60z" fill="url(#leather)"/>
+    <circle cx="69" cy="68" r="9" fill="url(#skin)"/>
+    <path d="M64 60c2-8 14-8 16 0" fill="#5a341c"/>
+    <path d="M96 40c18 22 18 62 0 84" fill="none" stroke="#4a2c18" stroke-width="5" stroke-linecap="round"/>
+    <path d="M96 40v84" stroke="#f4efe2" stroke-width="1.5"/>
+    <path d="M96 78h28" stroke="#6b4428" stroke-width="3"/>
+    <path d="M122 74l8 4-8 4z" fill="#c8962e"/>
+    <path d="M48 108c8 4 10 14 4 18" fill="none" stroke="#5a341c" stroke-width="3"/>
+  </g>
+
+  <g id="cavalry" transform="translate(640 0)">
+    <ellipse cx="86" cy="178" rx="46" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M28 150c8-28 30-36 62-28 18 4 36 2 52-12 4 10-2 22-16 28-6 16-20 24-36 22-8 10-22 12-34 4-10 6-22 4-28-14z" fill="url(#horse)"/>
+    <path d="M132 108c10-6 18-2 16 8-8 2-16 0-16-8z" fill="#4a2c18"/>
+    <path d="M36 156l-8 16M58 162l-4 14M108 160l6 14" stroke="#2a1c12" stroke-width="4" stroke-linecap="round"/>
+    <path d="M70 118c6-24 20-30 28-18v28h-20z" fill="url(#cloth)"/>
+    <circle cx="96" cy="92" r="9" fill="url(#skin)"/>
+    <path d="M88 86c3-12 18-10 20 2" fill="#7d1d16"/>
+    <path d="M108 70v70" stroke="#efe6cf" stroke-width="3"/>
+    <path d="M102 70h12l-6-12z" fill="#d7dde2"/>
+    <path d="M78 96h14l-4 6 4 6H78z" fill="#c8962e"/>
+  </g>
+
+  <g id="engineer" transform="translate(800 0)">
+    <ellipse cx="80" cy="176" rx="34" ry="8" fill="#000" opacity="0.28"/>
+    <path d="M58 150h12l2 22H60zm20 0h12l-2 22H78z" fill="#5c4030"/>
+    <path d="M56 98h32v52H56z" fill="#d7c4a2"/>
+    <path d="M60 102h24v8H60z" fill="#6b4428"/>
+    <path d="M64 74h18v26H64z" fill="url(#leather)"/>
+    <circle cx="73" cy="68" r="9" fill="url(#skin)"/>
+    <path d="M66 60h16v8H66z" fill="#8d7354"/>
+    <path d="M34 150l46-78" stroke="#6b4428" stroke-width="6" stroke-linecap="round"/>
+    <path d="M78 70l14-16" stroke="#8d969c" stroke-width="5" stroke-linecap="round"/>
+    <rect x="92" y="108" width="18" height="22" rx="3" fill="#5a341c"/>
+    <path d="M96 92h12l-3 6 3 6H96z" fill="#c8962e"/>
+  </g>
+
+  <g id="onager" transform="translate(960 0)">
+    <ellipse cx="80" cy="178" rx="46" ry="8" fill="#000" opacity="0.28"/>
+    <circle cx="38" cy="162" r="14" fill="#3a2416" stroke="#c8962e" stroke-width="3"/>
+    <circle cx="116" cy="162" r="14" fill="#3a2416" stroke="#c8962e" stroke-width="3"/>
+    <rect x="30" y="132" width="92" height="22" rx="4" fill="url(#wood)" stroke="#3a2416" stroke-width="2"/>
+    <path d="M48 136l62-78" stroke="#4a2c18" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="112" cy="54" r="10" fill="#8d969c" stroke="#2a2118" stroke-width="2"/>
+    <path d="M54 118h22v20H54z" fill="url(#cloth)"/>
+    <circle cx="65" cy="108" r="7" fill="url(#skin)"/>
+    <path d="M78 112h12l-3 5 3 5H78z" fill="#c8962e"/>
+  </g>
+
+  <g id="boneThrall" transform="translate(1120 0)">
+    <ellipse cx="80" cy="176" rx="30" ry="7" fill="#000" opacity="0.35"/>
+    <path d="M62 150l6 22M86 150l8 22" stroke="url(#bone)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M68 108h20M70 118h16M74 128h8" stroke="url(#bone)" stroke-width="3"/>
+    <path d="M78 96v40" stroke="url(#bone)" stroke-width="5"/>
+    <path d="M58 112h40" stroke="url(#bone)" stroke-width="4"/>
+    <circle cx="80" cy="72" r="16" fill="url(#bone)"/>
+    <circle cx="74" cy="70" r="3" fill="#101612"/>
+    <circle cx="88" cy="70" r="3" fill="#101612"/>
+    <path d="M74 80h12" stroke="#101612" stroke-width="2"/>
+    <path d="M96 86l22 28" stroke="#8d969c" stroke-width="4"/>
+    <circle cx="80" cy="68" r="2" fill="#9cf38a"/>
+  </g>
+
+  <g id="corpseArcher" transform="translate(1280 0)">
+    <ellipse cx="78" cy="176" rx="30" ry="7" fill="#000" opacity="0.35"/>
+    <path d="M60 148l6 22M82 148l8 22" stroke="url(#bone)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M76 98v46" stroke="url(#bone)" stroke-width="5"/>
+    <path d="M58 116h36" stroke="url(#bone)" stroke-width="4"/>
+    <circle cx="76" cy="74" r="15" fill="url(#bone)"/>
+    <circle cx="70" cy="72" r="3" fill="#101612"/>
+    <circle cx="84" cy="72" r="3" fill="#101612"/>
+    <path d="M98 46c16 20 16 58 0 78" fill="none" stroke="#d7ffe0" stroke-width="4"/>
+    <path d="M98 46v78" stroke="#9cf38a" stroke-width="1.5"/>
+    <path d="M98 82h24" stroke="#6b4428" stroke-width="3"/>
+    <path d="M120 78l8 4-8 4z" fill="#9cf38a"/>
+  </g>
+
+  <g id="graveKnight" transform="translate(1440 0)">
+    <ellipse cx="80" cy="176" rx="36" ry="8" fill="#000" opacity="0.35"/>
+    <path d="M54 146h14l2 24H56zm24 0h14l-2 24H78z" fill="#2a3330"/>
+    <path d="M52 96h40v52H52z" fill="#24302a" stroke="#9cf38a" stroke-width="2"/>
+    <path d="M58 78h28v22H58z" fill="#1a221e"/>
+    <path d="M52 70c6-20 36-20 42 0l-8 8H60z" fill="#101612"/>
+    <path d="M48 62l8 10M96 62l-8 10" stroke="#9cf38a" stroke-width="3"/>
+    <circle cx="68" cy="86" r="3" fill="#9cf38a"/>
+    <circle cx="84" cy="86" r="3" fill="#9cf38a"/>
+    <path d="M28 90l16-6 10 36-24 8z" fill="#1c2420" stroke="#9cf38a" stroke-width="2"/>
+    <path d="M108 40v104" stroke="#dfe8df" stroke-width="5"/>
+    <path d="M98 40h20l-10-16z" fill="#9cf38a"/>
+  </g>
+
+  <g id="lichBoss" transform="translate(1600 0)">
+    <ellipse cx="80" cy="180" rx="40" ry="8" fill="#000" opacity="0.4"/>
+    <path d="M42 86c4 40 12 70 16 84h44c4-16 12-48 18-84-12 16-30 22-39 22s-29-6-39-22z" fill="#141816"/>
+    <path d="M58 70c8-24 36-24 44 0v18H58z" fill="#101612"/>
+    <circle cx="80" cy="64" r="16" fill="url(#bone)"/>
+    <circle cx="73" cy="62" r="3.5" fill="#9cf38a"/>
+    <circle cx="88" cy="62" r="3.5" fill="#9cf38a"/>
+    <path d="M70 28l10 16 10-18 8 18 8-14" fill="none" stroke="#f0c866" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M112 48v108" stroke="#6b4428" stroke-width="5"/>
+    <circle cx="112" cy="44" r="9" fill="#9cf38a" stroke="#f0c866" stroke-width="2"/>
+    <path d="M48 96h16l-4 6 4 6H48z" fill="#8f2418"/>
+  </g>
+</svg>
