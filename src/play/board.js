@@ -46,23 +46,68 @@ export const UNIT_SPRITE_ORDER = ['scout', 'legionary', 'spearGuard', 'archer', 
 const SPRITE_CELL = { width: 384, height: 512 };
 const SPRITE_FOOT = 502 / 512;
 const SPRITE_URL = new URL('../../assets/sprites/unit-atlas.png', import.meta.url);
+const BUILDING_URL = new URL('../../assets/sprites/building-atlas.png', import.meta.url);
+const TREE_URL = new URL('../../assets/sprites/prop-tree.png', import.meta.url);
+const PEAK_URL = new URL('../../assets/sprites/prop-peak.png', import.meta.url);
+export const BUILDING_SPRITE_ORDER = ['city', 'farm', 'lumberCamp', 'mine', 'barracks', 'archeryYard', 'stable', 'workshop', 'watchtower', 'wall', 'shrine', 'rallyBanner', 'outpost', 'portal', 'bonePit', 'graveForge', 'necropolis'];
+const BUILDING_CELL = { width: 400, height: 400 };
+const BUILDING_FOOT = 392 / 400;
 const MATERIAL_SIZE = 192;
+const TERRAIN_PHOTO_KINDS = ['plains', 'forest', 'hills', 'mountains', 'river', 'marsh', 'ruins', 'blight'];
 
 let unitAtlas = null;
 let unitAtlasReady = false;
+let buildingAtlas = null;
+let buildingAtlasReady = false;
+let propTree = null;
+let propPeak = null;
+const terrainPhotos = {};
+let artEpoch = 0;
 let materialSet = null;
+
+function loadImage(url) {
+  return new Promise((resolve) => {
+    if (typeof Image === 'undefined') {
+      resolve(null);
+      return;
+    }
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url.href;
+  });
+}
 
 export function loadUnitSprites() {
   if (typeof Image === 'undefined') return Promise.resolve(false);
-  if (unitAtlasReady) return Promise.resolve(true);
-  unitAtlas = new Image();
-  return new Promise((resolve) => {
-    unitAtlas.onload = () => {
-      unitAtlasReady = true;
-      resolve(true);
-    };
-    unitAtlas.onerror = () => resolve(false);
-    unitAtlas.src = SPRITE_URL.href;
+  if (unitAtlasReady && buildingAtlasReady) return Promise.resolve(true);
+  const terrainJobs = TERRAIN_PHOTO_KINDS.map((kind) => loadImage(new URL(`../../assets/sprites/terrain/${kind}.png`, import.meta.url)).then((image) => {
+    if (image) terrainPhotos[kind] = image;
+  }));
+  return Promise.all([
+    loadImage(SPRITE_URL).then((image) => {
+      if (image) {
+        unitAtlas = image;
+        unitAtlasReady = true;
+      }
+    }),
+    loadImage(BUILDING_URL).then((image) => {
+      if (image) {
+        buildingAtlas = image;
+        buildingAtlasReady = true;
+      }
+    }),
+    loadImage(TREE_URL).then((image) => {
+      if (image) propTree = image;
+    }),
+    loadImage(PEAK_URL).then((image) => {
+      if (image) propPeak = image;
+    }),
+    ...terrainJobs
+  ]).then(() => {
+    materialSet = null;
+    artEpoch += 1;
+    return unitAtlasReady;
   });
 }
 
@@ -151,6 +196,24 @@ export function createBoard(canvas) {
     pan(-dx / view.tile, -dy / view.tile);
   }
 
+  function ensureVisible(x, y) {
+    const cols = canvas.clientWidth / view.tile;
+    const rows = canvas.clientHeight / view.tile;
+    const margin = 1.35;
+    let camX = view.camX;
+    let camY = view.camY;
+    if (x < camX + margin) camX = x - margin;
+    else if (x > camX + cols - margin) camX = x - (cols - margin);
+    if (y < camY + margin) camY = y - margin;
+    else if (y > camY + rows - margin) camY = y - (rows - margin);
+    camX = clamp(camX, 0, Math.max(0, MAP_WIDTH - cols));
+    camY = clamp(camY, 0, Math.max(0, MAP_HEIGHT - rows));
+    if (camX === view.camX && camY === view.camY) return;
+    view.camX = camX;
+    view.camY = camY;
+    view.cacheKey = '';
+  }
+
   function tileAtPoint(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     const x = view.camX + (clientX - rect.left) / view.tile;
@@ -191,7 +254,7 @@ export function createBoard(canvas) {
     const field = buildType ? new Map() : ensureField(state, selectedUnit);
     const sites = ensureBuildSites(state, buildType);
     const seen = state.visible.filter(Boolean).length;
-    const terrainKey = `${frame.tile}|${view.camX.toFixed(2)}|${view.camY.toFixed(2)}|${state.turn}|${state.revealed.filter(Boolean).length}|${seen}|${state.buildings.length}`;
+    const terrainKey = `${artEpoch}|${frame.tile}|${view.camX.toFixed(2)}|${view.camY.toFixed(2)}|${state.turn}|${state.revealed.filter(Boolean).length}|${seen}|${state.buildings.length}`;
     if (terrainKey !== view.cacheKey) {
       view.cacheKey = terrainKey;
       paintTerrain(terrain, state, frame);
@@ -206,7 +269,7 @@ export function createBoard(canvas) {
     paintMinimap(ctx, state, frame);
   }
 
-  return { resize, focus, pan, panByPixels, tileAtPoint, paint, movementField: () => view.field };
+  return { resize, focus, ensureVisible, pan, panByPixels, tileAtPoint, paint, movementField: () => view.field };
 }
 
 function paintTerrain(surface, state, frame) {
@@ -397,23 +460,31 @@ function drawFogTile(ctx, rect, x, y, frame) {
 
 function drawTerrainFace(ctx, rect, tile, seen, x, y, frame) {
   stampMaterial(ctx, MATERIAL_SPEC[tile.terrain] ? tile.terrain : 'plains', rect, x, y, seen, frame);
-  ctx.strokeStyle = 'rgba(48, 32, 14, 0.07)';
+  ctx.strokeStyle = terrainPhotos[tile.terrain] ? 'rgba(36, 24, 12, 0.035)' : 'rgba(48, 32, 14, 0.07)';
   ctx.lineWidth = 1;
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.s - 1, rect.s - 1);
 }
 
 function drawTerrainFeature(ctx, state, tile, rect, seen, x, y) {
   if (tile.terrain === 'forest') drawForest(ctx, rect, x, y, seen);
-  else if (tile.terrain === 'hills') drawHill(ctx, rect, seen, x, y);
-  else if (tile.terrain === 'mountains') drawMountain(ctx, rect, seen, x, y);
+  else if (tile.terrain === 'hills') {
+    if (!terrainPhotos.hills) drawHill(ctx, rect, seen, x, y);
+  } else if (tile.terrain === 'mountains') drawMountain(ctx, rect, seen, x, y);
   else if (tile.terrain === 'river') drawRiver(ctx, state, rect, seen, x, y);
-  else if (tile.terrain === 'marsh') drawMarsh(ctx, rect, seen, x, y);
-  else if (tile.terrain === 'ruins') drawRuins(ctx, rect, seen, x, y);
-  else if (tile.terrain === 'blight') drawBlightGround(ctx, rect, seen, x, y);
-  else drawMeadow(ctx, rect, x, y, seen);
+  else if (tile.terrain === 'marsh') {
+    if (!terrainPhotos.marsh) drawMarsh(ctx, rect, seen, x, y);
+  } else if (tile.terrain === 'ruins') {
+    if (!terrainPhotos.ruins) drawRuins(ctx, rect, seen, x, y);
+  } else if (tile.terrain === 'blight') {
+    if (!terrainPhotos.blight) drawBlightGround(ctx, rect, seen, x, y);
+  } else if (!terrainPhotos.plains) drawMeadow(ctx, rect, x, y, seen);
 }
 
 function stampMaterial(ctx, kind, rect, x, y, seen, frame) {
+  if (stampPhoto(ctx, kind, rect, frame)) {
+    veilTile(ctx, rect, seen, kind, x, y);
+    return;
+  }
   const src = terrainMaterial(kind);
   const pattern = ctx.createPattern(src, 'repeat');
   if (pattern && typeof pattern.setTransform === 'function' && typeof DOMMatrix !== 'undefined' && frame) {
@@ -425,8 +496,27 @@ function stampMaterial(ctx, kind, rect, x, y, seen, frame) {
     const n = hash(x, y);
     ctx.drawImage(src, n % (MATERIAL_SIZE / 2), (n >>> 8) % (MATERIAL_SIZE / 2), MATERIAL_SIZE / 2, MATERIAL_SIZE / 2, rect.x, rect.y, rect.s + 1.25, rect.s + 1.25);
   }
+  veilTile(ctx, rect, seen, kind, x, y);
+}
+
+function stampPhoto(ctx, kind, rect, frame) {
+  const photo = terrainPhotos[kind];
+  if (!photo || !frame || typeof DOMMatrix === 'undefined') return false;
+  const pattern = ctx.createPattern(photo, 'repeat');
+  if (!pattern || typeof pattern.setTransform !== 'function') return false;
+  const matrix = new DOMMatrix();
+  matrix.translateSelf(-frame.camX * frame.tile, -frame.camY * frame.tile);
+  matrix.scaleSelf(0.85, 0.85);
+  pattern.setTransform(matrix);
+  ctx.fillStyle = pattern;
+  ctx.fillRect(rect.x, rect.y, rect.s + 1.25, rect.s + 1.25);
+  return true;
+}
+
+function veilTile(ctx, rect, seen, kind, x, y) {
   const region = (hash(Math.floor(x / 4), Math.floor(y / 4)) % 9) / 100;
-  ctx.fillStyle = region > 0.04 ? `rgba(255, 246, 220, ${region * 0.45})` : `rgba(36, 24, 12, ${0.05 - region})`;
+  const wash = terrainPhotos[kind] ? 0.28 : 1;
+  ctx.fillStyle = region > 0.04 ? `rgba(255, 246, 220, ${region * 0.45 * wash})` : `rgba(36, 24, 12, ${(0.05 - region) * wash})`;
   ctx.fillRect(rect.x, rect.y, rect.s + 1.2, rect.s + 1.2);
   if (!seen) {
     ctx.fillStyle = 'rgba(28, 20, 14, 0.38)';
@@ -552,6 +642,19 @@ function drawKnownEdge(ctx, state, rect, x, y) {
 }
 
 function drawForest(ctx, rect, x, y, seen) {
+  if (propTree) {
+    const count = 1 + (hash(x, y) % 2);
+    ctx.save();
+    if (!seen) ctx.globalAlpha = 0.62;
+    for (let i = 0; i < count; i += 1) {
+      const h = hash(x + i * 3, y + 5);
+      const px = rect.x + rect.s * (0.34 + ((h >>> 4) % 32) / 100);
+      const py = rect.y + rect.s * (0.72 + i * 0.1);
+      drawProp(ctx, propTree, px, py, rect.s * (0.92 + (h % 4) * 0.05));
+    }
+    ctx.restore();
+    return;
+  }
   const count = 2 + (hash(x, y) % 3);
   for (let i = 0; i < count; i += 1) {
     const h = hash(x + i * 5, y + 11);
@@ -613,6 +716,14 @@ function drawHill(ctx, rect, seen, x, y) {
 }
 
 function drawMountain(ctx, rect, seen, x, y) {
+  if (propPeak) {
+    ctx.save();
+    if (!seen) ctx.globalAlpha = 0.62;
+    const shift = ((hash(x, y) % 16) - 8) / 100;
+    drawProp(ctx, propPeak, rect.x + rect.s * (0.5 + shift), rect.y + rect.s * 0.9, rect.s * 1.2);
+    ctx.restore();
+    return;
+  }
   const s = rect.s;
   const shift = ((hash(x, y) % 12) - 6) / 100;
   ctx.fillStyle = 'rgba(20, 24, 28, 0.28)';
@@ -797,6 +908,31 @@ function drawBlightSpeck(ctx, rect, blight) {
   ctx.stroke();
 }
 
+function drawProp(ctx, image, groundX, groundY, height) {
+  const width = height * (image.width / image.height);
+  ctx.drawImage(image, groundX - width / 2, groundY - height, width, height);
+}
+
+function drawBuildingSprite(ctx, type, s) {
+  const index = BUILDING_SPRITE_ORDER.indexOf(type);
+  if (!buildingAtlasReady || !buildingAtlas || index < 0) return false;
+  const height = s * 1.34;
+  const width = height * (BUILDING_CELL.width / BUILDING_CELL.height);
+  const y = s * 0.86 - height * BUILDING_FOOT;
+  ctx.drawImage(
+    buildingAtlas,
+    index * BUILDING_CELL.width,
+    0,
+    BUILDING_CELL.width,
+    BUILDING_CELL.height,
+    (s - width) / 2,
+    y,
+    width,
+    height
+  );
+  return true;
+}
+
 function drawBuilding(ctx, frame, building, selected, seen) {
   const rect = tileRect(frame, building.x, building.y);
   const color = FACTION_INK[building.faction] || '#f0c866';
@@ -806,10 +942,13 @@ function drawBuilding(ctx, frame, building, selected, seen) {
   ctx.translate(rect.x, rect.y);
   if (building.turnsLeft > 0) ctx.globalAlpha *= 0.8;
   groundShadow(ctx, s);
-  if (building.faction === 'dead') drawDeadWork(ctx, building, s);
-  else drawLivingWork(ctx, building, s, color);
-  if (building.upgraded) drawFinial(ctx, s * 0.5, s * 0.18, s);
-  drawHealthPip(ctx, s * 0.24, s * 0.88, s * 0.52, Math.max(3, s * 0.045), building.hp / building.maxHp);
+  const painted = drawBuildingSprite(ctx, building.type, s);
+  if (!painted) {
+    if (building.faction === 'dead') drawDeadWork(ctx, building, s);
+    else drawLivingWork(ctx, building, s, color);
+    if (building.upgraded) drawFinial(ctx, s * 0.5, s * 0.18, s);
+  }
+  drawHealthPip(ctx, s * 0.22, s * 0.93, s * 0.56, Math.max(3, s * 0.04), building.hp / building.maxHp);
   if (building.turnsLeft > 0) drawScaffold(ctx, s);
   if (selected) drawBrackets(ctx, { x: s * 0.04, y: s * 0.04, s: s * 0.92 }, '#f4d48a', 0.02);
   ctx.restore();

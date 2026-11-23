@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v146';
+const CACHE_NAME = 'olundar-pwa-v147';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +7,17 @@ const APP_SHELL_ASSETS = [
   "./assets/sprites/olundar-sprite-sheet.svg",
   "./assets/sprites/unit-atlas.svg",
   "./assets/sprites/unit-atlas.png",
+  "./assets/sprites/building-atlas.png",
+  "./assets/sprites/prop-tree.png",
+  "./assets/sprites/prop-peak.png",
+  "./assets/sprites/terrain/plains.png",
+  "./assets/sprites/terrain/forest.png",
+  "./assets/sprites/terrain/hills.png",
+  "./assets/sprites/terrain/mountains.png",
+  "./assets/sprites/terrain/river.png",
+  "./assets/sprites/terrain/marsh.png",
+  "./assets/sprites/terrain/ruins.png",
+  "./assets/sprites/terrain/blight.png",
   "./data/meta.json",
   "./data/units.json",
   "./data/buildings.json",

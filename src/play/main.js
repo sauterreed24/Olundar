@@ -36,7 +36,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { createBoard, hoverSummary, loadUnitSprites, UNIT_SPRITE_ORDER } from './board.js';
+import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, UNIT_SPRITE_ORDER } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -165,6 +165,13 @@ function unitPortrait(unit) {
   return `<div class="portrait-plate ${tone}"><div class="portrait" style="background-position:${-index * 78}px 0"></div></div>`;
 }
 
+function buildingPortrait(building) {
+  const index = BUILDING_SPRITE_ORDER.indexOf(building.type);
+  if (index < 0) return '';
+  const tone = building.faction === 'dead' ? 'dead' : 'living';
+  return `<div class="portrait-plate ${tone}"><div class="portrait building" style="background-position:${-index * 86}px 0"></div></div>`;
+}
+
 function renderGlance() {
   const glance = document.querySelector('#glance');
   if (glance) glance.textContent = hover ? hoverSummary(state, hover, board.movementField()) : selectedGlance();
@@ -234,8 +241,14 @@ function buildingCard(building) {
   }).join('') : '';
   return `
     <section class="card">
-      <h2>${escapeHtml(building.name)}</h2>
-      <p class="muted">${escapeHtml(def.name)} · ${building.hp}/${building.maxHp} HP · tier ${(building.upgraded || 0) + 1}</p>
+      <div class="unit-head">
+        ${buildingPortrait(building)}
+        <div>
+          <h2>${escapeHtml(building.name)}</h2>
+          <p class="role">${escapeHtml(def.name)} · tier ${(building.upgraded || 0) + 1}</p>
+        </div>
+      </div>
+      <p class="muted">${building.hp}/${building.maxHp} HP</p>
       <p>${escapeHtml(def.text)}</p>
       ${building.turnsLeft > 0 ? `<p class="note">Finishes in ${building.turnsLeft} turn${building.turnsLeft === 1 ? '' : 's'}.</p>` : ''}
       <div class="actions">
@@ -425,7 +438,7 @@ function actOnTile(tile) {
     state.selectedUnitId = visibleUnit.id;
     state.selectedBuildingId = null;
     buildType = null;
-    board.focus(visibleUnit.x, visibleUnit.y);
+    board.ensureVisible(visibleUnit.x, visibleUnit.y);
     renderChrome();
     paint();
     return;
@@ -434,7 +447,7 @@ function actOnTile(tile) {
     state.selectedBuildingId = visibleBuilding.id;
     state.selectedUnitId = null;
     buildType = null;
-    board.focus(visibleBuilding.x, visibleBuilding.y);
+    board.ensureVisible(visibleBuilding.x, visibleBuilding.y);
     renderChrome();
     paint();
     return;
@@ -468,7 +481,7 @@ function run(command) {
   notice(result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.'), result?.ok === false ? 'bad' : 'good');
   if (result?.ok !== false) playAudioCue('ui');
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
-  if (focus) board.focus(focus.x, focus.y);
+  if (focus) board.ensureVisible(focus.x, focus.y);
   renderChrome();
   paint();
 }
@@ -504,7 +517,7 @@ function selectNext() {
   const next = ready[(index + 1) % ready.length];
   state.selectedUnitId = next.id;
   state.selectedBuildingId = null;
-  board.focus(next.x, next.y);
+  board.ensureVisible(next.x, next.y);
   renderChrome();
   paint();
 }
