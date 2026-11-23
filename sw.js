@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v139';
+const CACHE_NAME = 'olundar-pwa-v141';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -32,6 +32,9 @@ const APP_SHELL_ASSETS = [
   "./src/saveTransfer.js",
   "./src/settings.js",
   "./src/style.css",
+  "./src/play/main.js",
+  "./src/play/board.js",
+  "./src/play/play.css",
   "./node_modules/pixi.js/dist/pixi.min.mjs"
 ];
 

@@ -3,106 +3,40 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f6ead0" />
-    <title>Olundar: Imperial Survival Strategy</title>
+    <meta name="theme-color" content="#1c2430" />
+    <title>Olundar</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icons/olundar-icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./src/style.css" />
-    <script type="importmap">
-      {
-        "imports": {
-          "pixi.js": "./node_modules/pixi.js/dist/pixi.min.mjs"
-        }
-      }
-    </script>
+    <link rel="stylesheet" href="./src/play/play.css" />
   </head>
   <body>
-    <header class="topbar">
+    <header class="bar">
       <div class="brand">
-        <span class="sun">O</span>
+        <span class="mark">O</span>
         <div>
-          <h1>Olundar</h1>
-          <p>Exploration | Survival | Imperial War</p>
+          <strong>Olundar</strong>
+          <small>Hold the living world</small>
         </div>
       </div>
-      <div class="turnbox">
+      <div id="resources" class="resources" aria-live="polite"></div>
+      <div class="bar-actions">
         <strong id="turnLabel">Turn 1</strong>
-        <div class="top-actions">
-          <button id="nextUnitTop" type="button">Next Unit</button>
-          <button id="endTurnTop" type="button">End Turn</button>
-          <button id="installTop" type="button" hidden>Install</button>
-          <button id="audioTop" type="button" aria-pressed="false">Audio Off</button>
-          <button id="settingsTop" type="button">Settings</button>
-          <button id="saveTop" type="button">Save</button>
-          <button id="loadTop" type="button">Load</button>
-          <button id="newTop" type="button">New</button>
-        </div>
+        <button id="nextUnit" type="button">Next unit</button>
+        <button id="endTurn" class="primary" type="button">End turn</button>
+        <button id="installTop" type="button" hidden>Install</button>
+        <button id="audioTop" type="button">Audio</button>
+        <button id="saveTop" type="button">Save</button>
+        <button id="loadTop" type="button">Load</button>
+        <button id="newTop" type="button">New</button>
       </div>
     </header>
-
-    <div id="resourceBar" class="resourcebar" aria-live="polite"></div>
-    <div id="modeBanner" class="mode-banner" hidden></div>
-    <div id="setupOverlay" class="setup-overlay" hidden>
-      <form id="campaignSetup" class="setup-dialog" role="dialog" aria-modal="true" aria-labelledby="campaignSetupTitle"></form>
-    </div>
-    <div id="saveOverlay" class="setup-overlay" hidden>
-      <form id="saveManager" class="setup-dialog save-dialog" role="dialog" aria-modal="true" aria-labelledby="saveManagerTitle"></form>
-    </div>
-    <div id="settingsOverlay" class="setup-overlay" hidden>
-      <form id="settingsPanel" class="setup-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"></form>
-    </div>
-    <div id="recapOverlay" class="setup-overlay" hidden>
-      <section id="recapPanel" class="setup-dialog recap-dialog" role="dialog" aria-modal="true" aria-labelledby="recapTitle"></section>
-    </div>
-    <input id="saveImportInput" type="file" accept="application/json,.json" hidden />
-
-    <main class="layout">
-      <section class="map-shell" aria-label="Olundar world map">
-        <div id="mapLensBar" class="map-lens-bar" role="toolbar" aria-label="Strategic map lens"></div>
-        <canvas id="gameCanvas" width="1280" height="860"></canvas>
-        <div id="mapIntel" class="map-intel" aria-live="polite"></div>
-        <div id="mapTurnReport" class="map-turn-report" aria-live="polite" hidden></div>
-        <div class="map-help">
-          <span>Gold outlines every legal terrain-cost move</span>
-          <span>Blue outlines road-speed moves</span>
-          <span>Laurels mark supplied ground</span>
-          <span>Hover previews route cost</span>
-          <span>Red rim marks attack reach</span>
-          <span>Bronze dashes mark pact intercept lanes</span>
-          <span>Laurel rings mark Rally Banner healing</span>
-          <span>Green dashed lines mark marching dead</span>
-          <span>FUSE tiles will blight next turn</span>
-          <span>E ends turn | Esc cancels build</span>
-        </div>
-      </section>
-
-      <aside class="side">
-        <section id="selectionPanel" class="panel command-card"></section>
-        <section id="actionPanel" class="panel order-card"></section>
-        <details id="mobileIntelDrawer" class="mobile-intel-drawer">
-          <summary class="mobile-intel-summary">
-            <span>Campaign intelligence</span>
-            <small id="mobileIntelDrawerSummary">First orders, objectives, diplomacy</small>
-          </summary>
-          <div class="mobile-intel-stack">
-            <section id="councilPanel" class="panel council"></section>
-            <section id="guidePanel" class="panel guide"></section>
-            <section id="operationsPanel" class="panel operations"></section>
-            <section id="crisisPanel" class="panel crisis"></section>
-            <section id="missionPanel" class="panel missions"></section>
-            <section id="tilePanel" class="panel"></section>
-            <section class="panel">
-              <h2>Objectives</h2>
-              <ol id="objectiveList" class="objectives"></ol>
-            </section>
-            <section id="diplomacyPanel" class="panel"></section>
-            <section id="logPanel" class="panel chronicle"></section>
-          </div>
-        </details>
-      </aside>
+    <main class="stage">
+      <div class="map-frame">
+        <canvas id="board" aria-label="Olundar campaign map"></canvas>
+      </div>
+      <aside id="dock" class="dock" aria-live="polite"></aside>
     </main>
-
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./src/main.js"></script>
+    <div id="modal" class="modal" hidden></div>
+    <script type="module" src="./src/play/main.js"></script>
   </body>
 </html>

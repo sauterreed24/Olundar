@@ -64,6 +64,15 @@ Browsers that support installation will expose an **Install** button after the a
 
 ## Controls
 
+The campaign opens on a square tactical board. Terrain is drawn once and reused, so hovering does not rebuild the map. The dock on the right is the only command panel.
+
+- Click one of your units. Gold tiles are the legal moves. Click a gold tile to move.
+- Click an enemy outlined in red to attack.
+- Click a city or camp to train. An engineer can place a building, then click a green outline.
+- Press `N` for the next ready unit. Press `E` to end the turn. If anyone is still ready, press `E` again to confirm.
+- Drag the map to look around. Arrow keys pan. `Ctrl/Cmd+Z` undoes the last order.
+- Use the dock tabs for the war council, diplomacy, and the message log.
+
 - Click an Olundaran unit, then click a tile to move.
 - Select an Olundaran unit and hover or click a visible hostile target to preview damage, range, and target HP.
 - Click a visible hostile unit or building in range to attack.
