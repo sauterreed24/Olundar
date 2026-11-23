@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olundar-pwa-v144';
+const CACHE_NAME = 'olundar-pwa-v146';
 const APP_SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL_ASSETS = [
   "./assets/icons/olundar-icon.svg",
   "./assets/sprites/olundar-sprite-sheet.svg",
   "./assets/sprites/unit-atlas.svg",
+  "./assets/sprites/unit-atlas.png",
   "./data/meta.json",
   "./data/units.json",
   "./data/buildings.json",

@@ -36,11 +36,21 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { createBoard, hoverSummary, loadUnitSprites } from './board.js';
+import { createBoard, hoverSummary, loadUnitSprites, UNIT_SPRITE_ORDER } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
 const BUILD_ORDER = ['farm', 'lumberCamp', 'mine', 'road', 'watchtower', 'wall', 'rallyBanner', 'barracks', 'archeryYard', 'stable', 'workshop', 'shrine', 'outpost'];
+const RESOURCE_ICONS = {
+  food: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V6M8 8c2.2-1.6 3.2-3.6 2.4-6-2.2.8-3.4 2.8-2.4 6M8 9C6 7.2 4.2 6.2 3 3c.2 3 2.2 4.8 5 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  wood: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13.5h10M4.5 13.5V8.5L8 4l3.5 4.5v5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  stone: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12.5 5.2 5h5.6L13 12.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  iron: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 10.5h12l-2 3H4zM4.2 10.5 6.2 5h3.6l2 5.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  gold: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.6v4.8M6.2 8h3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  influence: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 9.5 6h4l-3.2 2.4 1.2 3.8L8 9.8 4.5 12.2 5.7 8.4 2.5 6h4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+  morale: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.2S3.2 10.2 3.2 7A2.6 2.6 0 0 1 8 5.4 2.6 2.6 0 0 1 12.8 7C12.8 10.2 8 13.2 8 13.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  people: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6" cy="5" r="1.7" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="6" r="1.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.6 13c.4-2.1 1.8-3.2 3.4-3.2s3 .1 3.4 3.2M9.2 13c.2-1.4 1.1-2.2 2-2.2 1 0 1.7.7 2 2.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+};
 
 const canvas = document.querySelector('#board');
 const dock = document.querySelector('#dock');
@@ -109,8 +119,8 @@ function renderChrome() {
   const player = state.factions.olundar;
   turnEl.textContent = state.status === 'playing' ? `Turn ${state.turn}` : state.status === 'won' ? 'Victory' : 'Defeat';
   resourcesEl.innerHTML = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']
-    .map((id) => `<span><b>${player.resources[id] ?? 0}</b> ${RESOURCE_NAMES[id]}</span>`)
-    .join('') + `<span><b>${player.population}/${player.housing}</b> People</span>`;
+    .map((id) => resourceChip(id, player.resources[id] ?? 0, RESOURCE_NAMES[id]))
+    .join('') + resourceChip('people', `${player.population}/${player.housing}`, 'People');
   document.querySelector('#audioTop').textContent = audioIsEnabled() ? 'Audio on' : 'Audio';
   document.querySelector('#endTurn').textContent = endArmed ? 'End turn now' : 'End turn';
   renderDock();
@@ -144,6 +154,17 @@ function selectedGlance() {
   return ready ? `${ready} units ready. Select one on the map.` : 'Select a unit, then choose a highlighted tile.';
 }
 
+function resourceChip(id, value, label) {
+  return `<span class="res res-${id}">${RESOURCE_ICONS[id]}<span><b>${value}</b><em>${escapeHtml(label)}</em></span></span>`;
+}
+
+function unitPortrait(unit) {
+  const index = UNIT_SPRITE_ORDER.indexOf(unit.type);
+  if (index < 0) return '';
+  const tone = unit.faction === 'dead' ? 'dead' : 'living';
+  return `<div class="portrait-plate ${tone}"><div class="portrait" style="background-position:${-index * 78}px 0"></div></div>`;
+}
+
 function renderGlance() {
   const glance = document.querySelector('#glance');
   if (glance) glance.textContent = hover ? hoverSummary(state, hover, board.movementField()) : selectedGlance();
@@ -157,7 +178,7 @@ function fieldTab() {
   }
   if (!unit && !building) {
     const ready = getReadyOlundarUnits(state).length;
-    return `<section class="card"><h2>Command</h2><p>${ready} unit${ready === 1 ? '' : 's'} ready. Select one on the map, or press N.</p>${buildHint()}</section>`;
+    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold marks show where that unit can walk. A red bracket means it can strike.</p>${buildHint()}</section>`;
   }
   if (unit) return unitCard(unit);
   return buildingCard(building);
@@ -177,13 +198,24 @@ function unitCard(unit) {
           : '';
   const mine = unit.faction === 'olundar';
   return `
-    <section class="card">
-      <h2>${escapeHtml(unit.name)}</h2>
-      <p class="muted">${escapeHtml(def.role)} · ${unit.hp}/${unit.maxHp} HP · move ${def.move} · attack ${def.attack}${def.range > 1 ? ` · range ${def.range}` : ''}</p>
+    <section class="card unit-card">
+      <div class="unit-head">
+        ${unitPortrait(unit)}
+        <div>
+          <h2>${escapeHtml(unit.name)}</h2>
+          <p class="role">${escapeHtml(def.role)}</p>
+        </div>
+      </div>
+      <ul class="stats">
+        <li><b>${unit.hp}/${unit.maxHp}</b><span>Health</span></li>
+        <li><b>${def.move}</b><span>Move</span></li>
+        <li><b>${def.attack}</b><span>Attack</span></li>
+        <li><b>${def.range}</b><span>Range</span></li>
+      </ul>
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
       <p>${escapeHtml(def.text)}</p>
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
-      ${mine && !unit.hasActed ? '<p class="note">Gold tiles are legal moves. Click one to go there. Red outlines can be attacked.</p>' : ''}
+      ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. A red bracket can be attacked.</p>' : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
