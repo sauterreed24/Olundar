@@ -21,7 +21,9 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   factionBooks,
+  findSpawnNear,
   formatCost,
+  incomeForBuilding,
   canAfford,
   missingCost,
   isEnemy,
@@ -131,8 +133,9 @@ function paint() {
 function renderChrome() {
   const player = state.factions.olundar;
   turnEl.textContent = state.status === 'playing' ? `Turn ${state.turn}` : state.status === 'won' ? 'Victory' : 'Defeat';
+  const harvest = nextHarvest();
   resourcesEl.innerHTML = ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']
-    .map((id) => resourceChip(id, player.resources[id] ?? 0, RESOURCE_NAMES[id]))
+    .map((id) => resourceChip(id, player.resources[id] ?? 0, RESOURCE_NAMES[id], harvest[id] || 0))
     .join('') + resourceChip('people', `${player.population}/${player.housing}`, 'People');
   document.querySelector('#audioTop').textContent = audioIsEnabled() ? 'Audio on' : 'Audio';
   document.querySelector('#endTurn').textContent = endArmed ? 'End turn now' : 'End turn';
@@ -259,12 +262,38 @@ function spokenList(items) {
   return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
-function resourceChip(id, value, label) {
+function nextHarvest() {
+  const books = factionBooks(state);
+  const income = { ...books.income };
+  const upkeep = { ...books.upkeep };
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar') continue;
+    if (building.turnsLeft === 1) {
+      const extra = incomeForBuilding(state, { ...building, turnsLeft: 0 });
+      for (const [key, amount] of Object.entries(extra)) income[key] = (income[key] || 0) + (amount || 0);
+    }
+    const musters = (building.turnsLeft === 0 || building.turnsLeft === 1) && building.queue?.[0]?.turnsLeft === 1;
+    if (!musters || !findSpawnNear(state, building.x, building.y, building.faction)) continue;
+    const bite = UNIT_TYPES[building.queue[0].unitType]?.upkeep || {};
+    for (const [key, amount] of Object.entries(bite)) upkeep[key] = (upkeep[key] || 0) + (amount || 0);
+  }
+  const nets = {};
+  for (const key of ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']) {
+    nets[key] = (income[key] || 0) - (upkeep[key] || 0);
+  }
+  const foodAfter = (state.factions.olundar.resources.food || 0) + (income.food || 0) - (upkeep.food || 0);
+  const faction = state.factions.olundar;
+  if (foodAfter > 120 && faction.population < faction.housing) nets.food -= 12;
+  return nets;
+}
+
+function resourceChip(id, value, label, net = 0) {
   const due = spendDue(id);
   const bite = comingBite(id);
   const hot = ledgerPulse.has(id) ? ' pulse' : '';
   const mark = `${due ? ' due' : ''}${bite ? ' bite' : ''}`;
-  const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}`;
+  const forecast = net ? `<small class="next${net < 0 ? ' drain' : ''}" title="next harvest">${net > 0 ? '+' : '−'}${Math.abs(net)}</small>` : '';
+  const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}${forecast}`;
   return `<span class="res res-${id}${hot}${mark}">${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
 }
 
