@@ -356,12 +356,12 @@ button.primary, button.armed {
 
 .company button.owing {
   border-color: #e2b15a;
+  box-shadow: 0 0 0 2px #fff1c4, inset 0 0 0 99px rgba(226, 177, 90, 0.28);
   animation: seat-owe 0.9s ease-in-out infinite;
 }
 
 @keyframes seat-owe {
-  0%, 100% { box-shadow: 0 0 0 2px #fff1c4, inset 0 0 0 99px rgba(226, 177, 90, 0.28); }
-  50% { box-shadow: 0 0 0 1px #a56b28; }
+  50% { box-shadow: 0 0 0 1px #e2b15a, inset 0 0 0 99px rgba(226, 177, 90, 0.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
