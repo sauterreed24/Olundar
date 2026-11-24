@@ -325,7 +325,7 @@ export function createBoard(canvas) {
     ctx.drawImage(terrain, 0, 0);
     ctx.drawImage(pieces, 0, 0);
     paintVignette(ctx);
-    paintMinimap(ctx, state, frame, selectedUnit);
+    paintMinimap(ctx, state, frame, selectedUnit, field);
     paintWarClock(ctx, state, frame);
   }
 
@@ -529,8 +529,10 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   for (const [id, cost] of field) {
     const [x, y] = id.split(',').map(Number);
     if (x < x0 || y < y0 || x >= x1 || y >= y1) continue;
+    const tile = tileAt(state, x, y);
+    const slow = (TERRAIN[tile?.terrain]?.move || 1) > 1;
     const exposed = selectedUnit ? hostsReaching(state, selectedUnit.faction, x, y, selectedUnit.id).length > 0 : false;
-    drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y, exposed);
+    drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y, exposed, slow);
   }
   if (!buildType && field.size) drawRoadGleam(ctx, state, frame, field, x0, y0, x1, y1);
   if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
@@ -689,7 +691,7 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
-function paintMinimap(ctx, state, frame, selectedUnit) {
+function paintMinimap(ctx, state, frame, selectedUnit, field) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
   ctx.save();
@@ -708,6 +710,31 @@ function paintMinimap(ctx, state, frame, selectedUnit) {
         ctx.fillStyle = isVisible(state, x, y) ? ink : shade(ink, 0.62);
       }
       ctx.fillRect(x0 + x * scale, y0 + y * scale, scale + 0.3, scale + 0.3);
+    }
+  }
+  ctx.strokeStyle = '#e0a45a';
+  ctx.lineWidth = Math.max(1, scale * 0.45);
+  ctx.lineCap = 'round';
+  for (let y = 0; y < MAP_HEIGHT; y += 1) {
+    for (let x = 0; x < MAP_WIDTH; x += 1) {
+      if (!isRevealed(state, x, y) || !tileAt(state, x, y)?.road) continue;
+      const cx = x0 + (x + 0.5) * scale;
+      const cy = y0 + (y + 0.5) * scale;
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        if (!isRevealed(state, x + dx, y + dy) || !tileAt(state, x + dx, y + dy)?.road) continue;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x0 + (x + dx + 0.5) * scale, y0 + (y + dy + 0.5) * scale);
+        ctx.stroke();
+      }
+    }
+  }
+  if (field?.size) {
+    for (const id of field.keys()) {
+      const [x, y] = id.split(',').map(Number);
+      const slow = (TERRAIN[tileAt(state, x, y)?.terrain]?.move || 1) > 1;
+      ctx.fillStyle = slow ? '#c45a2a' : 'rgba(240, 200, 102, 0.85)';
+      ctx.fillRect(x0 + x * scale + scale * 0.2, y0 + y * scale + scale * 0.2, Math.max(1.2, scale * 0.6), Math.max(1.2, scale * 0.6));
     }
   }
   for (const building of state.buildings) {
@@ -2083,7 +2110,7 @@ function drawMovePath(ctx, frame, path, field) {
   ctx.restore();
 }
 
-function drawMoveMark(ctx, rect, cost, aimed, exposed) {
+function drawMoveMark(ctx, rect, cost, aimed, exposed, slow) {
   const r = rect.s * (aimed ? 0.2 : cost <= 1 ? 0.15 : 0.1);
   ctx.save();
   ctx.translate(rect.x + rect.s / 2, rect.y + rect.s * 0.62);
@@ -2097,6 +2124,12 @@ function drawMoveMark(ctx, rect, cost, aimed, exposed) {
   ctx.rect(-r, -r, r * 2, r * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+  if (!slow || exposed) return;
+  ctx.save();
+  ctx.translate(rect.x + rect.s / 2, rect.y + rect.s * 0.78);
+  ctx.fillStyle = '#6a3a18';
+  ctx.fillRect(-rect.s * 0.08, -rect.s * 0.025, rect.s * 0.16, Math.max(2, rect.s * 0.045));
   ctx.restore();
 }
 
@@ -2332,6 +2365,7 @@ export function hoverSummary(state, tile, field) {
   const cover = coverWord(terrain.defense || 0);
   if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
+  if (Number.isFinite(move) && (terrain.move || 1) > 1) parts.push('slow');
   if (unit) parts.push(unit.name);
     if (building) {
       parts.push(building.name);
