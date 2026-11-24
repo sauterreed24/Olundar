@@ -328,7 +328,7 @@ export function createBoard(canvas) {
     const route = hover && selectedUnit && field.has(`${hover.x},${hover.y}`)
       ? traceMovePath(field, selectedUnit, hover.x, hover.y)
       : [];
-    paintMinimap(ctx, state, frame, selectedUnit, field, route);
+    paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType);
     paintWarClock(ctx, state, frame);
   }
 
@@ -544,10 +544,12 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (!buildType) drawReach(ctx, state, frame, selectedUnit, x0, y0, x1, y1);
   if (selectedUnit) drawThreatLines(ctx, frame, visibleThreats(state, selectedUnit), selectedUnit);
   if (buildType) {
-    for (const id of sites) {
-      const [x, y] = id.split(',').map(Number);
-      if (x < x0 || y < y0 || x >= x1 || y >= y1 || !isRevealed(state, x, y)) continue;
-      drawBrackets(ctx, tileRect(frame, x, y), 'rgba(88, 158, 78, 0.95)', 0.12);
+    const plans = sitePlans(state, buildType, sites);
+    for (const plan of plans.values()) {
+      if (plan.x < x0 || plan.y < y0 || plan.x >= x1 || plan.y >= y1 || !isRevealed(state, plan.x, plan.y)) continue;
+      const rect = tileRect(frame, plan.x, plan.y);
+      drawBrackets(ctx, rect, plan.rich ? 'rgba(226, 177, 90, 0.98)' : 'rgba(88, 158, 78, 0.95)', 0.12);
+      if (!(hover && hover.x === plan.x && hover.y === plan.y)) drawSiteChip(ctx, rect, plan.label);
     }
   }
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
@@ -694,7 +696,7 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
-function paintMinimap(ctx, state, frame, selectedUnit, field, route = []) {
+function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
   ctx.save();
@@ -732,7 +734,7 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = []) {
       }
     }
   }
-  if (selectedUnit && !selectedUnit.hasActed && selectedUnit.faction === 'olundar') {
+  if (!sites?.size && selectedUnit && !selectedUnit.hasActed && selectedUnit.faction === 'olundar') {
     const range = UNIT_TYPES[selectedUnit.type]?.range || 1;
     ctx.fillStyle = '#b42318';
     for (let y = selectedUnit.y - range; y <= selectedUnit.y + range; y += 1) {
@@ -741,6 +743,13 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = []) {
         if (distance === 0 || distance > range || !isVisible(state, x, y)) continue;
         ctx.fillRect(x0 + x * scale + scale * 0.28, y0 + y * scale + scale * 0.28, Math.max(1.1, scale * 0.44), Math.max(1.1, scale * 0.44));
       }
+    }
+  }
+  if (buildType && sites?.size) {
+    const plans = sitePlans(state, buildType, sites);
+    for (const plan of plans.values()) {
+      ctx.fillStyle = plan.rich ? '#e2b15a' : '#5c9a4e';
+      ctx.fillRect(x0 + plan.x * scale + scale * 0.16, y0 + plan.y * scale + scale * 0.16, Math.max(1.4, scale * 0.68), Math.max(1.4, scale * 0.68));
     }
   }
   if (field?.size) {
@@ -2265,6 +2274,7 @@ function drawBuildGhost(ctx, frame, buildType, hover, sites, state) {
     ctx.fillRect(rect.s * 0.12, rect.s * 0.4, rect.s * 0.76, rect.s * 0.22);
   }
   ctx.restore();
+  drawSiteChip(ctx, rect, plannedYieldLabel(state, buildType, hover.x, hover.y));
 }
 
 function drawStrikePreview(ctx, frame, unit, strike) {
@@ -2434,6 +2444,37 @@ function yieldLabel(state, building, limit = 1) {
   const income = incomeForBuilding(state, building);
   const entries = Object.entries(income).filter(([, amount]) => amount).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
   return entries.slice(0, limit).map(([id, amount]) => `${id} ${amount > 0 ? '+' : ''}${amount}`).join(', ');
+}
+
+export function plannedYieldLabel(state, type, x, y) {
+  if (!type || !inBounds(x, y)) return '';
+  return yieldLabel(state, { type, x, y, upgraded: 0, turnsLeft: 0 });
+}
+
+function sitePlans(state, type, sites) {
+  const plans = new Map();
+  const scores = [];
+  for (const id of sites || []) {
+    const [x, y] = id.split(',').map(Number);
+    const income = incomeForBuilding(state, { type, x, y, upgraded: 0 });
+    const score = Object.values(income).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
+    plans.set(id, { x, y, score, label: plannedYieldLabel(state, type, x, y), rich: false });
+    scores.push(score);
+  }
+  const max = scores.reduce((best, score) => Math.max(best, score), 0);
+  const varied = scores.some((score) => score !== scores[0]);
+  if (varied && max > 0) {
+    for (const plan of plans.values()) plan.rich = plan.score === max;
+  }
+  return plans;
+}
+
+function drawSiteChip(ctx, rect, label) {
+  if (!label) return;
+  ctx.save();
+  ctx.translate(rect.x, rect.y);
+  drawYieldChip(ctx, rect.s, label);
+  ctx.restore();
 }
 
 function drawYieldChip(ctx, s, label) {

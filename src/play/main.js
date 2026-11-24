@@ -34,13 +34,14 @@ import {
   getWarCouncil,
   isRevealed,
   isVisible,
+  canBuildOn,
   serializeState,
   unitAt,
   upgradeCostFor
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -194,7 +195,14 @@ function orderGlance() {
   const parts = [hoverSummary(state, hover, field)];
   if (buildType) {
     const name = BUILDING_TYPES[buildType].name;
-    parts.push(board.buildSites().has(`${hover.x},${hover.y}`) ? `place ${name}` : `${name} will not stand here`);
+    const turns = BUILDING_TYPES[buildType].buildTurns;
+    if (board.buildSites().has(`${hover.x},${hover.y}`)) {
+      const yieldText = plannedYieldLabel(state, buildType, hover.x, hover.y);
+      parts.push(yieldText ? `place ${name} · ${yieldText}` : `place ${name}`);
+      if (turns) parts.push(`rises in ${turns}`);
+    } else {
+      parts.push(canBuildOn(state, buildType, hover.x, hover.y).reason || `${name} will not stand here`);
+    }
     return parts.join(' · ');
   }
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
@@ -303,7 +311,7 @@ function unitCard(unit) {
       ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
       ${threatLine(unit)}
       ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
-      ${buildType ? `<p class="note">The ghost shows where ${escapeHtml(BUILDING_TYPES[buildType].name)} can rise. A red wash will not take it.</p>` : ''}
+      ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
@@ -353,7 +361,7 @@ function buildButtons() {
 }
 
 function buildHint() {
-  return buildType ? `<p class="note">The ghost shows where ${escapeHtml(BUILDING_TYPES[buildType].name)} can rise. A red wash will not take it.</p>` : '';
+  return buildType ? '<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>' : '';
 }
 
 function councilTab() {
