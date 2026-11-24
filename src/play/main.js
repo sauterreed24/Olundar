@@ -637,7 +637,11 @@ function run(command) {
     if (sighted.length) board.play({ kind: 'sight', tiles: sighted.map((unit) => ({ x: unit.x, y: unit.y })), duration: 880 });
     playAudioCue('ui');
     playCue(cue, result);
-    if (!opened.length && !sighted.length) nextUnit = handOffSpentUnit();
+    if (command.type === 'build' && result.building) {
+      state.selectedUnitId = null;
+      state.selectedBuildingId = result.building.id;
+      buildType = null;
+    } else if (!opened.length && !sighted.length) nextUnit = handOffSpentUnit();
   }
   if (nextUnit) text = `${text} ${nextUnit.name} is next.`;
   notice(text, result?.ok === false ? 'bad' : 'good');
@@ -699,7 +703,7 @@ function motionCue(command) {
     };
   }
   if (command.type === 'fortify' && unit) return { kind: 'brace', unitId: unit.id, duration: 480 };
-  if (command.type === 'build') return { kind: 'rise', x: command.payload.x, y: command.payload.y, duration: 460 };
+  if (command.type === 'build') return { kind: 'stake', x: command.payload.x, y: command.payload.y, duration: 640 };
   return null;
 }
 

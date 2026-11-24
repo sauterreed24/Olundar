@@ -4,7 +4,7 @@
  * Ground, features, then y-sorted buildings and units, so the map reads back-to-front.
  */
 
-import { FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from '../content.js';
+import { BUILDING_TYPES, FACTIONS, MAP_HEIGHT, MAP_WIDTH, TERRAIN, UNIT_TYPES } from '../content.js';
 import { inBounds, neighbors4 } from '../map.js';
 import {
   canBuildOn,
@@ -766,6 +766,12 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
     ctx.fillStyle = building.faction === 'dead' ? '#d8ff9a' : '#fff6e0';
     ctx.fillRect(x0 + building.x * scale - 0.5, y0 + building.y * scale - 0.5, scale + 1.2, scale + 1.2);
   }
+  ctx.strokeStyle = '#e2b15a';
+  ctx.lineWidth = Math.max(1, frame.dpr * 0.7);
+  for (const building of state.buildings) {
+    if (building.turnsLeft <= 0 || building.faction !== 'olundar' || !isRevealed(state, building.x, building.y)) continue;
+    ctx.strokeRect(x0 + building.x * scale + scale * 0.16, y0 + building.y * scale + scale * 0.16, Math.max(1.3, scale * 0.68), Math.max(1.3, scale * 0.68));
+  }
   for (const unit of state.units) {
     if (!isVisible(state, unit.x, unit.y)) continue;
     const marked = unit.id === selectedUnit?.id;
@@ -1465,8 +1471,20 @@ function drawBuilding(ctx, frame, building, selected, seen, pending = 0, yieldTe
     if (building.upgraded) drawFinial(ctx, s * 0.5, s * 0.18, s);
   }
   drawHealthPip(ctx, s * 0.22, s * 0.93, s * 0.56, Math.max(4, s * 0.055), building.hp / building.maxHp, pending / building.maxHp);
-  drawYieldChip(ctx, s, yieldText);
-  if (building.turnsLeft > 0) drawScaffold(ctx, s);
+  if (building.turnsLeft > 0) {
+    const stake = motions.find((motion) => motion.kind === 'stake' && motion.x === building.x && motion.y === building.y);
+    drawScaffold(ctx, s, stake ? motionAmount(stake) : 1);
+    drawWorkClock(ctx, s, workProgress(building));
+    drawYieldChip(ctx, s, yieldText, s * 0.58);
+    if (stake) {
+      const amount = motionAmount(stake);
+      ctx.strokeStyle = `rgba(226, 177, 90, ${1 - amount})`;
+      ctx.lineWidth = Math.max(2, s * 0.045);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.62, s * (0.4 - amount * 0.16), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  } else drawYieldChip(ctx, s, yieldText);
   if (selected) drawBrackets(ctx, { x: s * 0.04, y: s * 0.04, s: s * 0.92 }, '#f4d48a', 0.02);
   ctx.restore();
 }
@@ -1818,16 +1836,53 @@ function groundShadow(ctx, s) {
   ctx.fill();
 }
 
-function drawScaffold(ctx, s) {
-  ctx.strokeStyle = '#6b4428';
-  ctx.lineWidth = Math.max(2, s * 0.04);
+function drawScaffold(ctx, s, grown = 1) {
+  const rise = Math.max(0, Math.min(1, grown));
+  const foot = s * 0.7;
+  const head = foot - s * 0.48 * rise;
+  ctx.lineCap = 'square';
+  ctx.strokeStyle = '#2a1a0e';
+  ctx.lineWidth = Math.max(5, s * 0.09);
   ctx.beginPath();
-  ctx.moveTo(s * 0.16, s * 0.8);
-  ctx.lineTo(s * 0.16, s * 0.24);
-  ctx.moveTo(s * 0.84, s * 0.8);
-  ctx.lineTo(s * 0.84, s * 0.3);
-  ctx.moveTo(s * 0.16, s * 0.38);
-  ctx.lineTo(s * 0.84, s * 0.38);
+  ctx.moveTo(s * 0.18, foot);
+  ctx.lineTo(s * 0.18, head);
+  ctx.moveTo(s * 0.82, foot);
+  ctx.lineTo(s * 0.82, head + s * 0.04);
+  ctx.moveTo(s * 0.18, foot);
+  ctx.lineTo(s * 0.82, head + s * 0.04);
+  ctx.stroke();
+  ctx.strokeStyle = '#e2b15a';
+  ctx.lineWidth = Math.max(2.5, s * 0.045);
+  ctx.stroke();
+  ctx.fillStyle = '#fff1c4';
+  ctx.fillRect(s * 0.12, head - s * 0.03, s * 0.12, s * 0.045);
+  ctx.fillRect(s * 0.76, head + s * 0.01, s * 0.12, s * 0.045);
+}
+
+function workProgress(building) {
+  const total = BUILDING_TYPES[building.type]?.buildTurns || building.turnsLeft || 1;
+  return Math.max(0, Math.min(1, 1 - building.turnsLeft / total));
+}
+
+function drawWorkClock(ctx, s, done) {
+  const cx = s * 0.5;
+  const cy = s * 0.16;
+  const radius = Math.max(7, s * 0.13);
+  ctx.beginPath();
+  ctx.strokeStyle = '#2a1a0e';
+  ctx.lineWidth = Math.max(3, s * 0.055);
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.strokeStyle = '#f3e2c4';
+  ctx.lineWidth = Math.max(2, s * 0.035);
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  if (done <= 0.02) return;
+  ctx.beginPath();
+  ctx.strokeStyle = '#e2b15a';
+  ctx.lineWidth = Math.max(3, s * 0.06);
+  ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * done);
   ctx.stroke();
 }
 
@@ -2422,7 +2477,9 @@ export function hoverSummary(state, tile, field) {
 }
 
 export function holdingLine(state, building) {
-  if (!building || building.type === 'road') return '';
+  if (!building) return '';
+  if (building.turnsLeft > 0) return `rises in ${building.turnsLeft}`;
+  if (building.type === 'road') return '';
   const parts = [];
   const yieldText = yieldLabel(state, building, 4);
   if (yieldText) parts.push(yieldText);
@@ -2439,8 +2496,9 @@ function musterLabel(building) {
 }
 
 function yieldLabel(state, building, limit = 1) {
-  if (!building || building.type === 'road') return '';
+  if (!building) return '';
   if (building.turnsLeft > 0) return `in ${building.turnsLeft}`;
+  if (building.type === 'road') return '';
   const income = incomeForBuilding(state, building);
   const entries = Object.entries(income).filter(([, amount]) => amount).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
   return entries.slice(0, limit).map(([id, amount]) => `${id} ${amount > 0 ? '+' : ''}${amount}`).join(', ');
@@ -2477,7 +2535,7 @@ function drawSiteChip(ctx, rect, label) {
   ctx.restore();
 }
 
-function drawYieldChip(ctx, s, label) {
+function drawYieldChip(ctx, s, label, lift = 0) {
   if (!label) return;
   const size = Math.max(10, Math.round(s * 0.15));
   ctx.save();
@@ -2485,7 +2543,7 @@ function drawYieldChip(ctx, s, label) {
   const width = Math.min(s * 0.98, ctx.measureText(label).width + size * 0.85);
   const height = size + 3;
   const left = (s - width) / 2;
-  const top = s * 0.98 - height;
+  const top = Math.max(2, s * 0.98 - height - lift);
   ctx.fillStyle = 'rgba(255, 246, 224, 0.94)';
   ctx.strokeStyle = '#6a4a28';
   ctx.lineWidth = 1;
