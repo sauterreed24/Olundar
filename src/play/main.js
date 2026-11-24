@@ -184,7 +184,8 @@ function companyRoster() {
       endArmed && !unit.hasActed ? 'owing' : '',
       freshCompany.has(unit.id) ? 'fresh' : '',
       near.has(unit.id) && !posted.has(unit.id) ? 'near' : '',
-      posted.has(unit.id) ? 'posted' : ''
+      posted.has(unit.id) && unit.fortified > 0 ? 'holds' : '',
+      posted.has(unit.id) && !(unit.fortified > 0) ? 'posted' : ''
     ].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
@@ -257,9 +258,12 @@ function selectedGlance() {
     const extra = holdingLine(state, building);
     const postedUnits = stoodBeside(state, building);
     const postedIds = new Set(postedUnits.map((unit) => unit.id));
-    const postedNames = postedUnits.map((unit) => unit.name.split(' ').slice(-1)[0]);
-    const near = reachersFor(state, building).filter((unit) => !postedIds.has(unit.id)).map((unit) => unit.name.split(' ').slice(-1)[0]);
-    const posted = postedNames.length ? `${spokenList(postedNames)} ${postedNames.length === 1 ? 'stands' : 'stand'} here` : '';
+    const short = (unit) => unit.name.split(' ').slice(-1)[0];
+    const posture = (units, one, many) => units.length ? `${spokenList(units.map(short))} ${units.length === 1 ? one : many} here` : '';
+    const holders = postedUnits.filter((unit) => unit.fortified > 0);
+    const standers = postedUnits.filter((unit) => !(unit.fortified > 0));
+    const near = reachersFor(state, building).filter((unit) => !postedIds.has(unit.id)).map(short);
+    const posted = [posture(holders, 'holds', 'hold'), posture(standers, 'stands', 'stand')].filter(Boolean).join(' · ');
     const reach = near.length ? `${spokenList(near)} can reach` : '';
     const parts = [extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`];
     if (posted) parts.push(posted);

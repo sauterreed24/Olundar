@@ -656,7 +656,8 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const posted = new Set(stoodBeside(state, selected).map((unit) => unit.id));
     const near = new Set(reachersFor(state, selected).map((unit) => unit.id));
     for (const unit of state.units) {
-      if (posted.has(unit.id) && unit.id !== selectedUnit?.id) drawApproachMark(ctx, frame, unit.x, unit.y);
+      if (posted.has(unit.id) && unit.fortified > 0) drawHoldTether(ctx, frame, unit, selected);
+      else if (posted.has(unit.id) && unit.id !== selectedUnit?.id) drawApproachMark(ctx, frame, unit.x, unit.y);
       if (!near.has(unit.id) || posted.has(unit.id)) continue;
       const rect = tileRect(frame, unit.x, unit.y);
       ctx.save();
@@ -2351,6 +2352,19 @@ function drawMoveGhost(ctx, frame, unit, hover, seat, exposed = false) {
     ctx.fill();
   }
   if (seat) drawCompanyMark(ctx, s, seat, true);
+  ctx.restore();
+}
+
+function drawHoldTether(ctx, frame, unit, building) {
+  const from = tileRect(frame, unit.x, unit.y);
+  const to = tileRect(frame, building.x, building.y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(240, 200, 102, 0.95)';
+  ctx.lineWidth = Math.max(2, frame.tile * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(from.x + from.s * 0.5, from.y + from.s * 0.7);
+  ctx.lineTo(to.x + to.s * 0.5, to.y + to.s * 0.55);
+  ctx.stroke();
   ctx.restore();
 }
 

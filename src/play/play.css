@@ -388,6 +388,11 @@ button.primary, button.armed {
   outline-offset: -3px;
 }
 
+.company button.holds {
+  outline: 2px solid #e2b15a;
+  outline-offset: -3px;
+}
+
 .company button.spent {
   opacity: 0.48;
 }
