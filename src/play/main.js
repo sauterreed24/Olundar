@@ -196,9 +196,10 @@ function selectedGlance() {
 
 function resourceChip(id, value, label) {
   const due = spendDue(id);
+  const bite = comingBite(id);
   const hot = ledgerPulse.has(id) ? ' pulse' : '';
-  const mark = due ? ' due' : '';
-  const debit = due ? `<small>−${due}</small>` : '';
+  const mark = `${due ? ' due' : ''}${bite ? ' bite' : ''}`;
+  const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}`;
   return `<span class="res res-${id}${hot}${mark}">${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
 }
 
@@ -214,6 +215,15 @@ function spendDue(id) {
   const cost = BUILDING_TYPES[buildType]?.cost || {};
   if (!canAfford(state.factions.olundar.resources, cost)) return 0;
   return cost[id] || 0;
+}
+
+function comingBite(id) {
+  let total = 0;
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar') continue;
+    for (const entry of building.queue || []) total += UNIT_TYPES[entry.unitType]?.upkeep?.[id] || 0;
+  }
+  return total;
 }
 
 function orderButton({ cmd, attrs = '', name, cost, armed = false, enabled = true }) {
