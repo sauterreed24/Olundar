@@ -366,6 +366,7 @@ function buildingCard(building) {
       </div>
       <p class="muted">${building.hp}/${building.maxHp} HP</p>
       <p>${escapeHtml(def.text)}</p>
+      ${workMeter(building, def)}
       ${building.turnsLeft > 0 ? `<p class="note">Finishes in ${building.turnsLeft} turn${building.turnsLeft === 1 ? '' : 's'}.</p>` : ''}
       ${(building.queue || []).map((entry) => {
         const trainee = UNIT_TYPES[entry.unitType];
@@ -378,6 +379,12 @@ function buildingCard(building) {
       </div>
     </section>
   `;
+}
+
+function workMeter(building, def) {
+  if (!building.turnsLeft || !def.buildTurns) return '';
+  const done = Math.round(100 * (1 - building.turnsLeft / def.buildTurns));
+  return `<div class="bar work" aria-label="Work done"><span style="width:${done}%"></span></div>`;
 }
 
 function buildButtons() {
@@ -813,9 +820,11 @@ function requestEndTurn() {
   }).length;
   const harvest = harvestLine(beforeStores);
   const arrival = arrivalLine(arrived);
+  const works = worksLine(rising);
   const advance = marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`;
   const bits = [advance];
   if (harvest.text) bits.push(`Harvest ${harvest.text}.`);
+  if (works) bits.push(`${works}.`);
   if (arrival) bits.push(`${arrival}.`);
   notice(bits.join(' '), 'good');
   ledgerPulse = new Set(harvest.pulsed);
@@ -824,13 +833,27 @@ function requestEndTurn() {
   else if (arrived.some((unit) => unit.faction === 'olundar')) {
     const muster = arrived.find((unit) => unit.faction === 'olundar');
     board.ensureVisible(muster.x, muster.y);
-  } else if (!state.selectedUnitId) {
-    const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
-    if (city) board.focus(city.x, city.y);
+  } else {
+    const held = state.buildings.find((building) => building.id === state.selectedBuildingId);
+    if (held) board.ensureVisible(held.x, held.y);
+    else if (!state.selectedUnitId) {
+      const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+      if (city) board.focus(city.x, city.y);
+    }
   }
   renderChrome();
   ledgerPulse = new Set();
   paint();
+}
+
+function worksLine(ids) {
+  const parts = [];
+  for (const id of ids) {
+    const building = state.buildings.find((item) => item.id === id);
+    if (!building) continue;
+    parts.push(building.turnsLeft > 0 ? `${building.name} rises in ${building.turnsLeft}` : `${building.name} stands`);
+  }
+  return parts.join('. ');
 }
 
 function resourceSnapshot() {

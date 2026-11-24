@@ -406,6 +406,10 @@ button.primary, button.armed {
   background: linear-gradient(90deg, #2f7a3a, #8fce62);
 }
 
+.card .bar.work span {
+  background: linear-gradient(90deg, #a56b28, #f0d48a);
+}
+
 .log p { font-family: var(--sans); font-size: 0.86rem; }
 .log .good { color: #1f6b32; }
 .log .danger, .log .bad { color: var(--danger); }
