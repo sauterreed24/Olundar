@@ -628,6 +628,27 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     drawCoverMark(ctx, frame, state, hover);
     drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
   }
+  if (!buildType) paintKin(ctx, state, frame, selectedBuildingId);
+}
+
+function paintKin(ctx, state, frame, selectedBuildingId) {
+  const selected = state.buildings.find((building) => building.id === selectedBuildingId);
+  if (!selected || selected.faction !== 'olundar') return;
+  const from = tileRect(frame, selected.x, selected.y);
+  for (const building of state.buildings) {
+    if (!sharesYield(state, selected, building) || !isRevealed(state, building.x, building.y)) continue;
+    const to = tileRect(frame, building.x, building.y);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(226, 177, 90, 0.9)';
+    ctx.lineWidth = Math.max(1.5, frame.tile * 0.028);
+    ctx.setLineDash([Math.max(4, frame.tile * 0.12), Math.max(3, frame.tile * 0.08)]);
+    ctx.beginPath();
+    ctx.moveTo(from.x + from.s * 0.5, from.y + from.s * 0.55);
+    ctx.lineTo(to.x + to.s * 0.5, to.y + to.s * 0.55);
+    ctx.stroke();
+    ctx.restore();
+    drawBrackets(ctx, to, 'rgba(226, 177, 90, 0.95)', 0.12);
+  }
 }
 
 function paintDawn(ctx, frame) {
