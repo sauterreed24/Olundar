@@ -22,6 +22,8 @@ import {
   forecastUnitAttack,
   factionBooks,
   formatCost,
+  canAfford,
+  missingCost,
   isEnemy,
   getAftermathMissions,
   getCrisisCouncil,
@@ -171,8 +173,32 @@ function selectedGlance() {
 }
 
 function resourceChip(id, value, label) {
+  const due = spendDue(id);
   const hot = ledgerPulse.has(id) ? ' pulse' : '';
-  return `<span class="res res-${id}${hot}">${RESOURCE_ICONS[id]}<span><b>${value}</b><em>${escapeHtml(label)}</em></span></span>`;
+  const mark = due ? ' due' : '';
+  const debit = due ? `<small>−${due}</small>` : '';
+  return `<span class="res res-${id}${hot}${mark}">${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
+}
+
+function purse(cost) {
+  const resources = state.factions.olundar.resources;
+  const missing = missingCost(resources, cost || {});
+  const short = !canAfford(resources, cost || {});
+  return { short, text: short ? `Need ${formatCost(missing)}` : formatCost(cost) };
+}
+
+function spendDue(id) {
+  if (!buildType) return 0;
+  const cost = BUILDING_TYPES[buildType]?.cost || {};
+  if (!canAfford(state.factions.olundar.resources, cost)) return 0;
+  return cost[id] || 0;
+}
+
+function orderButton({ cmd, attrs = '', name, cost, armed = false, enabled = true }) {
+  const bill = purse(cost);
+  const open = enabled && !bill.short;
+  const classes = [armed && open ? 'armed' : '', bill.short ? 'short' : ''].filter(Boolean).join(' ');
+  return `<button type="button" data-cmd="${cmd}" ${attrs} ${classes ? `class="${classes}"` : ''} ${open ? '' : 'disabled'}>${escapeHtml(name)} · ${escapeHtml(bill.text)}</button>`;
 }
 
 function unitPortrait(unit) {
@@ -200,6 +226,7 @@ function orderGlance() {
       const yieldText = plannedYieldLabel(state, buildType, hover.x, hover.y);
       parts.push(yieldText ? `place ${name} · ${yieldText}` : `place ${name}`);
       if (turns) parts.push(`rises in ${turns}`);
+      parts.push(`spends ${formatCost(BUILDING_TYPES[buildType].cost)}`);
     } else {
       parts.push(canBuildOn(state, buildType, hover.x, hover.y).reason || `${name} will not stand here`);
     }
@@ -326,7 +353,7 @@ function buildingCard(building) {
   const mine = building.faction === 'olundar';
   const trains = mine && building.turnsLeft <= 0 ? def.trains.map((type) => {
     const unit = UNIT_TYPES[type];
-    return `<button type="button" data-cmd="train" data-unit="${type}">Train ${escapeHtml(unit.name)} · ${escapeHtml(formatCost(unit.cost))}</button>`;
+    return orderButton({ cmd: 'train', attrs: `data-unit="${type}"`, name: `Train ${unit.name}`, cost: unit.cost });
   }).join('') : '';
   return `
     <section class="card">
@@ -347,7 +374,7 @@ function buildingCard(building) {
       }).join('')}
       <div class="actions">
         ${trains}
-        ${mine && building.turnsLeft <= 0 ? `<button type="button" data-cmd="upgrade">Upgrade · ${escapeHtml(formatCost(upgradeCostFor(building)))}</button>` : ''}
+        ${mine && building.turnsLeft <= 0 ? orderButton({ cmd: 'upgrade', name: 'Upgrade', cost: upgradeCostFor(building) }) : ''}
       </div>
     </section>
   `;
@@ -356,7 +383,7 @@ function buildingCard(building) {
 function buildButtons() {
   return BUILD_ORDER.map((type) => {
     const def = BUILDING_TYPES[type];
-    return `<button type="button" data-cmd="arm-build" data-building="${type}" ${buildType === type ? 'class="armed"' : ''}>${escapeHtml(def.name)} · ${escapeHtml(formatCost(def.cost))}</button>`;
+    return orderButton({ cmd: 'arm-build', attrs: `data-building="${type}"`, name: def.name, cost: def.cost, armed: buildType === type });
   }).join('');
 }
 
@@ -378,7 +405,7 @@ function councilTab() {
       <h2>Sun decrees</h2>
       <p class="muted">${edicts.ready ? 'Ready.' : `Cooling down for ${edicts.cooldown} turn${edicts.cooldown === 1 ? '' : 's'}.`}${edicts.activeLabel ? ` Active: ${escapeHtml(edicts.activeLabel)}.` : ''}</p>
       <div class="actions">
-        ${Object.values(SUN_EDICTS).map((edict) => `<button type="button" data-cmd="edict" data-edict="${edict.id}" ${edicts.ready ? '' : 'disabled'}>${escapeHtml(edict.name)} · ${escapeHtml(formatCost(edict.cost))}</button>`).join('')}
+        ${Object.values(SUN_EDICTS).map((edict) => orderButton({ cmd: 'edict', attrs: `data-edict="${edict.id}"`, name: edict.name, cost: edict.cost, enabled: edicts.ready })).join('')}
       </div>
     </section>
     ${crisis.visible ? crisisCard(crisis) : ''}

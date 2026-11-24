@@ -56,6 +56,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button.short:disabled {
+  opacity: 1;
+  color: #8a3324;
+  background: #f6e4d8;
+  border-color: #b4634a;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 button.primary, button.armed {
   background: linear-gradient(180deg, #a32e22, #6d1b12);
   color: #fff6e8;
@@ -136,6 +145,18 @@ button.primary, button.armed {
 
 .resources .res.pulse {
   animation: ledger-flash 1.15s ease;
+}
+
+.resources .res.due {
+  border-color: #e2b15a;
+  box-shadow: 0 0 0 1px #e2b15a, inset 0 0 0 99px rgba(226, 177, 90, 0.16);
+}
+
+.resources .res.due small {
+  margin-left: 0.28rem;
+  color: #ffb089;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 @keyframes ledger-flash {
