@@ -742,10 +742,14 @@ export function addMessage(state, text, tone = 'info') {
   state.messages = state.messages.slice(0, 80);
 }
 
-export function getReadyOlundarUnits(state) {
+export function olundarCompany(state) {
   return state.units
-    .filter((unit) => unit.faction === 'olundar' && !unit.hasActed)
+    .filter((unit) => unit.faction === 'olundar')
     .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
+}
+
+export function getReadyOlundarUnits(state) {
+  return olundarCompany(state).filter((unit) => !unit.hasActed);
 }
 
 export function nextReadyOlundarUnit(state, currentId) {

@@ -292,6 +292,56 @@ button.primary, button.armed {
   margin-bottom: 0.65rem;
 }
 
+.company {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+}
+
+.company button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.3rem 0.15rem 0.35rem;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
+.company button.ready {
+  border-color: #a56b28;
+}
+
+.company button.spent {
+  opacity: 0.48;
+}
+
+.company button.current {
+  box-shadow: 0 0 0 1px #e2b15a, inset 0 0 0 99px rgba(226, 177, 90, 0.16);
+}
+
+.company em {
+  font-style: normal;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company .seat-face {
+  width: 48px;
+  height: 56px;
+  overflow: hidden;
+}
+
+.company .portrait-plate {
+  transform: scale(0.5);
+  transform-origin: top left;
+}
+
 .role {
   margin: 0;
   color: var(--muted);

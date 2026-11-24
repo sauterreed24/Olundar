@@ -31,6 +31,7 @@ import {
   getEndTurnWarnings,
   getRallyForecast,
   getReadyOlundarUnits,
+  olundarCompany,
   nextReadyOlundarUnit,
   getSunEdictStatus,
   getWarCouncil,
@@ -146,6 +147,7 @@ function renderDock() {
       ${tabButton('log', 'Log')}
     </div>
     <p id="glance" class="glance">${escapeHtml(glanceText)}</p>
+    ${companyRoster()}
     <p class="aim"><b>${escapeHtml(clock.title)}</b> ${escapeHtml(clock.detail)}</p>
     ${nextOrder() ? `<p class="note order">${escapeHtml(nextOrder())}</p>` : ''}
     ${tab === 'field' ? fieldTab() : ''}
@@ -153,6 +155,16 @@ function renderDock() {
     ${tab === 'diplomacy' ? diplomacyTab() : ''}
     ${tab === 'log' ? logTab() : ''}
   `;
+}
+
+function companyRoster() {
+  const company = olundarCompany(state);
+  if (!company.length) return '';
+  return `<div class="company">${company.map((unit) => {
+    const classes = [unit.hasActed ? 'spent' : 'ready', unit.id === state.selectedUnitId ? 'current' : ''].filter(Boolean).join(' ');
+    const name = unit.name.split(' ').slice(-1)[0];
+    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}"><span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
+  }).join('')}</div>`;
 }
 
 function nextOrder() {
@@ -488,6 +500,7 @@ function onDockClick(event) {
     return;
   }
   if (cmd === 'fortify') run(fortifyCommand(state.selectedUnitId));
+  else if (cmd === 'seat') takeSeat(button.dataset.unit);
   else if (cmd === 'arm-build') {
     buildType = button.dataset.building;
     state.selectedBuildingId = null;
@@ -894,6 +907,19 @@ function selectNext() {
   board.ensureVisible(next.x, next.y);
   renderChrome();
   paint();
+}
+
+function takeSeat(unitId) {
+  const unit = state.units.find((item) => item.id === unitId && item.faction === 'olundar');
+  if (!unit) return;
+  state.selectedUnitId = unit.id;
+  state.selectedBuildingId = null;
+  buildType = null;
+  endArmed = false;
+  board.ensureVisible(unit.x, unit.y);
+  board.play({ kind: 'beckon', unitId: unit.id, duration: 460 });
+  paint();
+  renderChrome();
 }
 
 function onKey(event) {
