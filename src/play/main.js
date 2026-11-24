@@ -38,7 +38,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, UNIT_SPRITE_ORDER } from './board.js';
+import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -104,6 +104,7 @@ function boot() {
   window.addEventListener('keydown', onKey);
   dock.addEventListener('click', onDockClick);
   modal.addEventListener('click', onModalClick);
+  board.watch(() => paint());
   renderChrome();
   paint();
 }
@@ -497,17 +498,58 @@ function isEnemyTile(attacker, target) {
 }
 
 function run(command) {
+  const cue = motionCue(command);
   const result = executePlayerCommand(state, command);
   endArmed = false;
   notice(result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.'), result?.ok === false ? 'bad' : 'good');
   if (result?.ok !== false) {
     playAudioCue('ui');
+    playCue(cue, result);
     handOffSpentUnit();
   }
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);
   paint();
   renderChrome();
+}
+
+function motionCue(command) {
+  const unit = state.units.find((item) => item.id === command.payload?.unitId);
+  if (command.type === 'move' && unit) {
+    const path = traceMovePath(board.movementField(), unit, command.payload.x, command.payload.y);
+    const route = path.length > 1 ? path : [{ x: unit.x, y: unit.y }, { x: command.payload.x, y: command.payload.y }];
+    return { kind: 'walk', unitId: unit.id, path: route, duration: Math.min(980, 220 + route.length * 110) };
+  }
+  if (command.type === 'attack' && unit) {
+    const target = command.payload.targetType === 'building'
+      ? state.buildings.find((item) => item.id === command.payload.targetId)
+      : state.units.find((item) => item.id === command.payload.targetId);
+    if (!target) return null;
+    return {
+      kind: 'strike',
+      unitId: unit.id,
+      tx: target.x,
+      ty: target.y,
+      defender: { type: target.type, faction: target.faction },
+      duration: 460
+    };
+  }
+  if (command.type === 'fortify' && unit) return { kind: 'brace', unitId: unit.id, duration: 480 };
+  if (command.type === 'build') return { kind: 'rise', x: command.payload.x, y: command.payload.y, duration: 460 };
+  return null;
+}
+
+function playCue(cue, result) {
+  if (!cue) return;
+  if (cue.kind === 'strike') {
+    board.play(cue);
+    board.play({ kind: 'impact', x: cue.tx, y: cue.ty, duration: 540 });
+    if (result?.targetDestroyed && cue.defender?.type) {
+      board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 620 });
+    }
+    return;
+  }
+  board.play(cue);
 }
 
 function handOffSpentUnit() {
@@ -566,6 +608,7 @@ function onKey(event) {
     renderChrome();
     paint();
   } else if ((event.key === 'z' || event.key === 'Z') && (event.metaKey || event.ctrlKey)) {
+    board.clearMotion();
     const result = event.shiftKey ? getCommandHistory().redo(state) : getCommandHistory().undo(state);
     notice(result.reason, result.ok ? 'good' : 'info');
     renderChrome();

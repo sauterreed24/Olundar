@@ -64,6 +64,11 @@ let propPeak = null;
 const terrainPhotos = {};
 let artEpoch = 0;
 let materialSet = null;
+const motions = [];
+let frameNow = 0;
+let rafId = 0;
+let repaint = null;
+let idleOn = false;
 
 function trimFringe(source) {
   const canvas = document.createElement('canvas');
@@ -299,7 +304,8 @@ export function createBoard(canvas) {
       view.cacheKey = terrainKey;
       paintTerrain(terrain, state, frame);
     }
-    paintPieces(pieces, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
+    noteIdle(Boolean(selectedUnit && !selectedUnit.hasActed));
+  paintPieces(pieces, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -309,7 +315,137 @@ export function createBoard(canvas) {
     paintMinimap(ctx, state, frame);
   }
 
-  return { resize, focus, ensureVisible, pan, panByPixels, tileAtPoint, paint, movementField: () => view.field };
+  return {
+    resize,
+    focus,
+    ensureVisible,
+    pan,
+    panByPixels,
+    tileAtPoint,
+    paint,
+    play,
+    clearMotion,
+    watch,
+    movementField: () => view.field
+  };
+}
+
+function watch(callback) {
+  repaint = callback;
+}
+
+function play(motion) {
+  if (!motion || reducedMotion()) return;
+  motions.push({ ...motion, started: clock() });
+  startClock();
+}
+
+function clearMotion() {
+  motions.length = 0;
+}
+
+function noteIdle(active) {
+  idleOn = Boolean(active) && !reducedMotion();
+  if (idleOn) startClock();
+}
+
+function reducedMotion() {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function clock() {
+  return typeof performance === 'undefined' ? 0 : performance.now();
+}
+
+function startClock() {
+  if (rafId || typeof requestAnimationFrame !== 'function') return;
+  const step = (time) => {
+    frameNow = time;
+    for (let index = motions.length - 1; index >= 0; index -= 1) {
+      if (time - motions[index].started >= motions[index].duration) motions.splice(index, 1);
+    }
+    repaint?.();
+    if (motions.length || idleOn) rafId = requestAnimationFrame(step);
+    else rafId = 0;
+  };
+  rafId = requestAnimationFrame(step);
+}
+
+function activeMotion(unitId, kind) {
+  return motions.find((motion) => motion.kind === kind && motion.unitId === unitId) || null;
+}
+
+function motionAmount(motion) {
+  if (!motion) return 1;
+  return Math.max(0, Math.min(1, (frameNow - motion.started) / motion.duration));
+}
+
+export function pointOnPath(path, amount) {
+  if (!path?.length) return null;
+  if (path.length === 1 || amount <= 0) return { x: path[0].x, y: path[0].y };
+  const eased = amount < 0.5 ? 2 * amount * amount : 1 - ((-2 * amount + 2) ** 2) / 2;
+  if (eased >= 1) return { x: path[path.length - 1].x, y: path[path.length - 1].y };
+  const span = path.length - 1;
+  const distance = eased * span;
+  const index = Math.min(span - 1, Math.floor(distance));
+  const local = distance - index;
+  return {
+    x: path[index].x + (path[index + 1].x - path[index].x) * local,
+    y: path[index].y + (path[index + 1].y - path[index].y) * local
+  };
+}
+
+function spritePlace(unit) {
+  const walk = activeMotion(unit.id, 'walk');
+  const place = walk ? pointOnPath(walk.path, motionAmount(walk)) : { x: unit.x, y: unit.y };
+  const strike = activeMotion(unit.id, 'strike');
+  if (strike) {
+    const lean = Math.sin(motionAmount(strike) * Math.PI) * 0.22;
+    return {
+      x: place.x + (strike.tx - unit.x) * lean,
+      y: place.y + (strike.ty - unit.y) * lean
+    };
+  }
+  return place || { x: unit.x, y: unit.y };
+}
+
+function paintImpacts(ctx, frame) {
+  for (const motion of motions) {
+    if (motion.kind === 'fall') drawFall(ctx, frame, motion);
+    if (motion.kind === 'impact') drawImpact(ctx, frame, motion);
+  }
+}
+
+function drawFall(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRectAt(frame, motion.x, motion.y + amount * 0.12);
+  ctx.save();
+  ctx.globalAlpha = 1 - amount;
+  ctx.translate(rect.x, rect.y);
+  drawUnitSprite(ctx, { type: motion.type, faction: motion.faction }, rect.s);
+  ctx.restore();
+}
+
+function drawImpact(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRect(frame, motion.x, motion.y);
+  const cx = rect.x + rect.s / 2;
+  const cy = rect.y + rect.s * 0.48;
+  ctx.save();
+  ctx.strokeStyle = `rgba(176, 36, 24, ${1 - amount})`;
+  ctx.lineWidth = Math.max(2, rect.s * 0.06);
+  ctx.beginPath();
+  ctx.arc(cx, cy, rect.s * (0.12 + amount * 0.42), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(255, 236, 190, ${1 - amount})`;
+  ctx.lineWidth = Math.max(2, rect.s * 0.045);
+  ctx.beginPath();
+  ctx.moveTo(cx - rect.s * 0.28, cy - rect.s * 0.08);
+  ctx.lineTo(cx + rect.s * 0.22, cy + rect.s * 0.16);
+  ctx.moveTo(cx - rect.s * 0.08, cy + rect.s * 0.24);
+  ctx.lineTo(cx + rect.s * 0.26, cy - rect.s * 0.2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function paintTerrain(surface, state, frame) {
@@ -380,18 +516,20 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     props.push({ rank: 0, x: building.x, y: building.y, building });
   }
   for (const unit of state.units) {
-    if (unit.x < x0 || unit.y < y0 || unit.x >= x1 || unit.y >= y1) continue;
-    if (!isVisible(state, unit.x, unit.y)) continue;
-    props.push({ rank: 1, x: unit.x, y: unit.y, unit });
+    const place = spritePlace(unit);
+    if (place.x < x0 - 1 || place.y < y0 - 1 || place.x >= x1 + 1 || place.y >= y1 + 1) continue;
+    if (!isVisible(state, unit.x, unit.y) && !activeMotion(unit.id, 'walk')) continue;
+    props.push({ rank: 1, x: place.x, y: place.y, unit, place });
   }
   props.sort((a, b) => a.y - b.y || a.x - b.x || a.rank - b.rank);
   for (const prop of props) {
     if (prop.building) drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y));
     else {
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
-      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack);
+      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place);
     }
   }
+  paintImpacts(ctx, frame);
   if (hover) drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
 }
 
@@ -408,6 +546,7 @@ function paintMarches(ctx, state, frame) {
     ctx.strokeStyle = 'rgba(122, 28, 22, 0.82)';
     ctx.lineWidth = Math.max(2, frame.tile * 0.045);
     ctx.setLineDash([frame.tile * 0.16, frame.tile * 0.1]);
+    ctx.lineDashOffset = -frameNow / 48;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -985,6 +1124,14 @@ function drawBuilding(ctx, frame, building, selected, seen) {
   ctx.save();
   ctx.globalAlpha = seen ? 1 : 0.52;
   ctx.translate(rect.x, rect.y);
+  const rise = motions.find((motion) => motion.kind === 'rise' && motion.x === building.x && motion.y === building.y);
+  if (rise) {
+    const amount = 1 - (1 - motionAmount(rise)) ** 2;
+    ctx.translate(s * 0.5, s * 0.82);
+    ctx.scale(0.7 + 0.3 * amount, 0.7 + 0.3 * amount);
+    ctx.translate(-s * 0.5, -s * 0.82);
+    ctx.globalAlpha *= 0.35 + 0.65 * amount;
+  }
   if (building.turnsLeft > 0) ctx.globalAlpha *= 0.8;
   groundShadow(ctx, s);
   const painted = drawBuildingSprite(ctx, building.type, s);
@@ -1366,9 +1513,14 @@ function drawFinial(ctx, x, y, s) {
   ctx.fill();
 }
 
-function drawUnit(ctx, frame, unit, selected, attack) {
-  const rect = tileRect(frame, unit.x, unit.y);
+function drawUnit(ctx, frame, unit, selected, attack, place = null) {
+  const spot = place || { x: unit.x, y: unit.y };
+  const rect = tileRectAt(frame, spot.x, spot.y);
   const s = rect.s;
+  const walking = activeMotion(unit.id, 'walk');
+  const bob = selected && !walking && !activeMotion(unit.id, 'strike')
+    ? Math.sin((frameNow + unit.x * 90) / 260) * s * 0.04
+    : 0;
   ctx.save();
   ctx.translate(rect.x, rect.y);
   ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.72 : 1;
@@ -1376,7 +1528,24 @@ function drawUnit(ctx, frame, unit, selected, attack) {
   ctx.beginPath();
   ctx.ellipse(s * 0.5, s * 0.84, s * 0.24, s * 0.065, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (walking) {
+    const step = 0.5 + 0.5 * Math.sin(motionAmount(walking) * Math.PI * 6);
+    ctx.fillStyle = `rgba(70, 48, 18, ${0.18 + step * 0.2})`;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.42, s * 0.86, s * 0.08, s * 0.03, 0, 0, Math.PI * 2);
+    ctx.ellipse(s * 0.58, s * 0.86, s * 0.08, s * 0.03, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.translate(0, bob);
   drawUnitSprite(ctx, unit, s);
+  if (activeMotion(unit.id, 'brace')) {
+    const amount = motionAmount(activeMotion(unit.id, 'brace'));
+    ctx.strokeStyle = `rgba(240, 200, 102, ${1 - amount})`;
+    ctx.lineWidth = Math.max(2, s * 0.05);
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.46, s * (0.2 + amount * 0.28), Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+  }
   if (unit.faction !== 'dead' && unit.faction !== 'olundar') {
     ctx.fillStyle = FACTION_INK[unit.faction] || '#f0c866';
     ctx.beginPath();
@@ -1388,7 +1557,10 @@ function drawUnit(ctx, frame, unit, selected, attack) {
   }
   drawHealthPip(ctx, s * 0.26, s * 0.9, s * 0.48, Math.max(3, s * 0.04), unit.hp / unit.maxHp);
   if (attack) drawBrackets(ctx, { x: s * 0.02, y: s * 0.02, s: s * 0.96 }, '#d23b2e', 0);
-  if (selected) drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, '#f4d48a', 0);
+  if (selected) {
+    const glow = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(frameNow / 180));
+    drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, `rgba(244, 212, 138, ${glow})`, 0);
+  }
   ctx.restore();
 }
 
@@ -1546,6 +1718,14 @@ function isAttackTarget(state, attacker, target) {
 function terrainName(state, x, y) {
   if (!inBounds(x, y) || !isRevealed(state, x, y)) return null;
   return tileAt(state, x, y).terrain;
+}
+
+function tileRectAt(frame, x, y) {
+  return {
+    x: (x - frame.camX) * frame.tile,
+    y: (y - frame.camY) * frame.tile,
+    s: frame.tile
+  };
 }
 
 function tileRect(frame, x, y) {
