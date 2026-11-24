@@ -509,6 +509,7 @@ function paintTerrain(surface, state, frame) {
       drawTerrainFeature(ctx, state, tile, rect, seen, x, y);
       if (tile.road) drawRoad(ctx, state, tile, rect, seen);
       drawKnownEdge(ctx, state, rect, x, y);
+      drawSightEdge(ctx, state, rect, x, y);
     }
   }
   paintDaylight(ctx, surface.width, surface.height);
@@ -915,6 +916,34 @@ function paintGrain(ctx, spec) {
     for (let i = 0; i < 80; i += 1) ctx.fillRect(hash(i, 60) % MATERIAL_SIZE, hash(61, i) % MATERIAL_SIZE, 2, 2);
   }
   ctx.restore();
+}
+
+function remembered(state, x, y) {
+  return inBounds(x, y) && isRevealed(state, x, y) && !isVisible(state, x, y);
+}
+
+function drawSightEdge(ctx, state, rect, x, y) {
+  if (!isVisible(state, x, y)) return;
+  const depth = rect.s * 0.7;
+  const ink = 'rgba(42, 30, 18, 0.42)';
+  const clear = 'rgba(42, 30, 18, 0)';
+  const edges = [
+    [0, -1, rect.x, rect.y, rect.s, depth],
+    [0, 1, rect.x, rect.y + rect.s - depth, rect.s, depth],
+    [-1, 0, rect.x, rect.y, depth, rect.s],
+    [1, 0, rect.x + rect.s - depth, rect.y, depth, rect.s]
+  ];
+  for (const [dx, dy, ex, ey, ew, eh] of edges) {
+    if (!remembered(state, x + dx, y + dy)) continue;
+    const vertical = dy !== 0;
+    const g = vertical
+      ? ctx.createLinearGradient(0, dy < 0 ? ey : ey + eh, 0, dy < 0 ? ey + eh : ey)
+      : ctx.createLinearGradient(dx < 0 ? ex : ex + ew, 0, dx < 0 ? ex + ew : ex, 0);
+    g.addColorStop(0, ink);
+    g.addColorStop(1, clear);
+    ctx.fillStyle = g;
+    ctx.fillRect(ex, ey, ew, eh);
+  }
 }
 
 function edgeHidden(state, x, y) {
@@ -2223,6 +2252,7 @@ export function hoverSummary(state, tile, field) {
   const unit = isVisible(state, tile.x, tile.y) ? state.units.find((item) => item.x === tile.x && item.y === tile.y) : null;
   const building = isVisible(state, tile.x, tile.y) ? state.buildings.find((item) => item.x === tile.x && item.y === tile.y && item.type !== 'road') : null;
   const parts = [`${terrain.name} ${tile.x},${tile.y}`];
+  if (!isVisible(state, tile.x, tile.y)) parts.push('out of sight');
   const cover = coverWord(terrain.defense || 0);
   if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
