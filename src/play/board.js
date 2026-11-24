@@ -189,6 +189,19 @@ export function movementField(state, unit) {
   return costs;
 }
 
+export function reachersFor(state, building) {
+  if (!building) return [];
+  const spots = new Set([key(building.x, building.y)]);
+  for (const next of neighbors4(building.x, building.y)) spots.add(key(next.x, next.y));
+  return olundarCompany(state).filter((unit) => {
+    if (unit.hasActed) return false;
+    if (spots.has(key(unit.x, unit.y))) return true;
+    const field = movementField(state, unit);
+    for (const spot of spots) if (field.has(spot)) return true;
+    return false;
+  });
+}
+
 export function createBoard(canvas) {
   const terrain = document.createElement('canvas');
   const pieces = document.createElement('canvas');
@@ -622,6 +635,22 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     paintStepDawn(ctx, frame, groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y));
   }
   paintImpacts(ctx, frame);
+  if (!buildType && selectedBuildingId) {
+    const selected = state.buildings.find((building) => building.id === selectedBuildingId);
+    const near = new Set(reachersFor(state, selected).map((unit) => unit.id));
+    for (const unit of state.units) {
+      if (!near.has(unit.id)) continue;
+      const rect = tileRect(frame, unit.x, unit.y);
+      ctx.save();
+      ctx.strokeStyle = '#7fbf4a';
+      ctx.lineWidth = Math.max(2, rect.s * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(rect.x + rect.s * 0.28, rect.y + rect.s * 0.9);
+      ctx.lineTo(rect.x + rect.s * 0.72, rect.y + rect.s * 0.9);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
   if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
   if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
   if (hover) {

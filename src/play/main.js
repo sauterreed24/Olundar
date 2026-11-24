@@ -48,7 +48,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -173,13 +173,16 @@ function companyRoster() {
   const company = olundarCompany(state);
   const coming = comingCompany();
   if (!company.length && !coming.length) return '';
+  const open = state.buildings.find((building) => building.id === state.selectedBuildingId);
+  const near = new Set(reachersFor(state, open).map((unit) => unit.id));
   const living = company.map((unit, index) => {
     const classes = [
       unit.hasActed ? 'spent' : 'ready',
       unit.id === state.selectedUnitId ? 'current' : '',
       unit.fortified > 0 ? 'guard' : '',
       endArmed && !unit.hasActed ? 'owing' : '',
-      freshCompany.has(unit.id) ? 'fresh' : ''
+      freshCompany.has(unit.id) ? 'fresh' : '',
+      near.has(unit.id) ? 'near' : ''
     ].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
@@ -242,7 +245,11 @@ function selectedGlance() {
   }
   if (building) {
     const extra = holdingLine(state, building);
-    return extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`;
+    const near = reachersFor(state, building).map((unit) => unit.name.split(' ').slice(-1)[0]);
+    const reach = near.length ? `${spokenList(near)} can reach` : '';
+    const parts = [extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`];
+    if (reach) parts.push(reach);
+    return parts.join(' · ');
   }
   return owingPhrase() || 'Select a unit, then choose a highlighted tile.';
 }

@@ -379,6 +379,10 @@ button.primary, button.armed {
   border-color: #a56b28;
 }
 
+.company button.near {
+  box-shadow: inset 0 -3px 0 #7fbf4a;
+}
+
 .company button.spent {
   opacity: 0.48;
 }
