@@ -532,6 +532,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y));
   }
   if (!buildType) drawReach(ctx, state, frame, selectedUnit, x0, y0, x1, y1);
+  if (selectedUnit) drawThreatLines(ctx, frame, visibleThreats(state, selectedUnit), selectedUnit);
   if (buildType) {
     for (const id of sites) {
       const [x, y] = id.split(',').map(Number);
@@ -1134,9 +1135,9 @@ function drawRoad(ctx, state, tile, rect, seen) {
     }
     ctx.stroke();
   };
-  trace(Math.max(7, s * 0.36), seen ? '#6a4828' : '#4a3824');
-  trace(Math.max(4, s * 0.2), seen ? '#ecd7a8' : '#9a8460');
-  trace(Math.max(1, s * 0.03), seen ? 'rgba(90, 56, 24, 0.4)' : 'rgba(40, 28, 16, 0.3)');
+  trace(Math.max(8, s * 0.42), seen ? '#3f2a16' : '#2c2116');
+  trace(Math.max(5, s * 0.26), seen ? '#c9853a' : '#8a6840');
+  trace(Math.max(1.5, s * 0.05), seen ? 'rgba(255, 236, 196, 0.55)' : 'rgba(90, 70, 40, 0.35)');
 }
 
 function drawBlightSpeck(ctx, rect, blight) {
@@ -1569,6 +1570,35 @@ function drawFinial(ctx, x, y, s) {
   ctx.beginPath();
   ctx.arc(x, y, Math.max(2, s * 0.04), 0, Math.PI * 2);
   ctx.fill();
+}
+
+export function visibleThreats(state, unit) {
+  if (!unit) return [];
+  return state.units.filter((enemy) => {
+    if (enemy.id === unit.id || !isEnemy(state, unit.faction, enemy.faction)) return false;
+    if (!isVisible(state, enemy.x, enemy.y)) return false;
+    const range = UNIT_TYPES[enemy.type]?.range || 1;
+    const distance = Math.abs(enemy.x - unit.x) + Math.abs(enemy.y - unit.y);
+    return distance > 0 && distance <= range;
+  });
+}
+
+function drawThreatLines(ctx, frame, threats, unit) {
+  const target = tileRect(frame, unit.x, unit.y);
+  const tx = target.x + target.s / 2;
+  const ty = target.y + target.s * 0.55;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(176, 36, 28, 0.8)';
+  ctx.lineWidth = Math.max(1.5, frame.tile * 0.035);
+  ctx.setLineDash([frame.tile * 0.12, frame.tile * 0.08]);
+  for (const enemy of threats) {
+    const from = tileRect(frame, enemy.x, enemy.y);
+    ctx.beginPath();
+    ctx.moveTo(from.x + from.s / 2, from.y + from.s * 0.55);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawReach(ctx, state, frame, unit, x0, y0, x1, y1) {

@@ -38,7 +38,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER } from './board.js';
+import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleThreats } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -213,6 +213,14 @@ function fieldTab() {
   return buildingCard(building);
 }
 
+function threatLine(unit) {
+  if (unit.faction !== 'olundar') return '';
+  const threats = visibleThreats(state, unit);
+  if (!threats.length) return '<p class="note">No visible host can strike this unit.</p>';
+  const names = threats.map((enemy) => enemy.name).join(', ');
+  return `<p class="note danger">In reach of ${escapeHtml(names)}.</p>`;
+}
+
 function unitCard(unit) {
   const def = UNIT_TYPES[unit.type];
   const forecast = unit.faction === 'olundar' ? getRallyForecast(state, unit) : null;
@@ -244,6 +252,7 @@ function unitCard(unit) {
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
       <p>${escapeHtml(def.text)}</p>
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
+      ${threatLine(unit)}
       ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. Red ticks are weapon reach. A red bracket can be struck.</p>' : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}

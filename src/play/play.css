@@ -336,6 +336,8 @@ button.primary, button.armed {
   font-size: 0.84rem;
 }
 
+.note.danger { color: var(--danger); font-weight: 700; }
+
 .glance {
   margin: 0 0 0.7rem;
   padding: 0.45rem 0.55rem;
