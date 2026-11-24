@@ -191,7 +191,10 @@ function companyRoster() {
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
     const guard = unit.fortified > 0 ? `<span class="seat-guard">${unit.fortified}</span>` : '';
     const fresh = freshCompany.has(unit.id) ? '<span class="seat-new">new</span>' : '';
-    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}">${key}${guard}${fresh}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
+    const dawn = dawnStepFor(state, unit);
+    const dawnMark = dawn ? `<span class="seat-dawn">${dawn.tiles.length}</span>` : '';
+    const dawnTitle = dawn ? ` · opens ${dawn.tiles.length}` : '';
+    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}${dawnTitle}">${key}${guard}${fresh}${dawnMark}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
   }).join('');
   return `<div class="company">${living}${coming.map(comingSeat).join('')}</div>`;
 }

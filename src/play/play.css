@@ -371,6 +371,17 @@ button.primary, button.armed {
   color: #8a5a18;
 }
 
+.company .seat-dawn {
+  position: absolute;
+  right: 0.18rem;
+  bottom: 0.16rem;
+  z-index: 1;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #9a6420;
+}
+
 .company button.guard {
   box-shadow: inset 0 -3px 0 #e2b15a;
 }
