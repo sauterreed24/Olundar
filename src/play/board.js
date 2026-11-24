@@ -633,6 +633,13 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0, exposed);
     drawMarchCost(ctx, frame, hover.x, hover.y, field.get(`${hover.x},${hover.y}`), exposed);
     paintStepDawn(ctx, frame, groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y));
+  } else if (!buildType && selectedUnit && selectedBuildingId) {
+    const building = state.buildings.find((item) => item.id === selectedBuildingId);
+    const approach = approachFromField(field, selectedUnit, building);
+    if (approach?.path?.length > 1) {
+      drawMovePath(ctx, frame, approach.path, field);
+      drawMarchCost(ctx, frame, approach.x, approach.y, approach.cost, false);
+    }
   }
   paintImpacts(ctx, frame);
   if (!buildType && selectedBuildingId) {
@@ -2473,6 +2480,26 @@ export function traceMovePath(field, origin, x, y) {
     cy = next.y;
   }
   return path.reverse();
+}
+
+export function approachFor(state, unit, building) {
+  if (!unit || !building || unit.hasActed || unit.faction !== 'olundar') return null;
+  return approachFromField(movementField(state, unit), unit, building);
+}
+
+function approachFromField(field, unit, building) {
+  if (!unit || !building || !field) return null;
+  const spots = [{ x: building.x, y: building.y }, ...neighbors4(building.x, building.y)];
+  const here = spots.find((spot) => spot.x === unit.x && spot.y === unit.y);
+  if (here) return { x: here.x, y: here.y, cost: 0, path: [] };
+  let best = null;
+  for (const spot of spots) {
+    const cost = field.get(`${spot.x},${spot.y}`);
+    if (cost == null) continue;
+    if (!best || cost < best.cost) best = { x: spot.x, y: spot.y, cost };
+  }
+  if (!best) return null;
+  return { ...best, path: traceMovePath(field, unit, best.x, best.y) };
 }
 
 function drawMovePath(ctx, frame, path, field) {

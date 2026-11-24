@@ -48,7 +48,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -241,7 +241,15 @@ function selectedGlance() {
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
   if (unit) {
     const seat = companySeat(state, unit);
-    return seat ? `Seat ${seat} · ${unit.name} · ${unit.x},${unit.y}` : `${unit.name} · ${unit.x},${unit.y}`;
+    const base = seat ? `Seat ${seat} · ${unit.name}` : unit.name;
+    const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
+    const approach = approachFor(state, unit, building);
+    if (approach && building) {
+      return approach.cost > 0
+        ? `${base} · ${approach.cost} to ${building.name}`
+        : `${base} · beside ${building.name}`;
+    }
+    return `${base} · ${unit.x},${unit.y}`;
   }
   if (building) {
     const extra = holdingLine(state, building);
@@ -1141,8 +1149,10 @@ function selectNext() {
 function takeSeat(unitId) {
   const unit = state.units.find((item) => item.id === unitId && item.faction === 'olundar');
   if (!unit) return;
+  const held = state.buildings.find((building) => building.id === state.selectedBuildingId);
+  const keeps = Boolean(approachFor(state, unit, held));
   state.selectedUnitId = unit.id;
-  state.selectedBuildingId = null;
+  state.selectedBuildingId = keeps ? held.id : null;
   buildType = null;
   endArmed = false;
   board.ensureVisible(unit.x, unit.y);
