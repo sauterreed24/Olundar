@@ -160,8 +160,9 @@ function renderDock() {
 
 function companyRoster() {
   const company = olundarCompany(state);
-  if (!company.length) return '';
-  return `<div class="company">${company.map((unit, index) => {
+  const coming = comingCompany();
+  if (!company.length && !coming.length) return '';
+  const living = company.map((unit, index) => {
     const classes = [
       unit.hasActed ? 'spent' : 'ready',
       unit.id === state.selectedUnitId ? 'current' : '',
@@ -174,7 +175,41 @@ function companyRoster() {
     const guard = unit.fortified > 0 ? `<span class="seat-guard">${unit.fortified}</span>` : '';
     const fresh = freshCompany.has(unit.id) ? '<span class="seat-new">new</span>' : '';
     return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}">${key}${guard}${fresh}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
-  }).join('')}</div>`;
+  }).join('');
+  return `<div class="company">${living}${coming.map(comingSeat).join('')}</div>`;
+}
+
+function comingCompany() {
+  const seats = [];
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0 || !building.queue?.length) continue;
+    const entry = building.queue[0];
+    const def = UNIT_TYPES[entry.unitType];
+    if (!def) continue;
+    seats.push({
+      buildingId: building.id,
+      unitType: entry.unitType,
+      turnsLeft: entry.turnsLeft,
+      name: def.name,
+      waiting: building.queue.length - 1,
+      y: building.y,
+      x: building.x
+    });
+  }
+  seats.sort((a, b) => a.turnsLeft - b.turnsLeft || a.y - b.y || a.x - b.x);
+  return seats;
+}
+
+function comingSeat(seat) {
+  const short = seat.name.split(' ').slice(-1)[0];
+  const classes = [
+    'coming',
+    seat.buildingId === state.selectedBuildingId ? 'current' : '',
+    seat.turnsLeft <= 1 ? 'soon' : ''
+  ].filter(Boolean).join(' ');
+  const wait = `musters in ${seat.turnsLeft} turn${seat.turnsLeft === 1 ? '' : 's'}`;
+  const extra = seat.waiting ? ` · ${seat.waiting} more waiting` : '';
+  return `<button type="button" class="${classes}" data-cmd="coming" data-building="${seat.buildingId}" title="${escapeHtml(`${seat.name} ${wait}${extra}`)}"><span class="seat-soon">in ${seat.turnsLeft}</span><span class="seat-face">${unitPortrait({ type: seat.unitType, faction: 'olundar' })}</span><em>${escapeHtml(short)}</em></button>`;
 }
 
 function nextOrder() {
@@ -533,6 +568,7 @@ function onDockClick(event) {
   }
   if (cmd === 'fortify') run(fortifyCommand(state.selectedUnitId));
   else if (cmd === 'seat') takeSeat(button.dataset.unit);
+  else if (cmd === 'coming') takeComing(button.dataset.building);
   else if (cmd === 'arm-build') {
     buildType = button.dataset.building;
     state.selectedBuildingId = null;
@@ -961,6 +997,18 @@ function takeSeat(unitId) {
   endArmed = false;
   board.ensureVisible(unit.x, unit.y);
   board.play({ kind: 'beckon', unitId: unit.id, duration: 460 });
+  paint();
+  renderChrome();
+}
+
+function takeComing(buildingId) {
+  const building = state.buildings.find((item) => item.id === buildingId && item.faction === 'olundar');
+  if (!building?.queue?.length || building.turnsLeft > 0) return;
+  state.selectedBuildingId = building.id;
+  state.selectedUnitId = null;
+  buildType = null;
+  endArmed = false;
+  board.ensureVisible(building.x, building.y);
   paint();
   renderChrome();
 }

@@ -401,6 +401,42 @@ button.primary, button.armed {
   color: #2f5a24;
 }
 
+.company button.coming {
+  border-style: dashed;
+  border-color: #8aa04a;
+  background: linear-gradient(180deg, rgba(255, 250, 241, 0.72), rgba(226, 232, 196, 0.9));
+}
+
+.company button.coming .seat-face {
+  opacity: 0.55;
+}
+
+.company button.coming.soon {
+  border-style: solid;
+  border-color: #6f8f2e;
+  box-shadow: 0 0 0 2px #c6d36a;
+}
+
+.company button.coming.soon .seat-face,
+.company button.coming.current .seat-face {
+  opacity: 1;
+}
+
+.company button.coming.current {
+  box-shadow: 0 0 0 2px #c6d36a, inset 0 0 0 99px rgba(143, 206, 98, 0.18);
+}
+
+.company .seat-soon {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.16rem;
+  z-index: 1;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #2f5a24;
+}
+
 .company em {
   font-style: normal;
   max-width: 100%;
