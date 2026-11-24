@@ -38,7 +38,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -192,7 +192,11 @@ function orderGlance() {
     const enemy = unitAt(state, hover.x, hover.y);
     if (enemy && enemy.id !== unit.id) {
       const forecast = forecastUnitAttack(state, unit.id, enemy.id);
-      if (forecast.ok) parts.push(forecast.lethal ? `${forecast.damage} damage, falls` : `${forecast.damage} damage, ${forecast.targetHpAfter} left`);
+      if (forecast.ok) {
+        const blow = forecast.lethal ? `${forecast.damage} damage, falls` : `${forecast.damage} damage, ${forecast.targetHpAfter} left`;
+        const why = coverClause(forecast);
+        parts.push(why ? `${blow} · ${why}` : blow);
+      }
     }
     const structure = state.buildings.find((item) => item.x === hover.x && item.y === hover.y && item.type !== 'road');
     if (structure) {

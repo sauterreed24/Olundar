@@ -40,7 +40,7 @@ const MATERIAL_SPEC = {
   marsh: { base: '#6e8a40', dark: '#3e5424', light: '#c5d67a', deep: '#2c3e1c', grain: 'mud' },
   ruins: { base: '#cbb892', dark: '#8d7350', light: '#f3e6cc', deep: '#6e5a3c', grain: 'dust' },
   blight: { base: '#4a3c5e', dark: '#2a2038', light: '#8d7aa8', deep: '#1a1424', grain: 'crack' },
-  fog: { base: '#3a322a', dark: '#241c16', light: '#5a4c40', deep: '#1a1410', grain: 'mist' }
+  fog: { base: '#8d7356', dark: '#6d5842', light: '#e7d3b0', deep: '#5c4634', grain: 'vellum' }
 };
 
 const FACTION_INK = Object.fromEntries(Object.values(FACTIONS).map((faction) => [faction.id, faction.color || '#f0c866']));
@@ -570,7 +570,10 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const strike = hoverStrike(state, selectedUnit, hover.x, hover.y);
     if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
   }
-  if (hover) drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
+  if (hover) {
+    drawCoverMark(ctx, frame, state, hover);
+    drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
+  }
 }
 
 function paintMarches(ctx, state, frame) {
@@ -763,12 +766,13 @@ function stampPhoto(ctx, kind, rect, frame) {
 }
 
 function veilTile(ctx, rect, seen, kind, x, y) {
+  if (kind === 'fog') return;
   const region = (hash(Math.floor(x / 4), Math.floor(y / 4)) % 9) / 100;
   const wash = terrainPhotos[kind] ? 0.28 : 1;
   ctx.fillStyle = region > 0.04 ? `rgba(255, 246, 220, ${region * 0.45 * wash})` : `rgba(36, 24, 12, ${(0.05 - region) * wash})`;
   ctx.fillRect(rect.x, rect.y, rect.s + 1.2, rect.s + 1.2);
   if (!seen) {
-    ctx.fillStyle = 'rgba(28, 20, 14, 0.38)';
+    ctx.fillStyle = 'rgba(42, 30, 18, 0.28)';
     ctx.fillRect(rect.x, rect.y, rect.s + 1.2, rect.s + 1.2);
   }
 }
@@ -787,6 +791,11 @@ function buildMaterials() {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = spec.base;
     ctx.fillRect(0, 0, MATERIAL_SIZE, MATERIAL_SIZE);
+    if (kind === 'fog') {
+      paintGrain(ctx, spec);
+      set[kind] = canvas;
+      continue;
+    }
     for (let i = 0; i < 48; i += 1) {
       const px = hash(i + kind.length * 13, 4) % MATERIAL_SIZE;
       const py = hash(9, i + kind.length) % MATERIAL_SIZE;
@@ -848,6 +857,10 @@ function paintGrain(ctx, spec) {
       ctx.ellipse(hash(i, 40) % MATERIAL_SIZE, hash(41, i) % MATERIAL_SIZE, 16, 8, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  } else if (spec.grain === 'vellum') {
+    ctx.fillStyle = spec.light;
+    ctx.globalAlpha = 0.04;
+    ctx.fillRect(0, 0, MATERIAL_SIZE, MATERIAL_SIZE);
   } else if (spec.grain === 'crack') {
     ctx.strokeStyle = '#d8ff9a';
     ctx.globalAlpha = 0.22;
@@ -869,8 +882,14 @@ function paintGrain(ctx, spec) {
   ctx.restore();
 }
 
+function edgeHidden(state, x, y) {
+  return !inBounds(x, y) || !isRevealed(state, x, y);
+}
+
 function drawKnownEdge(ctx, state, rect, x, y) {
-  const depth = rect.s * 0.28;
+  const depth = rect.s * 0.96;
+  const ink = 'rgba(141, 115, 86, 0.94)';
+  const clear = 'rgba(141, 115, 86, 0)';
   const edges = [
     [0, -1, rect.x, rect.y, rect.s, depth],
     [0, 1, rect.x, rect.y + rect.s - depth, rect.s, depth],
@@ -878,15 +897,25 @@ function drawKnownEdge(ctx, state, rect, x, y) {
     [1, 0, rect.x + rect.s - depth, rect.y, depth, rect.s]
   ];
   for (const [dx, dy, ex, ey, ew, eh] of edges) {
-    if (inBounds(x + dx, y + dy) && isRevealed(state, x + dx, y + dy)) continue;
+    if (!edgeHidden(state, x + dx, y + dy)) continue;
     const vertical = dy !== 0;
     const g = vertical
       ? ctx.createLinearGradient(0, dy < 0 ? ey : ey + eh, 0, dy < 0 ? ey + eh : ey)
       : ctx.createLinearGradient(dx < 0 ? ex : ex + ew, 0, dx < 0 ? ex + ew : ex, 0);
-    g.addColorStop(0, 'rgba(12, 8, 6, 0.72)');
-    g.addColorStop(1, 'rgba(12, 8, 6, 0)');
+    g.addColorStop(0, ink);
+    g.addColorStop(1, clear);
     ctx.fillStyle = g;
     ctx.fillRect(ex, ey, ew, eh);
+  }
+  for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    if (!edgeHidden(state, x + dx, y) || !edgeHidden(state, x, y + dy)) continue;
+    const cx = dx < 0 ? rect.x : rect.x + rect.s;
+    const cy = dy < 0 ? rect.y : rect.y + rect.s;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, depth);
+    g.addColorStop(0, ink);
+    g.addColorStop(1, clear);
+    ctx.fillStyle = g;
+    ctx.fillRect(dx < 0 ? rect.x : rect.x + rect.s - depth, dy < 0 ? rect.y : rect.y + rect.s - depth, depth, depth);
   }
 }
 
@@ -2058,6 +2087,22 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+export function coverClause(forecast) {
+  if (!forecast?.ok) return '';
+  const bits = [];
+  if (forecast.armor) bits.push(`armor ${forecast.armor}`);
+  if (forecast.terrainDefense > 0) bits.push(`holds ${forecast.terrainDefense}`);
+  else if (forecast.terrainDefense < 0) bits.push('bare ground');
+  if (forecast.fortified) bits.push(`guard ${forecast.fortified}`);
+  return bits.join(', ');
+}
+
+function coverWord(defense) {
+  if (defense > 0) return `holds ${defense}`;
+  if (defense < 0) return 'bare ground';
+  return '';
+}
+
 export function hoverSummary(state, tile, field) {
   if (!tile) return 'Select a unit, then choose a highlighted tile.';
   if (!isRevealed(state, tile.x, tile.y)) return `Unexplored ${tile.x},${tile.y}`;
@@ -2066,8 +2111,34 @@ export function hoverSummary(state, tile, field) {
   const unit = isVisible(state, tile.x, tile.y) ? state.units.find((item) => item.x === tile.x && item.y === tile.y) : null;
   const building = isVisible(state, tile.x, tile.y) ? state.buildings.find((item) => item.x === tile.x && item.y === tile.y && item.type !== 'road') : null;
   const parts = [`${terrain.name} ${tile.x},${tile.y}`];
+  const cover = coverWord(terrain.defense || 0);
+  if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
   if (unit) parts.push(unit.name);
   if (building) parts.push(building.name);
   return parts.join(' · ');
+}
+
+function drawCoverMark(ctx, frame, state, hover) {
+  if (!isRevealed(state, hover.x, hover.y)) return;
+  const defense = TERRAIN[tileAt(state, hover.x, hover.y).terrain]?.defense || 0;
+  if (!defense) return;
+  const rect = tileRect(frame, hover.x, hover.y);
+  const r = Math.max(7, rect.s * 0.13);
+  const cx = rect.x + rect.s * 0.18;
+  const cy = rect.y + rect.s * 0.18;
+  ctx.save();
+  ctx.fillStyle = defense > 0 ? 'rgba(255, 246, 224, 0.94)' : 'rgba(159, 45, 34, 0.92)';
+  ctx.strokeStyle = defense > 0 ? '#6a4a28' : '#fff6e0';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = defense > 0 ? '#3a2416' : '#fff6e0';
+  ctx.font = `700 ${Math.max(10, Math.round(r * 1.15))}px Palatino, Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(defense > 0 ? String(defense) : '−', cx, cy + 0.5);
+  ctx.restore();
 }
