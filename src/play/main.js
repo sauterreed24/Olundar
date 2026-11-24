@@ -247,7 +247,7 @@ function selectedGlance() {
     if (approach && building) {
       return approach.cost > 0
         ? `${base} · ${approach.cost} to ${building.name}`
-        : `${base} · beside ${building.name}`;
+        : `${base} · ${besidePhrase(building)}`;
     }
     return `${base} · ${unit.x},${unit.y}`;
   }
@@ -260,6 +260,17 @@ function selectedGlance() {
     return parts.join(' · ');
   }
   return owingPhrase() || 'Select a unit, then choose a highlighted tile.';
+}
+
+function besidePhrase(building) {
+  const income = incomeForBuilding(state, building);
+  const yieldText = Object.entries(income)
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id, amount]) => `${id} +${amount}`)
+    .join(', ');
+  return yieldText ? `beside ${building.name} · ${yieldText}` : `beside ${building.name}`;
 }
 
 function owingPhrase() {
@@ -535,6 +546,7 @@ function unitCard(unit) {
       ${upkeepLine(def)}
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
       ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
+      ${stoodNote(unit)}
       ${threatLine(unit)}
       ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
       ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
@@ -546,6 +558,13 @@ function unitCard(unit) {
       </div>
     </section>
   `;
+}
+
+function stoodNote(unit) {
+  const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
+  const approach = approachFor(state, unit, building);
+  if (!approach || approach.cost > 0 || !building) return '';
+  return `<p class="note">Stands beside ${escapeHtml(building.name)}.</p>`;
 }
 
 function stepUpButton(unit) {
@@ -560,7 +579,7 @@ function stepUp() {
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
   const approach = approachFor(state, unit, building);
   if (!unit || !approach || approach.cost < 1) return;
-  run(moveCommand(unit.id, approach.x, approach.y));
+  run(moveCommand(unit.id, approach.x, approach.y), { stay: true });
 }
 
 function buildingCard(building) {
@@ -846,7 +865,9 @@ function isEnemyTile(attacker, target) {
   return distance > 0 && distance <= def.range;
 }
 
-function run(command) {
+function run(command, options = {}) {
+  const stayId = options.stay ? state.selectedUnitId : null;
+  const stayBuilding = options.stay ? state.selectedBuildingId : null;
   const scouted = command.type === 'move' ? scoutMemory(state) : null;
   const cue = motionCue(command);
   const result = executePlayerCommand(state, command);
@@ -871,7 +892,13 @@ function run(command) {
       state.selectedUnitId = null;
       state.selectedBuildingId = result.building.id;
       buildType = null;
-    } else if (!opened.length && !sighted.length) nextUnit = handOffSpentUnit();
+    } else if (!options.stay && !opened.length && !sighted.length) nextUnit = handOffSpentUnit();
+  }
+  if (options.stay && result?.ok !== false && stayId) {
+    state.selectedUnitId = stayId;
+    state.selectedBuildingId = stayBuilding;
+    const held = state.buildings.find((building) => building.id === stayBuilding);
+    if (held) text = `${text} Stands beside ${held.name}.`;
   }
   if (nextUnit) text = `${text} ${nextUnit.name} is next.`;
   notice(text, result?.ok === false ? 'bad' : 'good');

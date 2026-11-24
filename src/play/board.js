@@ -636,7 +636,8 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   } else if (!buildType && selectedUnit && selectedBuildingId) {
     const building = state.buildings.find((item) => item.id === selectedBuildingId);
     const approach = approachFromField(field, selectedUnit, building);
-    if (approach?.path?.length > 1) {
+    if (approach?.cost === 0) drawApproachMark(ctx, frame, selectedUnit.x, selectedUnit.y);
+    else if (approach?.path?.length > 1) {
       drawMovePath(ctx, frame, approach.path, field);
       drawApproachMark(ctx, frame, approach.x, approach.y);
       drawMarchCost(ctx, frame, approach.x, approach.y, approach.cost, false);
@@ -2495,8 +2496,10 @@ export function traceMovePath(field, origin, x, y) {
 }
 
 export function approachFor(state, unit, building) {
-  if (!unit || !building || unit.hasActed || unit.faction !== 'olundar') return null;
-  return approachFromField(movementField(state, unit), unit, building);
+  if (!unit || !building || unit.faction !== 'olundar') return null;
+  const approach = approachFromField(movementField(state, unit), unit, building);
+  if (!approach || (unit.hasActed && approach.cost > 0)) return null;
+  return approach;
 }
 
 function approachFromField(field, unit, building) {
