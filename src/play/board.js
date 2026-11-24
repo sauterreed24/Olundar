@@ -734,6 +734,14 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
+function sharesYield(state, selected, other) {
+  if (!selected || !other || other.id === selected.id) return false;
+  if (other.faction !== 'olundar' || other.turnsLeft > 0 || other.type === 'road') return false;
+  const ours = incomeForBuilding(state, selected);
+  const theirs = incomeForBuilding(state, other);
+  return Object.keys(ours).some((key) => (ours[key] || 0) > 0 && (theirs[key] || 0) > 0);
+}
+
 function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null, dawn = [], selectedBuilding = null) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
@@ -812,6 +820,11 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
     ctx.strokeStyle = '#fff6d8';
     ctx.lineWidth = Math.max(1.6, frame.dpr);
     ctx.strokeRect(x0 + selectedBuilding.x * scale - 2.2, y0 + selectedBuilding.y * scale - 2.2, scale + 4.4, scale + 4.4);
+    ctx.fillStyle = '#f3d48a';
+    for (const building of state.buildings) {
+      if (!sharesYield(state, selectedBuilding, building) || !isRevealed(state, building.x, building.y)) continue;
+      ctx.fillRect(x0 + building.x * scale, y0 + building.y * scale, scale + 0.4, scale + 0.4);
+    }
   }
   ctx.strokeStyle = '#f3d48a';
   ctx.lineWidth = Math.max(1.4, frame.dpr);
