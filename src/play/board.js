@@ -1500,8 +1500,26 @@ function drawBuilding(ctx, frame, building, selected, seen, pending = 0, yieldTe
       ctx.arc(s * 0.5, s * 0.62, s * (0.4 - amount * 0.16), 0, Math.PI * 2);
       ctx.stroke();
     }
-  } else drawYieldChip(ctx, s, yieldText);
+  } else {
+    drawMusterGhost(ctx, s, building);
+    drawYieldChip(ctx, s, yieldText);
+  }
   if (selected) drawBrackets(ctx, { x: s * 0.04, y: s * 0.04, s: s * 0.92 }, '#f4d48a', 0.02);
+  ctx.restore();
+}
+
+function drawMusterGhost(ctx, s, building) {
+  const current = building.queue?.[0];
+  if (!current || building.turnsLeft > 0) return;
+  ctx.save();
+  ctx.translate(s * 0.58, s * 0.4);
+  ctx.scale(0.4, 0.4);
+  ctx.globalAlpha *= 0.9;
+  ctx.fillStyle = 'rgba(16, 10, 6, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.86, s * 0.22, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+  drawUnitSprite(ctx, { type: current.unitType, faction: building.faction }, s);
   ctx.restore();
 }
 
