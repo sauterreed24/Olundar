@@ -16,6 +16,7 @@ import {
   isEnemy,
   isRevealed,
   isVisible,
+  incomeForBuilding,
   moveCostFor,
   tileAt
 } from '../rules.js';
@@ -562,7 +563,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   for (const prop of props) {
     if (prop.building) {
       const loss = strike && prop.building.x === strike.x && prop.building.y === strike.y ? strike.damage : 0;
-      drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y), loss);
+      drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y), loss, yieldLabel(state, prop.building));
     } else {
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
       const aim = prop.unit.id === selectedUnit?.id ? hover : null;
@@ -1272,7 +1273,7 @@ function drawBuildingSprite(ctx, type, s) {
   return true;
 }
 
-function drawBuilding(ctx, frame, building, selected, seen, pending = 0) {
+function drawBuilding(ctx, frame, building, selected, seen, pending = 0, yieldText = '') {
   const rect = tileRect(frame, building.x, building.y);
   const color = FACTION_INK[building.faction] || '#f0c866';
   const s = rect.s;
@@ -1296,6 +1297,7 @@ function drawBuilding(ctx, frame, building, selected, seen, pending = 0) {
     if (building.upgraded) drawFinial(ctx, s * 0.5, s * 0.18, s);
   }
   drawHealthPip(ctx, s * 0.22, s * 0.93, s * 0.56, Math.max(4, s * 0.055), building.hp / building.maxHp, pending / building.maxHp);
+  drawYieldChip(ctx, s, yieldText);
   if (building.turnsLeft > 0) drawScaffold(ctx, s);
   if (selected) drawBrackets(ctx, { x: s * 0.04, y: s * 0.04, s: s * 0.92 }, '#f4d48a', 0.02);
   ctx.restore();
@@ -2209,8 +2211,42 @@ export function hoverSummary(state, tile, field) {
   if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
   if (unit) parts.push(unit.name);
-  if (building) parts.push(building.name);
+  if (building) {
+    parts.push(building.name);
+    const yieldText = yieldLabel(state, building, 4);
+    if (yieldText) parts.push(yieldText);
+  }
   return parts.join(' · ');
+}
+
+function yieldLabel(state, building, limit = 1) {
+  if (!building || building.type === 'road') return '';
+  if (building.turnsLeft > 0) return `in ${building.turnsLeft}`;
+  const income = incomeForBuilding(state, building);
+  const entries = Object.entries(income).filter(([, amount]) => amount).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  return entries.slice(0, limit).map(([id, amount]) => `${id} ${amount > 0 ? '+' : ''}${amount}`).join(', ');
+}
+
+function drawYieldChip(ctx, s, label) {
+  if (!label) return;
+  const size = Math.max(10, Math.round(s * 0.15));
+  ctx.save();
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const width = Math.min(s * 0.98, ctx.measureText(label).width + size * 0.85);
+  const height = size + 3;
+  const left = (s - width) / 2;
+  const top = s * 0.98 - height;
+  ctx.fillStyle = 'rgba(255, 246, 224, 0.94)';
+  ctx.strokeStyle = '#6a4a28';
+  ctx.lineWidth = 1;
+  roundRect(ctx, left, top, width, height, 3);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#3a2416';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, left + width / 2, top + height / 2 + 0.5);
+  ctx.restore();
 }
 
 function drawCoverMark(ctx, frame, state, hover) {

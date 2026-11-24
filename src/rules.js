@@ -3817,7 +3817,7 @@ function processEconomy(state) {
   }
 }
 
-function incomeForBuilding(state, building) {
+export function incomeForBuilding(state, building) {
   const def = getBuildingDef(building);
   const income = { ...def.income };
   const tile = tileAt(state, building.x, building.y);
