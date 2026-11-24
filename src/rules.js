@@ -3055,7 +3055,7 @@ export function fortifyUnit(state, unitId) {
   unit.fortified = Math.min(2, unit.fortified + 1);
   unit.hasActed = true;
   addMessage(state, `${unit.name} fortifies and gains defensive armor until it moves.`, 'info');
-  return { ok: true };
+  return { ok: true, reason: `${unit.name} holds. Guard ${unit.fortified}.` };
 }
 
 export function forecastUnitAttack(state, attackerId, defenderId) {

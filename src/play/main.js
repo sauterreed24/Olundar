@@ -161,10 +161,11 @@ function companyRoster() {
   const company = olundarCompany(state);
   if (!company.length) return '';
   return `<div class="company">${company.map((unit, index) => {
-    const classes = [unit.hasActed ? 'spent' : 'ready', unit.id === state.selectedUnitId ? 'current' : ''].filter(Boolean).join(' ');
+    const classes = [unit.hasActed ? 'spent' : 'ready', unit.id === state.selectedUnitId ? 'current' : '', unit.fortified > 0 ? 'guard' : ''].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
-    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}">${key}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
+    const guard = unit.fortified > 0 ? `<span class="seat-guard">${unit.fortified}</span>` : '';
+    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}">${key}${guard}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
   }).join('')}</div>`;
 }
 
@@ -931,6 +932,12 @@ function onKey(event) {
       takeSeat(unit.id);
       event.preventDefault();
     }
+    return;
+  }
+  if ((event.key === 'f' || event.key === 'F') && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    const selected = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar');
+    if (selected) run(fortifyCommand(selected.id));
+    event.preventDefault();
     return;
   }
   if (event.key === 'e' || event.key === 'E') requestEndTurn();

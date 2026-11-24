@@ -323,6 +323,21 @@ button.primary, button.armed {
   color: #6a4420;
 }
 
+.company .seat-guard {
+  position: absolute;
+  top: 0.12rem;
+  right: 0.22rem;
+  z-index: 1;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #8a5a18;
+}
+
+.company button.guard {
+  box-shadow: inset 0 -3px 0 #e2b15a;
+}
+
 .company button.ready {
   border-color: #a56b28;
 }
@@ -333,6 +348,10 @@ button.primary, button.armed {
 
 .company button.current {
   box-shadow: 0 0 0 1px #e2b15a, inset 0 0 0 99px rgba(226, 177, 90, 0.16);
+}
+
+.company button.current.guard {
+  box-shadow: 0 0 0 1px #e2b15a, inset 0 -3px 0 #c9853a, inset 0 0 0 99px rgba(226, 177, 90, 0.16);
 }
 
 .company em {
