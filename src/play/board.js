@@ -20,6 +20,7 @@ import {
   isVisible,
   incomeForBuilding,
   moveCostFor,
+  olundarCompany,
   tileAt
 } from '../rules.js';
 
@@ -572,6 +573,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     props.push({ rank: 1, x: place.x, y: place.y, unit, place });
   }
   props.sort((a, b) => a.y - b.y || a.x - b.x || a.rank - b.rank);
+  const seats = new Map(olundarCompany(state).map((unit, index) => [unit.id, index + 1]));
   for (const prop of props) {
     if (prop.building) {
       const loss = strike && prop.building.x === strike.x && prop.building.y === strike.y ? strike.damage : 0;
@@ -580,7 +582,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
       const aim = prop.unit.id === selectedUnit?.id ? hover : null;
       const loss = strike && prop.unit.x === strike.x && prop.unit.y === strike.y ? strike.damage : 0;
-      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim, loss);
+      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim, loss, seats.get(prop.unit.id) || 0);
     }
   }
   paintImpacts(ctx, frame);
@@ -1958,7 +1960,7 @@ function faceOf(unit, aim) {
   return facing.get(unit.id) || -1;
 }
 
-function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, pending = 0) {
+function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, pending = 0, seat = 0) {
   const spot = place || { x: unit.x, y: unit.y };
   const rect = tileRectAt(frame, spot.x, spot.y);
   const s = rect.s;
@@ -1996,6 +1998,7 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
   }
   drawUnitSprite(ctx, unit, s);
   ctx.restore();
+  if (seat) drawCompanyMark(ctx, s, seat, selected);
   if (arrive) {
     const amount = motionAmount(arrive);
     ctx.strokeStyle = unit.faction === 'olundar' ? `rgba(240, 200, 102, ${1 - amount})` : `rgba(156, 243, 138, ${1 - amount})`;
@@ -2056,6 +2059,28 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
     const glow = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(frameNow / 180));
     drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, `rgba(244, 212, 138, ${glow})`, 0);
   }
+  ctx.restore();
+}
+
+function drawCompanyMark(ctx, s, seat, selected) {
+  const size = Math.max(12, Math.round(s * 0.22));
+  ctx.save();
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const label = String(seat);
+  const width = ctx.measureText(label).width + size * 0.85;
+  const height = size + 3;
+  const left = s * 0.04;
+  const top = s * 0.02;
+  ctx.fillStyle = selected ? '#fff6d8' : 'rgba(255, 246, 224, 0.94)';
+  ctx.strokeStyle = selected ? '#a56b28' : '#5c3a22';
+  ctx.lineWidth = selected ? 2.5 : 1.25;
+  roundRect(ctx, left, top, width, height, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#3a2416';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, left + width / 2, top + height / 2 + 0.5);
   ctx.restore();
 }
 
