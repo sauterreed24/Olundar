@@ -883,7 +883,11 @@ function worksLine(ids) {
   for (const id of ids) {
     const building = state.buildings.find((item) => item.id === id);
     if (!building) continue;
-    parts.push(building.turnsLeft > 0 ? `${building.name} rises in ${building.turnsLeft}` : `${building.name} stands`);
+    if (building.turnsLeft > 0) parts.push(`${building.name} rises in ${building.turnsLeft}`);
+    else {
+      const paid = holdingLine(state, building);
+      parts.push(paid ? `${building.name} stands, ${paid}` : `${building.name} stands`);
+    }
   }
   return parts.join('. ');
 }
