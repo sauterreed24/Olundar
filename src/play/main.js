@@ -533,6 +533,7 @@ function unitCard(unit) {
   const mine = unit.faction === 'olundar';
   const seat = companySeat(state, unit);
   const role = seat ? `Seat ${seat} · ${def.role}` : def.role;
+  const held = heldBuilding(unit);
   return `
     <section class="card unit-card">
       <div class="unit-head">
@@ -552,14 +553,14 @@ function unitCard(unit) {
       <p>${escapeHtml(def.text)}</p>
       ${upkeepLine(def)}
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
-      ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
+      ${unit.fortified > 0 ? `<p class="note">${held ? `Holds ${escapeHtml(held.name)} until this unit moves or strikes.` : 'Fortified. The guard holds until this unit moves or strikes.'}</p>` : ''}
       ${stoodNote(unit)}
       ${threatLine(unit)}
       ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
       ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? stepUpButton(unit) : ''}
-        ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
+        ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">${held ? `Hold ${escapeHtml(held.name)}` : 'Fortify'}</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
         ${buildType ? `<button type="button" data-cmd="cancel-build">Cancel build</button>` : ''}
       </div>
@@ -567,11 +568,24 @@ function unitCard(unit) {
   `;
 }
 
-function stoodNote(unit) {
+function heldBuilding(unit) {
+  if (!unit || unit.faction !== 'olundar') return null;
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
   const approach = approachFor(state, unit, building);
-  if (!approach || approach.cost > 0 || !building) return '';
+  if (!approach || approach.cost > 0 || !building) return null;
+  return building;
+}
+
+function stoodNote(unit) {
+  const building = heldBuilding(unit);
+  if (!building || unit.fortified > 0) return '';
   return `<p class="note">Stands beside ${escapeHtml(building.name)}.</p>`;
+}
+
+function fortifySelected() {
+  const unit = state.units.find((item) => item.id === state.selectedUnitId && item.faction === 'olundar');
+  if (!unit || unit.hasActed) return;
+  run(fortifyCommand(unit.id), heldBuilding(unit) ? { stay: true } : {});
 }
 
 function stepUpButton(unit) {
@@ -733,7 +747,7 @@ function onDockClick(event) {
     renderDock();
     return;
   }
-  if (cmd === 'fortify') run(fortifyCommand(state.selectedUnitId));
+  if (cmd === 'fortify') fortifySelected();
   else if (cmd === 'step-up') stepUp();
   else if (cmd === 'seat') takeSeat(button.dataset.unit);
   else if (cmd === 'coming') takeComing(button.dataset.building);
@@ -1236,7 +1250,7 @@ function onKey(event) {
   }
   if ((event.key === 'f' || event.key === 'F') && !event.metaKey && !event.ctrlKey && !event.altKey) {
     const selected = state.units.find((unit) => unit.id === state.selectedUnitId && unit.faction === 'olundar');
-    if (selected) run(fortifyCommand(selected.id));
+    if (selected) fortifySelected();
     event.preventDefault();
     return;
   }
