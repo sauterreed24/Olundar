@@ -539,12 +539,28 @@ function unitCard(unit) {
       ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
       ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
       <div class="actions">
+        ${mine && !unit.hasActed ? stepUpButton(unit) : ''}
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
         ${buildType ? `<button type="button" data-cmd="cancel-build">Cancel build</button>` : ''}
       </div>
     </section>
   `;
+}
+
+function stepUpButton(unit) {
+  const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
+  const approach = approachFor(state, unit, building);
+  if (!approach || approach.cost < 1 || !building) return '';
+  return `<button type="button" data-cmd="step-up">Step up · ${approach.cost}</button>`;
+}
+
+function stepUp() {
+  const unit = state.units.find((item) => item.id === state.selectedUnitId);
+  const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
+  const approach = approachFor(state, unit, building);
+  if (!unit || !approach || approach.cost < 1) return;
+  run(moveCommand(unit.id, approach.x, approach.y));
 }
 
 function buildingCard(building) {
@@ -692,6 +708,7 @@ function onDockClick(event) {
     return;
   }
   if (cmd === 'fortify') run(fortifyCommand(state.selectedUnitId));
+  else if (cmd === 'step-up') stepUp();
   else if (cmd === 'seat') takeSeat(button.dataset.unit);
   else if (cmd === 'coming') takeComing(button.dataset.building);
   else if (cmd === 'arm-build') {

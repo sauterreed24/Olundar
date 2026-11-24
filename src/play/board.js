@@ -638,6 +638,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const approach = approachFromField(field, selectedUnit, building);
     if (approach?.path?.length > 1) {
       drawMovePath(ctx, frame, approach.path, field);
+      drawApproachMark(ctx, frame, approach.x, approach.y);
       drawMarchCost(ctx, frame, approach.x, approach.y, approach.cost, false);
     }
   }
@@ -2340,6 +2341,17 @@ function drawMoveGhost(ctx, frame, unit, hover, seat, exposed = false) {
     ctx.fill();
   }
   if (seat) drawCompanyMark(ctx, s, seat, true);
+  ctx.restore();
+}
+
+function drawApproachMark(ctx, frame, x, y) {
+  const rect = tileRect(frame, x, y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(226, 177, 90, 0.95)';
+  ctx.lineWidth = Math.max(2, rect.s * 0.05);
+  ctx.beginPath();
+  ctx.arc(rect.x + rect.s * 0.5, rect.y + rect.s * 0.62, rect.s * 0.36, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
