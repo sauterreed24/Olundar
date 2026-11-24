@@ -135,6 +135,7 @@ function renderChrome() {
     .join('') + resourceChip('people', `${player.population}/${player.housing}`, 'People');
   document.querySelector('#audioTop').textContent = audioIsEnabled() ? 'Audio on' : 'Audio';
   document.querySelector('#endTurn').textContent = endArmed ? 'End turn now' : 'End turn';
+  document.querySelector('#endTurn').title = endArmed ? owingPhrase() : '';
   renderDock();
 }
 
@@ -231,8 +232,27 @@ function selectedGlance() {
     const extra = holdingLine(state, building);
     return extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`;
   }
-  const ready = getReadyOlundarUnits(state).length;
-  return ready ? `${ready} gold pennants still owe an order.` : 'Select a unit, then choose a highlighted tile.';
+  return owingPhrase() || 'Select a unit, then choose a highlighted tile.';
+}
+
+function owingPhrase() {
+  const company = olundarCompany(state);
+  const owing = company.filter((unit) => !unit.hasActed);
+  if (!owing.length) return '';
+  const shown = owing.slice(0, 4).map((unit) => {
+    const index = company.indexOf(unit);
+    const short = unit.name.split(' ').slice(-1)[0];
+    return index < 9 ? `${index + 1} ${short}` : short;
+  });
+  const rest = owing.length - shown.length;
+  const list = rest > 0 ? `${shown.join(', ')}, and ${rest} more` : spokenList(shown);
+  return `${list} still ${owing.length === 1 ? 'owes' : 'owe'} an order.`;
+}
+
+function spokenList(items) {
+  if (items.length <= 1) return items[0] || '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
 function resourceChip(id, value, label) {
@@ -346,8 +366,9 @@ function fieldTab() {
     return `<section class="card"><h2>${state.status === 'won' ? 'Olundar stands' : 'Olundar has fallen'}</h2><p>Start a new campaign or load a saved one.</p></section>`;
   }
   if (!unit && !building) {
-    const ready = getReadyOlundarUnits(state).length;
-    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Books next turn: ${escapeHtml(booksLine())}.</p><p class="note">Gold pennants still owe an order. Gold steps are walks, crimson steps are exposed, and a red bracket can be struck.</p>${buildHint()}</section>`;
+    const owed = owingPhrase();
+    const line = owed ? `${owed} Press a seat, or N.` : 'The company has spent its orders.';
+    return `<section class="card"><h2>The valley holds</h2><p>${escapeHtml(line)}</p><p class="note">Books next turn: ${escapeHtml(booksLine())}.</p><p class="note">Gold pennants still owe an order. Gold steps are walks, crimson steps are exposed, and a red bracket can be struck.</p>${buildHint()}</section>`;
   }
   if (unit) return unitCard(unit);
   return buildingCard(building);
@@ -915,7 +936,7 @@ function requestEndTurn() {
   const warnings = getEndTurnWarnings(state);
   if (warnings.length && !endArmed) {
     endArmed = true;
-    notice(warnings[0], 'info');
+    notice(owingPhrase() || warnings[0], 'info');
     renderChrome();
     return;
   }
