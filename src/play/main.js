@@ -854,14 +854,43 @@ function playEnemyMarch(before) {
   return visibleMarchAnchor(state, moves);
 }
 
-function playArrivals(before) {
-  const arrived = [];
-  for (const unit of state.units) {
-    if (before.some((item) => item.id === unit.id)) continue;
-    board.play({ kind: 'arrive', unitId: unit.id, duration: 700 });
-    arrived.push(unit);
+function playArrivals(before, halls = []) {
+  const arrived = state.units.filter((unit) => !before.some((item) => item.id === unit.id));
+  const walks = musterWalks(arrived, halls);
+  for (const unit of arrived) {
+    const hall = walks.get(unit.id);
+    if (!hall) {
+      board.play({ kind: 'arrive', unitId: unit.id, duration: 700 });
+      continue;
+    }
+    const path = marchPath(hall, unit);
+    const duration = Math.min(860, 240 + path.length * 160);
+    board.play({ kind: 'walk', unitId: unit.id, path, duration });
+    board.play({ kind: 'arrive', unitId: unit.id, duration });
   }
   return arrived;
+}
+
+function musterWalks(units, halls) {
+  const pairs = [];
+  for (const unit of units) {
+    halls.forEach((hall, index) => {
+      if (hall.type !== unit.type || hall.faction !== unit.faction) return;
+      const dist = Math.abs(hall.x - unit.x) + Math.abs(hall.y - unit.y);
+      if (dist > 0 && dist <= 5) pairs.push({ id: unit.id, index, dist });
+    });
+  }
+  pairs.sort((a, b) => a.dist - b.dist || a.index - b.index);
+  const usedUnits = new Set();
+  const usedHalls = new Set();
+  const walks = new Map();
+  for (const pair of pairs) {
+    if (usedUnits.has(pair.id) || usedHalls.has(pair.index)) continue;
+    usedUnits.add(pair.id);
+    usedHalls.add(pair.index);
+    walks.set(pair.id, halls[pair.index]);
+  }
+  return walks;
 }
 
 function arrivalLine(units) {
@@ -885,9 +914,12 @@ function requestEndTurn() {
   const before = state.units.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, type: unit.type, faction: unit.faction }));
   const beforeStores = resourceSnapshot();
   const rising = state.buildings.filter((building) => building.faction === 'olundar' && building.turnsLeft > 0).map((building) => building.id);
+  const halls = state.buildings
+    .filter((building) => building.turnsLeft <= 0 && building.queue?.[0]?.turnsLeft === 1)
+    .map((building) => ({ x: building.x, y: building.y, type: building.queue[0].unitType, faction: building.faction }));
   endTurn(state);
   const watch = playEnemyMarch(before);
-  const arrived = playArrivals(before);
+  const arrived = playArrivals(before, halls);
   const mustered = arrived.filter((unit) => unit.faction === 'olundar');
   freshCompany = new Set(mustered.map((unit) => unit.id));
   if (mustered.length && !watch) {
