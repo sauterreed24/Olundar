@@ -526,7 +526,8 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   for (const [id, cost] of field) {
     const [x, y] = id.split(',').map(Number);
     if (x < x0 || y < y0 || x >= x1 || y >= y1) continue;
-    drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y);
+    const exposed = selectedUnit ? hostsReaching(state, selectedUnit.faction, x, y, selectedUnit.id).length > 0 : false;
+    drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y, exposed);
   }
   if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
     drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y));
@@ -1572,15 +1573,19 @@ function drawFinial(ctx, x, y, s) {
   ctx.fill();
 }
 
-export function visibleThreats(state, unit) {
-  if (!unit) return [];
+export function hostsReaching(state, faction, x, y, ignoreId = null) {
   return state.units.filter((enemy) => {
-    if (enemy.id === unit.id || !isEnemy(state, unit.faction, enemy.faction)) return false;
+    if (enemy.id === ignoreId || !isEnemy(state, faction, enemy.faction)) return false;
     if (!isVisible(state, enemy.x, enemy.y)) return false;
     const range = UNIT_TYPES[enemy.type]?.range || 1;
-    const distance = Math.abs(enemy.x - unit.x) + Math.abs(enemy.y - unit.y);
+    const distance = Math.abs(enemy.x - x) + Math.abs(enemy.y - y);
     return distance > 0 && distance <= range;
   });
+}
+
+export function visibleThreats(state, unit) {
+  if (!unit) return [];
+  return hostsReaching(state, unit.faction, unit.x, unit.y, unit.id);
 }
 
 function drawThreatLines(ctx, frame, threats, unit) {
@@ -1664,6 +1669,13 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) 
   }
   drawUnitSprite(ctx, unit, s);
   ctx.restore();
+  if (unit.fortified > 0) {
+    ctx.strokeStyle = 'rgba(240, 200, 102, 0.92)';
+    ctx.lineWidth = Math.max(2, s * 0.045);
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.52, s * 0.36, Math.PI * 1.12, Math.PI * 1.88);
+    ctx.stroke();
+  }
   if (activeMotion(unit.id, 'brace')) {
     const amount = motionAmount(activeMotion(unit.id, 'brace'));
     ctx.strokeStyle = `rgba(240, 200, 102, ${1 - amount})`;
@@ -1807,13 +1819,15 @@ function drawMovePath(ctx, frame, path) {
   ctx.restore();
 }
 
-function drawMoveMark(ctx, rect, cost, aimed) {
+function drawMoveMark(ctx, rect, cost, aimed, exposed) {
   const r = rect.s * (aimed ? 0.2 : cost <= 1 ? 0.15 : 0.1);
   ctx.save();
   ctx.translate(rect.x + rect.s / 2, rect.y + rect.s * 0.62);
   ctx.rotate(Math.PI / 4);
-  ctx.fillStyle = aimed ? 'rgba(255, 236, 176, 0.95)' : cost <= 1 ? 'rgba(255, 214, 120, 0.78)' : 'rgba(255, 214, 120, 0.42)';
-  ctx.strokeStyle = 'rgba(92, 54, 12, 0.82)';
+  ctx.fillStyle = exposed
+    ? 'rgba(214, 92, 72, 0.72)'
+    : aimed ? 'rgba(255, 236, 176, 0.95)' : cost <= 1 ? 'rgba(255, 214, 120, 0.78)' : 'rgba(255, 214, 120, 0.42)';
+  ctx.strokeStyle = exposed ? 'rgba(120, 24, 18, 0.95)' : 'rgba(92, 54, 12, 0.82)';
   ctx.lineWidth = Math.max(1.25, rect.s * 0.028);
   ctx.beginPath();
   ctx.rect(-r, -r, r * 2, r * 2);

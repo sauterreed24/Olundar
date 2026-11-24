@@ -38,7 +38,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, createBoard, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleThreats } from './board.js';
+import { BUILDING_SPRITE_ORDER, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleThreats } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -179,6 +179,10 @@ function orderGlance() {
   const parts = [hoverSummary(state, hover, field)];
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
   if (!unit || unit.hasActed || unit.faction !== 'olundar') return parts.join(' · ');
+  if (field.has(`${hover.x},${hover.y}`)) {
+    const hosts = hostsReaching(state, unit.faction, hover.x, hover.y, unit.id);
+    parts.push(hosts.length ? `exposed to ${hosts.map((enemy) => enemy.name).join(', ')}` : 'covered');
+  }
   if (isVisible(state, hover.x, hover.y)) {
     const enemy = unitAt(state, hover.x, hover.y);
     if (enemy && enemy.id !== unit.id) {
@@ -252,6 +256,7 @@ function unitCard(unit) {
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
       <p>${escapeHtml(def.text)}</p>
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
+      ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
       ${threatLine(unit)}
       ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. Red ticks are weapon reach. A red bracket can be struck.</p>' : ''}
       <div class="actions">
