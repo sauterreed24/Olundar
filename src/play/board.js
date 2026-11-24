@@ -528,7 +528,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y, exposed);
   }
   if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
-    drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y));
+    drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y), field);
   }
   if (!buildType) drawReach(ctx, state, frame, selectedUnit, x0, y0, x1, y1);
   if (selectedUnit) drawThreatLines(ctx, frame, visibleThreats(state, selectedUnit), selectedUnit);
@@ -542,6 +542,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
   paintDawn(ctx, frame);
+  paintSight(ctx, frame);
 
   const strike = !buildType && selectedUnit && hover ? hoverStrike(state, selectedUnit, hover.x, hover.y) : null;
   const props = [];
@@ -587,6 +588,23 @@ function paintDawn(ctx, frame) {
     for (const tile of motion.tiles) {
       const rect = tileRect(frame, tile.x, tile.y);
       ctx.fillRect(rect.x, rect.y, rect.s, rect.s);
+    }
+  }
+}
+
+function paintSight(ctx, frame) {
+  for (const motion of motions) {
+    if (motion.kind !== 'sight' || !motion.tiles?.length) continue;
+    const amount = motionAmount(motion);
+    const alpha = 1 - amount;
+    if (alpha <= 0.02) continue;
+    ctx.strokeStyle = `rgba(176, 42, 32, ${alpha})`;
+    ctx.lineWidth = Math.max(2, frame.tile * 0.055);
+    for (const tile of motion.tiles) {
+      const rect = tileRect(frame, tile.x, tile.y);
+      ctx.beginPath();
+      ctx.arc(rect.x + rect.s / 2, rect.y + rect.s * 0.46, rect.s * (0.18 + amount * 0.42), 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
 }
@@ -1213,8 +1231,8 @@ function drawRoad(ctx, state, tile, rect, seen) {
     }
     ctx.stroke();
   };
-  trace(Math.max(8, s * 0.42), seen ? '#3f2a16' : '#2c2116');
-  trace(Math.max(5, s * 0.26), seen ? '#c9853a' : '#8a6840');
+  trace(Math.max(6, s * 0.3), seen ? '#3f2a16' : '#2c2116');
+  trace(Math.max(3.5, s * 0.18), seen ? '#c9853a' : '#8a6840');
   trace(Math.max(1.5, s * 0.05), seen ? 'rgba(255, 236, 196, 0.55)' : 'rgba(90, 70, 40, 0.35)');
 }
 
@@ -1884,7 +1902,7 @@ export function traceMovePath(field, origin, x, y) {
   return path.reverse();
 }
 
-function drawMovePath(ctx, frame, path) {
+function drawMovePath(ctx, frame, path, field) {
   if (path.length < 2) return;
   ctx.save();
   ctx.lineCap = 'round';
@@ -1904,6 +1922,29 @@ function drawMovePath(ctx, frame, path) {
   };
   trace(Math.max(5, frame.tile * 0.14), 'rgba(92, 48, 12, 0.85)');
   trace(Math.max(2.5, frame.tile * 0.065), 'rgba(214, 132, 32, 0.96)');
+  path.forEach((step, index) => {
+    if (index === 0) return;
+    const cost = field?.get(`${step.x},${step.y}`);
+    if (!Number.isFinite(cost)) return;
+    const rect = tileRect(frame, step.x, step.y);
+    const label = String(cost);
+    const size = Math.max(11, Math.round(frame.tile * 0.22));
+    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+    const width = ctx.measureText(label).width + size * 0.7;
+    const height = size + 2;
+    const left = rect.x + (rect.s - width) / 2;
+    const top = rect.y + rect.s * 0.28;
+    ctx.fillStyle = 'rgba(255, 246, 224, 0.94)';
+    ctx.strokeStyle = '#6a4a28';
+    ctx.lineWidth = 1;
+    roundRect(ctx, left, top, width, height, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#3a2416';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, left + width / 2, top + height / 2 + 0.5);
+  });
   const last = path[path.length - 1];
   const prev = path[path.length - 2];
   const end = tileRect(frame, last.x, last.y);

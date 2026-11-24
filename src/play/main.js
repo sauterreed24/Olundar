@@ -547,20 +547,22 @@ function run(command) {
   const result = executePlayerCommand(state, command);
   endArmed = false;
   const opened = scouted && result?.ok !== false ? openedGround(state, scouted.ground) : [];
-  const sighted = scouted && result?.ok !== false ? sightedHostNames(state, scouted.hosts) : [];
+  const sighted = scouted && result?.ok !== false ? sightedHosts(state, scouted.hosts) : [];
   let text = result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.');
-  if (opened.length || sighted.length) {
+  if (opened.length || sighted.length || result?.ruinWhisper) {
     const extra = [];
     if (opened.length) extra.push(`${opened.length} new ground`);
-    if (sighted.length) extra.push(`${sighted.join(', ')} sighted`);
+    if (sighted.length) extra.push(`${sighted.map((unit) => unit.name).join(', ')} sighted`);
+    if (result?.ruinWhisper) extra.push(result.ruinWhisper.echo ? 'a ruin whispers' : 'ruins surveyed');
     text = `${text} ${extra.join('. ')}.`;
   }
   notice(text, result?.ok === false ? 'bad' : 'good');
   if (result?.ok !== false) {
     if (opened.length) board.play({ kind: 'dawn', tiles: opened, duration: 760 });
+    if (sighted.length) board.play({ kind: 'sight', tiles: sighted.map((unit) => ({ x: unit.x, y: unit.y })), duration: 880 });
     playAudioCue('ui');
     playCue(cue, result);
-    if (!opened.length) handOffSpentUnit();
+    if (!opened.length && !sighted.length) handOffSpentUnit();
   }
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);
@@ -594,10 +596,8 @@ function openedGround(state, before) {
   return tiles;
 }
 
-function sightedHostNames(state, before) {
-  return state.units
-    .filter((unit) => isEnemy(state, 'olundar', unit.faction) && isVisible(state, unit.x, unit.y) && !before.has(unit.id))
-    .map((unit) => unit.name);
+function sightedHosts(state, before) {
+  return state.units.filter((unit) => isEnemy(state, 'olundar', unit.faction) && isVisible(state, unit.x, unit.y) && !before.has(unit.id));
 }
 
 function motionCue(command) {
