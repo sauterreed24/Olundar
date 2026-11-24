@@ -207,7 +207,7 @@ function fieldTab() {
   }
   if (!unit && !building) {
     const ready = getReadyOlundarUnits(state).length;
-    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold marks show where that unit can walk. A red bracket means it can strike.</p>${buildHint()}</section>`;
+    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold marks show where that unit can walk. Red ticks show weapon reach. A red bracket can be struck.</p>${buildHint()}</section>`;
   }
   if (unit) return unitCard(unit);
   return buildingCard(building);
@@ -244,7 +244,7 @@ function unitCard(unit) {
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
       <p>${escapeHtml(def.text)}</p>
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
-      ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. A red bracket can be attacked.</p>' : ''}
+      ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. Red ticks are weapon reach. A red bracket can be struck.</p>' : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}

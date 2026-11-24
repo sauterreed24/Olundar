@@ -65,6 +65,7 @@ const terrainPhotos = {};
 let artEpoch = 0;
 let materialSet = null;
 const motions = [];
+const facing = new Map();
 let frameNow = 0;
 let rafId = 0;
 let repaint = null;
@@ -530,6 +531,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
     drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y));
   }
+  if (!buildType) drawReach(ctx, state, frame, selectedUnit, x0, y0, x1, y1);
   if (buildType) {
     for (const id of sites) {
       const [x, y] = id.split(',').map(Number);
@@ -557,7 +559,8 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     if (prop.building) drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y));
     else {
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
-      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place);
+      const aim = prop.unit.id === selectedUnit?.id ? hover : null;
+      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim);
     }
   }
   paintImpacts(ctx, frame);
@@ -643,6 +646,19 @@ function paintMinimap(ctx, state, frame, selectedUnit) {
       ctx.lineWidth = Math.max(1, frame.dpr);
       ctx.strokeRect(x0 + unit.x * scale - 1.2, y0 + unit.y * scale - 1.2, dot + 1.6, dot + 1.6);
     }
+  }
+  for (const motion of motions) {
+    if (motion.kind !== 'walk' || motion.path?.length < 2) continue;
+    ctx.strokeStyle = 'rgba(214, 132, 32, 0.9)';
+    ctx.lineWidth = Math.max(1, frame.dpr);
+    ctx.beginPath();
+    motion.path.forEach((step, index) => {
+      const px = x0 + (step.x + 0.5) * scale;
+      const py = y0 + (step.y + 0.5) * scale;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
   }
   ctx.strokeStyle = '#f4d48a';
   ctx.lineWidth = Math.max(1, frame.dpr);
@@ -1555,7 +1571,39 @@ function drawFinial(ctx, x, y, s) {
   ctx.fill();
 }
 
-function drawUnit(ctx, frame, unit, selected, attack, place = null) {
+function drawReach(ctx, state, frame, unit, x0, y0, x1, y1) {
+  if (!unit || unit.hasActed || unit.faction !== 'olundar') return;
+  const range = UNIT_TYPES[unit.type]?.range || 1;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      if (!inBounds(x, y) || !isVisible(state, x, y)) continue;
+      const distance = Math.abs(x - unit.x) + Math.abs(y - unit.y);
+      if (distance === 0 || distance > range) continue;
+      const rect = tileRect(frame, x, y);
+      const mark = rect.s * 0.07;
+      ctx.save();
+      ctx.translate(rect.x + rect.s * 0.5, rect.y + rect.s * 0.22);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = 'rgba(176, 42, 32, 0.55)';
+      ctx.fillRect(-mark, -mark, mark * 2, mark * 2);
+      ctx.restore();
+    }
+  }
+}
+
+function faceOf(unit, aim) {
+  const walk = activeMotion(unit.id, 'walk');
+  if (walk?.path?.length > 1) {
+    const dx = walk.path[walk.path.length - 1].x - walk.path[0].x;
+    if (dx) facing.set(unit.id, dx > 0 ? 1 : -1);
+  }
+  const strike = activeMotion(unit.id, 'strike');
+  if (strike && strike.tx !== unit.x) facing.set(unit.id, strike.tx > unit.x ? 1 : -1);
+  if (aim && aim.x !== unit.x) facing.set(unit.id, aim.x > unit.x ? 1 : -1);
+  return facing.get(unit.id) || -1;
+}
+
+function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) {
   const spot = place || { x: unit.x, y: unit.y };
   const rect = tileRectAt(frame, spot.x, spot.y);
   const s = rect.s;
@@ -1578,8 +1626,14 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null) {
     ctx.ellipse(s * 0.58, s * 0.86, s * 0.08, s * 0.03, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.save();
   ctx.translate(0, bob);
+  if (faceOf(unit, aim) > 0) {
+    ctx.translate(s, 0);
+    ctx.scale(-1, 1);
+  }
   drawUnitSprite(ctx, unit, s);
+  ctx.restore();
   if (activeMotion(unit.id, 'brace')) {
     const amount = motionAmount(activeMotion(unit.id, 'brace'));
     ctx.strokeStyle = `rgba(240, 200, 102, ${1 - amount})`;
