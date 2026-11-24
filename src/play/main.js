@@ -18,6 +18,8 @@ import {
   createGame,
   deserializeState,
   endTurn,
+  forecastBuildingAttack,
+  forecastUnitAttack,
   formatCost,
   isEnemy,
   getAftermathMissions,
@@ -127,9 +129,7 @@ function renderChrome() {
 }
 
 function renderDock() {
-  const glanceText = hover
-    ? hoverSummary(state, hover, board.movementField())
-    : selectedGlance();
+  const glanceText = orderGlance();
   dock.innerHTML = `
     <div class="tabs">
       ${tabButton('field', 'Field')}
@@ -172,9 +172,30 @@ function buildingPortrait(building) {
   return `<div class="portrait-plate ${tone}"><div class="portrait building" style="background-position:${-index * 86}px 0"></div></div>`;
 }
 
+function orderGlance() {
+  if (!hover) return selectedGlance();
+  const field = board.movementField();
+  const parts = [hoverSummary(state, hover, field)];
+  const unit = state.units.find((item) => item.id === state.selectedUnitId);
+  if (!unit || unit.hasActed || unit.faction !== 'olundar') return parts.join(' · ');
+  if (isVisible(state, hover.x, hover.y)) {
+    const enemy = unitAt(state, hover.x, hover.y);
+    if (enemy && enemy.id !== unit.id) {
+      const forecast = forecastUnitAttack(state, unit.id, enemy.id);
+      if (forecast.ok) parts.push(forecast.lethal ? `${forecast.damage} damage, falls` : `${forecast.damage} damage, ${forecast.targetHpAfter} left`);
+    }
+    const structure = state.buildings.find((item) => item.x === hover.x && item.y === hover.y && item.type !== 'road');
+    if (structure) {
+      const forecast = forecastBuildingAttack(state, unit.id, structure.id);
+      if (forecast.ok) parts.push(`${forecast.damage} to ${structure.name}`);
+    }
+  }
+  return parts.join(' · ');
+}
+
 function renderGlance() {
   const glance = document.querySelector('#glance');
-  if (glance) glance.textContent = hover ? hoverSummary(state, hover, board.movementField()) : selectedGlance();
+  if (glance) glance.textContent = orderGlance();
 }
 
 function fieldTab() {
@@ -479,11 +500,24 @@ function run(command) {
   const result = executePlayerCommand(state, command);
   endArmed = false;
   notice(result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.'), result?.ok === false ? 'bad' : 'good');
-  if (result?.ok !== false) playAudioCue('ui');
+  if (result?.ok !== false) {
+    playAudioCue('ui');
+    handOffSpentUnit();
+  }
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);
-  renderChrome();
   paint();
+  renderChrome();
+}
+
+function handOffSpentUnit() {
+  const current = state.units.find((unit) => unit.id === state.selectedUnitId);
+  if (!current?.hasActed) return;
+  const ready = getReadyOlundarUnits(state);
+  if (!ready.length) return;
+  state.selectedUnitId = ready[0].id;
+  state.selectedBuildingId = null;
+  board.ensureVisible(ready[0].x, ready[0].y);
 }
 
 function requestEndTurn() {

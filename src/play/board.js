@@ -65,6 +65,46 @@ const terrainPhotos = {};
 let artEpoch = 0;
 let materialSet = null;
 
+function trimFringe(source) {
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = image.data;
+  const width = canvas.width;
+  const height = canvas.height;
+  const alpha = new Uint8ClampedArray(width * height);
+  for (let i = 0; i < alpha.length; i += 1) alpha[i] = px[i * 4 + 3];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (alpha[index] < 20) continue;
+      const edge = x === 0 || y === 0 || x === width - 1 || y === height - 1
+        || alpha[index - 1] < 16
+        || alpha[index + 1] < 16
+        || (y > 0 && alpha[index - width] < 16)
+        || (y < height - 1 && alpha[index + width] < 16);
+      if (!edge) continue;
+      const offset = index * 4;
+      const r = px[offset];
+      const g = px[offset + 1];
+      const b = px[offset + 2];
+      const min = Math.min(r, g, b);
+      const max = Math.max(r, g, b);
+      if (min > 188 && max - min < 32) px[offset + 3] = 0;
+      else {
+        px[offset] = Math.round(r * 0.78);
+        px[offset + 1] = Math.round(g * 0.76);
+        px[offset + 2] = Math.round(b * 0.7);
+      }
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
 function loadImage(url) {
   return new Promise((resolve) => {
     if (typeof Image === 'undefined') {
@@ -87,21 +127,21 @@ export function loadUnitSprites() {
   return Promise.all([
     loadImage(SPRITE_URL).then((image) => {
       if (image) {
-        unitAtlas = image;
+        unitAtlas = trimFringe(image);
         unitAtlasReady = true;
       }
     }),
     loadImage(BUILDING_URL).then((image) => {
       if (image) {
-        buildingAtlas = image;
+        buildingAtlas = trimFringe(image);
         buildingAtlasReady = true;
       }
     }),
     loadImage(TREE_URL).then((image) => {
-      if (image) propTree = image;
+      if (image) propTree = trimFringe(image);
     }),
     loadImage(PEAK_URL).then((image) => {
-      if (image) propPeak = image;
+      if (image) propPeak = trimFringe(image);
     }),
     ...terrainJobs
   ]).then(() => {
@@ -318,7 +358,10 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   for (const [id, cost] of field) {
     const [x, y] = id.split(',').map(Number);
     if (x < x0 || y < y0 || x >= x1 || y >= y1) continue;
-    drawMoveMark(ctx, tileRect(frame, x, y), cost);
+    drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y);
+  }
+  if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
+    drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y));
   }
   if (buildType) {
     for (const id of sites) {
@@ -460,9 +503,11 @@ function drawFogTile(ctx, rect, x, y, frame) {
 
 function drawTerrainFace(ctx, rect, tile, seen, x, y, frame) {
   stampMaterial(ctx, MATERIAL_SPEC[tile.terrain] ? tile.terrain : 'plains', rect, x, y, seen, frame);
-  ctx.strokeStyle = terrainPhotos[tile.terrain] ? 'rgba(36, 24, 12, 0.035)' : 'rgba(48, 32, 14, 0.07)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.s - 1, rect.s - 1);
+  if (!terrainPhotos[tile.terrain]) {
+    ctx.strokeStyle = 'rgba(48, 32, 14, 0.07)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.s - 1, rect.s - 1);
+  }
 }
 
 function drawTerrainFeature(ctx, state, tile, rect, seen, x, y) {
@@ -1327,6 +1372,10 @@ function drawUnit(ctx, frame, unit, selected, attack) {
   ctx.save();
   ctx.translate(rect.x, rect.y);
   ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.72 : 1;
+  ctx.fillStyle = 'rgba(20, 12, 8, 0.38)';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.84, s * 0.24, s * 0.065, 0, 0, Math.PI * 2);
+  ctx.fill();
   drawUnitSprite(ctx, unit, s);
   if (unit.faction !== 'dead' && unit.faction !== 'olundar') {
     ctx.fillStyle = FACTION_INK[unit.faction] || '#f0c866';
@@ -1357,8 +1406,8 @@ function drawUnitSprite(ctx, unit, s) {
   const y = s * 0.86 - height * SPRITE_FOOT;
   ctx.save();
   ctx.shadowColor = 'rgba(24, 14, 8, 0.42)';
-  ctx.shadowBlur = Math.max(2, s * 0.08);
-  ctx.shadowOffsetY = Math.max(1, s * 0.05);
+  ctx.shadowBlur = Math.max(1, s * 0.035);
+  ctx.shadowOffsetY = Math.max(1, s * 0.03);
   ctx.drawImage(
     unitAtlas,
     index * SPRITE_CELL.width,
@@ -1400,12 +1449,60 @@ function drawHealthPip(ctx, x, y, w, h, pct) {
   ctx.fill();
 }
 
-function drawMoveMark(ctx, rect, cost) {
-  const r = rect.s * (cost <= 1 ? 0.15 : 0.1);
+export function traceMovePath(field, origin, x, y) {
+  if (!origin || !field.has(`${x},${y}`)) return [];
+  const path = [{ x, y }];
+  let cx = x;
+  let cy = y;
+  for (let guard = 0; guard < 64; guard += 1) {
+    if (Math.abs(cx - origin.x) + Math.abs(cy - origin.y) === 1) {
+      path.push({ x: origin.x, y: origin.y });
+      break;
+    }
+    const cost = field.get(`${cx},${cy}`);
+    let next = null;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const step = field.get(`${cx + dx},${cy + dy}`);
+      if (step == null || step >= cost) continue;
+      if (!next || step < next.cost) next = { x: cx + dx, y: cy + dy, cost: step };
+    }
+    if (!next) break;
+    path.push({ x: next.x, y: next.y });
+    cx = next.x;
+    cy = next.y;
+  }
+  return path.reverse();
+}
+
+function drawMovePath(ctx, frame, path) {
+  if (path.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const trace = (width, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    path.forEach((step, index) => {
+      const rect = tileRect(frame, step.x, step.y);
+      const px = rect.x + rect.s / 2;
+      const py = rect.y + rect.s * 0.62;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  };
+  trace(Math.max(5, frame.tile * 0.14), 'rgba(92, 48, 12, 0.85)');
+  trace(Math.max(2.5, frame.tile * 0.065), 'rgba(214, 132, 32, 0.96)');
+  ctx.restore();
+}
+
+function drawMoveMark(ctx, rect, cost, aimed) {
+  const r = rect.s * (aimed ? 0.2 : cost <= 1 ? 0.15 : 0.1);
   ctx.save();
   ctx.translate(rect.x + rect.s / 2, rect.y + rect.s * 0.62);
   ctx.rotate(Math.PI / 4);
-  ctx.fillStyle = cost <= 1 ? 'rgba(255, 214, 120, 0.78)' : 'rgba(255, 214, 120, 0.42)';
+  ctx.fillStyle = aimed ? 'rgba(255, 236, 176, 0.95)' : cost <= 1 ? 'rgba(255, 214, 120, 0.78)' : 'rgba(255, 214, 120, 0.42)';
   ctx.strokeStyle = 'rgba(92, 54, 12, 0.82)';
   ctx.lineWidth = Math.max(1.25, rect.s * 0.028);
   ctx.beginPath();
