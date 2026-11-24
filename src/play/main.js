@@ -1,4 +1,4 @@
-import { BUILDING_TYPES, DIFFICULTY_PRESETS, RESOURCE_NAMES, SCENARIOS, SUN_EDICTS, UNIT_TYPES } from '../content.js';
+import { BUILDING_TYPES, DIFFICULTY_PRESETS, MAP_HEIGHT, MAP_WIDTH, RESOURCE_NAMES, SCENARIOS, SUN_EDICTS, UNIT_TYPES } from '../content.js';
 import {
   attackCommand,
   buildCommand,
@@ -542,20 +542,62 @@ function isEnemyTile(attacker, target) {
 }
 
 function run(command) {
+  const scouted = command.type === 'move' ? scoutMemory(state) : null;
   const cue = motionCue(command);
   const result = executePlayerCommand(state, command);
   endArmed = false;
-  notice(result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.'), result?.ok === false ? 'bad' : 'good');
+  const opened = scouted && result?.ok !== false ? openedGround(state, scouted.ground) : [];
+  const sighted = scouted && result?.ok !== false ? sightedHostNames(state, scouted.hosts) : [];
+  let text = result?.reason || (result?.ok === false ? 'That order failed.' : 'Done.');
+  if (opened.length || sighted.length) {
+    const extra = [];
+    if (opened.length) extra.push(`${opened.length} new ground`);
+    if (sighted.length) extra.push(`${sighted.join(', ')} sighted`);
+    text = `${text} ${extra.join('. ')}.`;
+  }
+  notice(text, result?.ok === false ? 'bad' : 'good');
   if (result?.ok !== false) {
+    if (opened.length) board.play({ kind: 'dawn', tiles: opened, duration: 760 });
     playAudioCue('ui');
     playCue(cue, result);
-    handOffSpentUnit();
+    if (!opened.length) handOffSpentUnit();
   }
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);
   paint();
   renderChrome();
   return result;
+}
+
+function scoutMemory(state) {
+  const ground = new Set();
+  for (let y = 0; y < MAP_HEIGHT; y += 1) {
+    for (let x = 0; x < MAP_WIDTH; x += 1) {
+      if (isRevealed(state, x, y)) ground.add(`${x},${y}`);
+    }
+  }
+  const hosts = new Set();
+  for (const unit of state.units) {
+    if (isEnemy(state, 'olundar', unit.faction) && isVisible(state, unit.x, unit.y)) hosts.add(unit.id);
+  }
+  return { ground, hosts };
+}
+
+function openedGround(state, before) {
+  const tiles = [];
+  for (let y = 0; y < MAP_HEIGHT; y += 1) {
+    for (let x = 0; x < MAP_WIDTH; x += 1) {
+      if (!isRevealed(state, x, y) || before.has(`${x},${y}`)) continue;
+      tiles.push({ x, y });
+    }
+  }
+  return tiles;
+}
+
+function sightedHostNames(state, before) {
+  return state.units
+    .filter((unit) => isEnemy(state, 'olundar', unit.faction) && isVisible(state, unit.x, unit.y) && !before.has(unit.id))
+    .map((unit) => unit.name);
 }
 
 function motionCue(command) {

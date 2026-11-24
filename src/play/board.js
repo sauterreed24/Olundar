@@ -541,6 +541,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   }
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
+  paintDawn(ctx, frame);
 
   const strike = !buildType && selectedUnit && hover ? hoverStrike(state, selectedUnit, hover.x, hover.y) : null;
   const props = [];
@@ -574,6 +575,19 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (hover) {
     drawCoverMark(ctx, frame, state, hover);
     drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
+  }
+}
+
+function paintDawn(ctx, frame) {
+  for (const motion of motions) {
+    if (motion.kind !== 'dawn' || !motion.tiles?.length) continue;
+    const alpha = 0.5 * (1 - motionAmount(motion));
+    if (alpha <= 0.02) continue;
+    ctx.fillStyle = `rgba(255, 236, 186, ${alpha})`;
+    for (const tile of motion.tiles) {
+      const rect = tileRect(frame, tile.x, tile.y);
+      ctx.fillRect(rect.x, rect.y, rect.s, rect.s);
+    }
   }
 }
 
@@ -1186,7 +1200,7 @@ function drawRoad(ctx, state, tile, rect, seen) {
   const trace = (width, color) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
-    ctx.lineCap = 'butt';
+    ctx.lineCap = 'round';
     ctx.beginPath();
     if (!arms.length) {
       ctx.moveTo(cx - s * 0.22, cy);
@@ -1194,7 +1208,7 @@ function drawRoad(ctx, state, tile, rect, seen) {
     } else {
       for (const [dx, dy] of arms) {
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + dx * s * 0.52, cy + dy * s * 0.52);
+        ctx.lineTo(cx + dx * s * 0.5, cy + dy * s * 0.5);
       }
     }
     ctx.stroke();
