@@ -314,9 +314,14 @@ function booksLine() {
   return parts.join(', ');
 }
 
+function upkeepPhrase(def) {
+  const parts = Object.entries(def?.upkeep || {}).filter(([, amount]) => amount).map(([id, amount]) => `${amount} ${id}`);
+  return parts.length ? `upkeep ${parts.join(', ')}` : '';
+}
+
 function upkeepLine(def) {
-  const parts = Object.entries(def.upkeep || {}).filter(([, amount]) => amount).map(([id, amount]) => `${id} ${amount}`);
-  return parts.length ? `<p class="note">Upkeep ${escapeHtml(parts.join(', '))}.</p>` : '';
+  const phrase = upkeepPhrase(def);
+  return phrase ? `<p class="note">${escapeHtml(phrase[0].toUpperCase() + phrase.slice(1))}.</p>` : '';
 }
 
 function threatLine(unit) {
@@ -377,7 +382,9 @@ function buildingCard(building) {
   const mine = building.faction === 'olundar';
   const trains = mine && building.turnsLeft <= 0 ? def.trains.map((type) => {
     const unit = UNIT_TYPES[type];
-    return orderButton({ cmd: 'train', attrs: `data-unit="${type}"`, name: `Train ${unit.name}`, cost: unit.cost });
+    const bite = upkeepPhrase(unit);
+    const name = bite ? `Train ${unit.name}, ${bite}` : `Train ${unit.name}`;
+    return orderButton({ cmd: 'train', attrs: `data-unit="${type}"`, name, cost: unit.cost });
   }).join('') : '';
   return `
     <section class="card">
@@ -395,7 +402,10 @@ function buildingCard(building) {
       ${(building.queue || []).map((entry) => {
         const trainee = UNIT_TYPES[entry.unitType];
         const name = trainee?.name || 'A company';
-        return `<p class="note">${escapeHtml(name)} musters in ${entry.turnsLeft} turn${entry.turnsLeft === 1 ? '' : 's'}.</p>`;
+        const bite = upkeepPhrase(trainee);
+        const wait = `${name} musters in ${entry.turnsLeft} turn${entry.turnsLeft === 1 ? '' : 's'}.`;
+        const line = bite ? `${wait} ${bite[0].toUpperCase()}${bite.slice(1)}.` : wait;
+        return `<p class="note">${escapeHtml(line)}</p>`;
       }).join('')}
       <div class="actions">
         ${trains}
