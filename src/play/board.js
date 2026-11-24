@@ -585,6 +585,10 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim, loss, seats.get(prop.unit.id) || 0);
     }
   }
+  if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
+      && (hover.x !== selectedUnit.x || hover.y !== selectedUnit.y)) {
+    drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0);
+  }
   paintImpacts(ctx, frame);
   if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
   if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
@@ -2059,6 +2063,30 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
     const glow = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(frameNow / 180));
     drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, `rgba(244, 212, 138, ${glow})`, 0);
   }
+  ctx.restore();
+}
+
+function drawMoveGhost(ctx, frame, unit, hover, seat) {
+  const rect = tileRect(frame, hover.x, hover.y);
+  const s = rect.s;
+  ctx.save();
+  ctx.translate(rect.x, rect.y);
+  ctx.globalAlpha = 0.72;
+  groundShadow(ctx, s);
+  ctx.save();
+  if (hover.x > unit.x) {
+    ctx.translate(s, 0);
+    ctx.scale(-1, 1);
+  }
+  const painted = drawUnitSprite(ctx, unit, s);
+  ctx.restore();
+  if (!painted) {
+    ctx.fillStyle = '#e2b15a';
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.48, s * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (seat) drawCompanyMark(ctx, s, seat, true);
   ctx.restore();
 }
 
