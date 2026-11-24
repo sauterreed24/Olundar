@@ -297,41 +297,43 @@ function resourceChip(id, value, label, net = 0) {
   const bite = comingBite(id);
   const hot = ledgerPulse.has(id) ? ' pulse' : '';
   const mark = `${due ? ' due' : ''}${bite ? ' bite' : ''}`;
-  const lead = leadingHolding(id);
-  const led = lead && lead.id === state.selectedBuildingId ? ' led' : '';
+  const holdings = holdingsFor(id);
+  const selected = holdings.find((item) => item.building.id === state.selectedBuildingId);
+  const lead = holdings[0];
+  const led = selected ? ' led' : '';
   const forecast = net ? `<small class="next${net < 0 ? ' drain' : ''}" title="next harvest">${net > 0 ? '+' : '−'}${Math.abs(net)}</small>` : '';
   const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}${forecast}`;
-  const hint = lead ? ` title="${escapeHtml(`${lead.name} leads ${label.toLowerCase()}`)}"` : '';
+  const hint = selected
+    ? ` title="${escapeHtml(`${selected.building.name} · ${label.toLowerCase()} +${selected.amount}`)}"`
+    : lead
+      ? ` title="${escapeHtml(`${lead.building.name} leads ${label.toLowerCase()}`)}"`
+      : '';
   return `<span class="res res-${id}${hot}${mark}${led}" data-store="${id}"${hint}>${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
 }
 
-function leadingHolding(id) {
-  if (!id || id === 'people') return null;
-  let best = null;
-  let bestAmount = 0;
-  for (const building of state.buildings) {
-    if (building.faction !== 'olundar' || building.turnsLeft > 0 || building.type === 'road') continue;
-    const amount = incomeForBuilding(state, building)[id] || 0;
-    if (amount > bestAmount) {
-      bestAmount = amount;
-      best = building;
-    }
-  }
-  return best;
+function holdingsFor(id) {
+  if (!id || id === 'people') return [];
+  return state.buildings
+    .filter((building) => building.faction === 'olundar' && building.turnsLeft <= 0 && building.type !== 'road')
+    .map((building) => ({ building, amount: incomeForBuilding(state, building)[id] || 0 }))
+    .filter((item) => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount || a.building.y - b.building.y || a.building.x - b.building.x);
 }
 
 function openHolding(id) {
   if (!id || id === 'people') return;
-  const building = leadingHolding(id);
-  if (!building) {
+  const holdings = holdingsFor(id);
+  if (!holdings.length) {
     notice(`No holding yields ${RESOURCE_NAMES[id] || id}.`, 'info');
     return;
   }
-  state.selectedBuildingId = building.id;
+  const index = holdings.findIndex((item) => item.building.id === state.selectedBuildingId);
+  const next = holdings[(index + 1) % holdings.length].building;
+  state.selectedBuildingId = next.id;
   state.selectedUnitId = null;
   buildType = null;
   endArmed = false;
-  board.ensureVisible(building.x, building.y);
+  board.ensureVisible(next.x, next.y);
   paint();
   renderChrome();
 }
