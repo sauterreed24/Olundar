@@ -115,6 +115,11 @@ function boot() {
   });
   window.addEventListener('keydown', onKey);
   dock.addEventListener('click', onDockClick);
+  resourcesEl.addEventListener('click', (event) => {
+    const chip = event.target.closest('.res');
+    const id = chip?.dataset.store;
+    if (id) openHolding(id);
+  });
   modal.addEventListener('click', onModalClick);
   board.watch(() => paint());
   renderChrome();
@@ -292,9 +297,43 @@ function resourceChip(id, value, label, net = 0) {
   const bite = comingBite(id);
   const hot = ledgerPulse.has(id) ? ' pulse' : '';
   const mark = `${due ? ' due' : ''}${bite ? ' bite' : ''}`;
+  const lead = leadingHolding(id);
+  const led = lead && lead.id === state.selectedBuildingId ? ' led' : '';
   const forecast = net ? `<small class="next${net < 0 ? ' drain' : ''}" title="next harvest">${net > 0 ? '+' : '−'}${Math.abs(net)}</small>` : '';
   const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}${forecast}`;
-  return `<span class="res res-${id}${hot}${mark}">${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
+  const hint = lead ? ` title="${escapeHtml(`${lead.name} leads ${label.toLowerCase()}`)}"` : '';
+  return `<span class="res res-${id}${hot}${mark}${led}" data-store="${id}"${hint}>${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
+}
+
+function leadingHolding(id) {
+  if (!id || id === 'people') return null;
+  let best = null;
+  let bestAmount = 0;
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0 || building.type === 'road') continue;
+    const amount = incomeForBuilding(state, building)[id] || 0;
+    if (amount > bestAmount) {
+      bestAmount = amount;
+      best = building;
+    }
+  }
+  return best;
+}
+
+function openHolding(id) {
+  if (!id || id === 'people') return;
+  const building = leadingHolding(id);
+  if (!building) {
+    notice(`No holding yields ${RESOURCE_NAMES[id] || id}.`, 'info');
+    return;
+  }
+  state.selectedBuildingId = building.id;
+  state.selectedUnitId = null;
+  buildType = null;
+  endArmed = false;
+  board.ensureVisible(building.x, building.y);
+  paint();
+  renderChrome();
 }
 
 function purse(cost) {
