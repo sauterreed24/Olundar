@@ -48,7 +48,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, stoodBeside, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -175,6 +175,7 @@ function companyRoster() {
   if (!company.length && !coming.length) return '';
   const open = state.buildings.find((building) => building.id === state.selectedBuildingId);
   const near = new Set(reachersFor(state, open).map((unit) => unit.id));
+  const posted = new Set(stoodBeside(state, open).map((unit) => unit.id));
   const living = company.map((unit, index) => {
     const classes = [
       unit.hasActed ? 'spent' : 'ready',
@@ -182,7 +183,8 @@ function companyRoster() {
       unit.fortified > 0 ? 'guard' : '',
       endArmed && !unit.hasActed ? 'owing' : '',
       freshCompany.has(unit.id) ? 'fresh' : '',
-      near.has(unit.id) ? 'near' : ''
+      near.has(unit.id) && !posted.has(unit.id) ? 'near' : '',
+      posted.has(unit.id) ? 'posted' : ''
     ].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
@@ -253,9 +255,14 @@ function selectedGlance() {
   }
   if (building) {
     const extra = holdingLine(state, building);
-    const near = reachersFor(state, building).map((unit) => unit.name.split(' ').slice(-1)[0]);
+    const postedUnits = stoodBeside(state, building);
+    const postedIds = new Set(postedUnits.map((unit) => unit.id));
+    const postedNames = postedUnits.map((unit) => unit.name.split(' ').slice(-1)[0]);
+    const near = reachersFor(state, building).filter((unit) => !postedIds.has(unit.id)).map((unit) => unit.name.split(' ').slice(-1)[0]);
+    const posted = postedNames.length ? `${spokenList(postedNames)} ${postedNames.length === 1 ? 'stands' : 'stand'} here` : '';
     const reach = near.length ? `${spokenList(near)} can reach` : '';
     const parts = [extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`];
+    if (posted) parts.push(posted);
     if (reach) parts.push(reach);
     return parts.join(' · ');
   }

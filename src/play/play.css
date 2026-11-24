@@ -383,6 +383,11 @@ button.primary, button.armed {
   box-shadow: inset 0 -3px 0 #7fbf4a;
 }
 
+.company button.posted {
+  outline: 1px solid #e2b15a;
+  outline-offset: -3px;
+}
+
 .company button.spent {
   opacity: 0.48;
 }

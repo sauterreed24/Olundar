@@ -189,6 +189,13 @@ export function movementField(state, unit) {
   return costs;
 }
 
+export function stoodBeside(state, building) {
+  if (!building) return [];
+  const spots = new Set([key(building.x, building.y)]);
+  for (const next of neighbors4(building.x, building.y)) spots.add(key(next.x, next.y));
+  return olundarCompany(state).filter((unit) => spots.has(key(unit.x, unit.y)));
+}
+
 export function reachersFor(state, building) {
   if (!building) return [];
   const spots = new Set([key(building.x, building.y)]);
@@ -646,9 +653,11 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   paintImpacts(ctx, frame);
   if (!buildType && selectedBuildingId) {
     const selected = state.buildings.find((building) => building.id === selectedBuildingId);
+    const posted = new Set(stoodBeside(state, selected).map((unit) => unit.id));
     const near = new Set(reachersFor(state, selected).map((unit) => unit.id));
     for (const unit of state.units) {
-      if (!near.has(unit.id)) continue;
+      if (posted.has(unit.id) && unit.id !== selectedUnit?.id) drawApproachMark(ctx, frame, unit.x, unit.y);
+      if (!near.has(unit.id) || posted.has(unit.id)) continue;
       const rect = tileRect(frame, unit.x, unit.y);
       ctx.save();
       ctx.strokeStyle = '#7fbf4a';
