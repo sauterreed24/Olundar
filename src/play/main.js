@@ -44,7 +44,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -192,6 +192,7 @@ function comingCompany() {
       turnsLeft: entry.turnsLeft,
       name: def.name,
       waiting: building.queue.length - 1,
+      ground: musterGround(state, building),
       y: building.y,
       x: building.x
     });
@@ -208,8 +209,9 @@ function comingSeat(seat) {
     seat.turnsLeft <= 1 ? 'soon' : ''
   ].filter(Boolean).join(' ');
   const wait = `musters in ${seat.turnsLeft} turn${seat.turnsLeft === 1 ? '' : 's'}`;
+  const place = seat.ground ? ` · steps to ${seat.ground.x},${seat.ground.y}` : ' · no open ground';
   const extra = seat.waiting ? ` · ${seat.waiting} more waiting` : '';
-  return `<button type="button" class="${classes}" data-cmd="coming" data-building="${seat.buildingId}" title="${escapeHtml(`${seat.name} ${wait}${extra}`)}"><span class="seat-soon">in ${seat.turnsLeft}</span><span class="seat-face">${unitPortrait({ type: seat.unitType, faction: 'olundar' })}</span><em>${escapeHtml(short)}</em></button>`;
+  return `<button type="button" class="${classes}" data-cmd="coming" data-building="${seat.buildingId}" title="${escapeHtml(`${seat.name} ${wait}${place}${extra}`)}"><span class="seat-soon">in ${seat.turnsLeft}</span><span class="seat-face">${unitPortrait({ type: seat.unitType, faction: 'olundar' })}</span><em>${escapeHtml(short)}</em></button>`;
 }
 
 function nextOrder() {
@@ -286,6 +288,8 @@ function orderGlance() {
   if (!hover) return selectedGlance();
   const field = buildType ? new Map() : board.movementField();
   const parts = [hoverSummary(state, hover, field)];
+  const due = musterOnTile(state, hover.x, hover.y);
+  if (due) parts.push(`${due.name} steps here in ${due.turnsLeft}`);
   if (buildType) {
     const name = BUILDING_TYPES[buildType].name;
     const turns = BUILDING_TYPES[buildType].buildTurns;

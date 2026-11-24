@@ -10,6 +10,7 @@ import {
   canBuildOn,
   canEnter,
   effectiveMoveRange,
+  findSpawnNear,
   forecastBuildingAttack,
   forecastUnitAttack,
   getMarchAssaultVectors,
@@ -588,6 +589,14 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim, loss, seats.get(prop.unit.id) || 0);
     }
   }
+  if (!buildType) {
+    for (const building of state.buildings) {
+      const ground = musterGround(state, building);
+      if (!ground || !isRevealed(state, ground.x, ground.y)) continue;
+      if (ground.x < x0 || ground.y < y0 || ground.x >= x1 || ground.y >= y1) continue;
+      drawMusterFoot(ctx, frame, building, ground);
+    }
+  }
   if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
       && (hover.x !== selectedUnit.x || hover.y !== selectedUnit.y)) {
     const exposed = hostsReaching(state, selectedUnit.faction, hover.x, hover.y, selectedUnit.id).length > 0;
@@ -789,6 +798,14 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
     if (!isRevealed(state, building.x, building.y)) continue;
     ctx.strokeRect(x0 + building.x * scale - 1.4, y0 + building.y * scale - 1.4, scale + 2.8, scale + 2.8);
   }
+  ctx.fillStyle = '#f3d48a';
+  for (const building of state.buildings) {
+    const ground = musterGround(state, building);
+    if (!ground || !isRevealed(state, ground.x, ground.y)) continue;
+    ctx.globalAlpha = building.queue[0].turnsLeft <= 1 ? 1 : 0.65;
+    ctx.fillRect(x0 + ground.x * scale, y0 + ground.y * scale, scale + 0.3, scale + 0.3);
+  }
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = '#e2b15a';
   ctx.lineWidth = Math.max(1, frame.dpr * 0.7);
   for (const building of state.buildings) {
@@ -1531,6 +1548,38 @@ function drawMusterGhost(ctx, s, building) {
   ctx.ellipse(s * 0.5, s * 0.86, s * 0.22, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
   drawUnitSprite(ctx, { type: current.unitType, faction: building.faction }, s);
+  ctx.restore();
+}
+
+function drawMusterFoot(ctx, frame, building, ground) {
+  const current = building.queue[0];
+  const soon = current.turnsLeft <= 1;
+  const rect = tileRect(frame, ground.x, ground.y);
+  const s = rect.s;
+  const scale = soon ? 0.72 : 0.5;
+  ctx.save();
+  ctx.translate(rect.x, rect.y);
+  ctx.globalAlpha = soon ? 0.82 : 0.45;
+  ctx.translate(s * 0.5, s * 0.86);
+  ctx.scale(scale, scale);
+  ctx.translate(-s * 0.5, -s * 0.86);
+  ctx.fillStyle = 'rgba(16, 10, 6, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.86, s * 0.2, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  if (ground.x > building.x) {
+    ctx.translate(s, 0);
+    ctx.scale(-1, 1);
+  }
+  drawUnitSprite(ctx, { type: current.unitType, faction: building.faction }, s);
+  ctx.restore();
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = soon ? 'rgba(226, 177, 90, 0.98)' : 'rgba(226, 177, 90, 0.55)';
+  ctx.lineWidth = Math.max(2, s * (soon ? 0.05 : 0.032));
+  ctx.setLineDash(soon ? [] : [Math.max(3, s * 0.08), Math.max(2, s * 0.05)]);
+  ctx.strokeRect(rect.x + s * 0.14, rect.y + s * 0.14, s * 0.72, s * 0.72);
   ctx.restore();
 }
 
@@ -2616,8 +2665,27 @@ export function holdingLine(state, building) {
   const yieldText = yieldLabel(state, building, 4);
   if (yieldText) parts.push(yieldText);
   const muster = musterLabel(building);
-  if (muster) parts.push(muster);
+  if (muster) {
+    const ground = musterGround(state, building);
+    parts.push(ground ? `${muster} · steps to ${ground.x},${ground.y}` : `${muster} · no open ground`);
+  }
   return parts.join(' · ');
+}
+
+export function musterGround(state, building) {
+  if (!state || !building?.queue?.length || building.turnsLeft > 0) return null;
+  return findSpawnNear(state, building.x, building.y, building.faction);
+}
+
+export function musterOnTile(state, x, y) {
+  if (!state) return null;
+  for (const building of state.buildings) {
+    const ground = musterGround(state, building);
+    if (!ground || ground.x !== x || ground.y !== y) continue;
+    const name = (UNIT_TYPES[building.queue[0].unitType]?.name || 'Troop').split(' ').slice(-1)[0];
+    return { name, turnsLeft: building.queue[0].turnsLeft };
+  }
+  return null;
 }
 
 function musterLabel(building) {
