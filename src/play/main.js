@@ -160,10 +160,11 @@ function renderDock() {
 function companyRoster() {
   const company = olundarCompany(state);
   if (!company.length) return '';
-  return `<div class="company">${company.map((unit) => {
+  return `<div class="company">${company.map((unit, index) => {
     const classes = [unit.hasActed ? 'spent' : 'ready', unit.id === state.selectedUnitId ? 'current' : ''].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
-    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}"><span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
+    const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
+    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}">${key}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
   }).join('')}</div>`;
 }
 
@@ -923,6 +924,15 @@ function takeSeat(unitId) {
 }
 
 function onKey(event) {
+  if (event.target?.closest?.('input, textarea, select')) return;
+  if (/^[1-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    const unit = olundarCompany(state)[Number(event.key) - 1];
+    if (unit) {
+      takeSeat(unit.id);
+      event.preventDefault();
+    }
+    return;
+  }
   if (event.key === 'e' || event.key === 'E') requestEndTurn();
   else if (event.key === 'n' || event.key === 'N') selectNext();
   else if (event.key === 'Escape') {
