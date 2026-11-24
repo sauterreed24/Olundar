@@ -782,6 +782,13 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
     ctx.fillStyle = building.faction === 'dead' ? '#d8ff9a' : '#fff6e0';
     ctx.fillRect(x0 + building.x * scale - 0.5, y0 + building.y * scale - 0.5, scale + 1.2, scale + 1.2);
   }
+  ctx.strokeStyle = '#f3d48a';
+  ctx.lineWidth = Math.max(1.4, frame.dpr);
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0 || !building.queue?.length) continue;
+    if (!isRevealed(state, building.x, building.y)) continue;
+    ctx.strokeRect(x0 + building.x * scale - 1.4, y0 + building.y * scale - 1.4, scale + 2.8, scale + 2.8);
+  }
   ctx.strokeStyle = '#e2b15a';
   ctx.lineWidth = Math.max(1, frame.dpr * 0.7);
   for (const building of state.buildings) {
@@ -1511,10 +1518,14 @@ function drawBuilding(ctx, frame, building, selected, seen, pending = 0, yieldTe
 function drawMusterGhost(ctx, s, building) {
   const current = building.queue?.[0];
   if (!current || building.turnsLeft > 0) return;
+  const total = Math.max(1, UNIT_TYPES[current.unitType]?.trainTurns || current.turnsLeft);
+  const grown = 1 - Math.max(0, current.turnsLeft - 1) / total;
+  const scale = 0.34 + 0.28 * grown;
   ctx.save();
-  ctx.translate(s * 0.58, s * 0.4);
-  ctx.scale(0.4, 0.4);
-  ctx.globalAlpha *= 0.9;
+  ctx.translate(s * 0.64, s * 0.78);
+  ctx.scale(scale, scale);
+  ctx.translate(-s * 0.5, -s * 0.86);
+  ctx.globalAlpha *= 0.92;
   ctx.fillStyle = 'rgba(16, 10, 6, 0.45)';
   ctx.beginPath();
   ctx.ellipse(s * 0.5, s * 0.86, s * 0.22, s * 0.06, 0, 0, Math.PI * 2);
