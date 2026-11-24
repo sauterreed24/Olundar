@@ -532,6 +532,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const exposed = selectedUnit ? hostsReaching(state, selectedUnit.faction, x, y, selectedUnit.id).length > 0 : false;
     drawMoveMark(ctx, tileRect(frame, x, y), cost, hover?.x === x && hover?.y === y, exposed);
   }
+  if (!buildType && field.size) drawRoadGleam(ctx, state, frame, field, x0, y0, x1, y1);
   if (hover && selectedUnit && field.has(`${hover.x},${hover.y}`)) {
     drawMovePath(ctx, frame, traceMovePath(field, selectedUnit, hover.x, hover.y), field);
   }
@@ -612,6 +613,39 @@ function paintSight(ctx, frame) {
       ctx.stroke();
     }
   }
+}
+
+function drawRoadGleam(ctx, state, frame, field, x0, y0, x1, y1) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255, 236, 170, 0.95)';
+  ctx.lineWidth = Math.max(3, frame.tile * 0.09);
+  ctx.shadowColor = 'rgba(255, 196, 70, 0.85)';
+  ctx.shadowBlur = Math.max(3, frame.tile * 0.08);
+  for (const id of field.keys()) {
+    const [x, y] = id.split(',').map(Number);
+    if (x < x0 || y < y0 || x >= x1 || y >= y1) continue;
+    if (!tileAt(state, x, y)?.road) continue;
+    const rect = tileRect(frame, x, y);
+    const cx = rect.x + rect.s / 2;
+    const cy = rect.y + rect.s / 2;
+    let linked = false;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!tileAt(state, x + dx, y + dy)?.road) continue;
+      linked = true;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + dx * rect.s * 0.5, cy + dy * rect.s * 0.5);
+      ctx.stroke();
+    }
+    if (!linked) {
+      ctx.beginPath();
+      ctx.moveTo(cx - rect.s * 0.18, cy);
+      ctx.lineTo(cx + rect.s * 0.18, cy);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function paintMarches(ctx, state, frame) {

@@ -353,6 +353,8 @@ button.primary, button.armed {
   font-size: 0.84rem;
 }
 
+.note.order { color: #4a3018; }
+
 .note.danger { color: var(--danger); font-weight: 700; }
 
 .glance {

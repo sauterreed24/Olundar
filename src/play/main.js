@@ -143,11 +143,17 @@ function renderDock() {
     </div>
     <p id="glance" class="glance">${escapeHtml(glanceText)}</p>
     <p class="aim"><b>${escapeHtml(clock.title)}</b> ${escapeHtml(clock.detail)}</p>
+    ${nextOrder() ? `<p class="note order">${escapeHtml(nextOrder())}</p>` : ''}
     ${tab === 'field' ? fieldTab() : ''}
     ${tab === 'council' ? councilTab() : ''}
     ${tab === 'diplomacy' ? diplomacyTab() : ''}
     ${tab === 'log' ? logTab() : ''}
   `;
+}
+
+function nextOrder() {
+  const strategic = getWarCouncil(state).priorities.find((item) => !item.text.startsWith('Issue orders'));
+  return strategic?.text || '';
 }
 
 function selectedGlance() {
