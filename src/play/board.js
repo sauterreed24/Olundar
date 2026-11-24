@@ -10,6 +10,8 @@ import {
   canBuildOn,
   canEnter,
   effectiveMoveRange,
+  forecastBuildingAttack,
+  forecastUnitAttack,
   getMarchAssaultVectors,
   isEnemy,
   isRevealed,
@@ -290,18 +292,13 @@ export function createBoard(canvas) {
     return view.field;
   }
 
-  function ensureBuildSites(state, buildingType) {
-    const id = buildingType ? `${buildingType}:${state.turn}:${state.units.length}:${state.buildings.length}` : '';
+  function ensureBuildSites(state, buildingType, builder) {
+    const id = buildingType && builder
+      ? `${buildingType}:${builder.id}:${builder.x},${builder.y}:${builder.hasActed}:${state.turn}:${state.buildings.length}`
+      : '';
     if (id !== view.buildKey) {
       view.buildKey = id;
-      view.buildSites = new Set();
-      if (buildingType) {
-        for (let y = 0; y < MAP_HEIGHT; y += 1) {
-          for (let x = 0; x < MAP_WIDTH; x += 1) {
-            if (canBuildOn(state, buildingType, x, y)) view.buildSites.add(key(x, y));
-          }
-        }
-      }
+      view.buildSites = new Set(legalBuildTiles(state, buildingType, builder));
     }
     return view.buildSites;
   }
@@ -310,7 +307,7 @@ export function createBoard(canvas) {
     const frame = layout();
     const selectedUnit = state.units.find((unit) => unit.id === selectedUnitId) || null;
     const field = buildType ? new Map() : ensureField(state, selectedUnit);
-    const sites = ensureBuildSites(state, buildType);
+    const sites = ensureBuildSites(state, buildType, selectedUnit);
     const seen = state.visible.filter(Boolean).length;
     const terrainKey = `${artEpoch}|${frame.tile}|${view.camX.toFixed(2)}|${view.camY.toFixed(2)}|${state.turn}|${state.revealed.filter(Boolean).length}|${seen}|${state.buildings.length}`;
     if (terrainKey !== view.cacheKey) {
@@ -318,7 +315,7 @@ export function createBoard(canvas) {
       paintTerrain(terrain, state, frame);
     }
     noteIdle(Boolean(selectedUnit && !selectedUnit.hasActed));
-  paintPieces(pieces, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
+    paintPieces(pieces, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -340,7 +337,8 @@ export function createBoard(canvas) {
     play,
     clearMotion,
     watch,
-    movementField: () => view.field
+    movementField: () => view.field,
+    buildSites: () => view.buildSites
   };
 }
 
@@ -541,6 +539,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drawBrackets(ctx, tileRect(frame, x, y), 'rgba(88, 158, 78, 0.95)', 0.12);
     }
   }
+  if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
 
   const props = [];
@@ -566,6 +565,11 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     }
   }
   paintImpacts(ctx, frame);
+  if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
+  if (!buildType && selectedUnit && hover) {
+    const strike = hoverStrike(state, selectedUnit, hover.x, hover.y);
+    if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
+  }
   if (hover) drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
 }
 
@@ -640,7 +644,8 @@ function paintMinimap(ctx, state, frame, selectedUnit) {
   for (const unit of state.units) {
     if (!isVisible(state, unit.x, unit.y)) continue;
     const marked = unit.id === selectedUnit?.id;
-    ctx.fillStyle = unit.faction === 'dead' ? '#9cf38a' : '#f0c866';
+    const friendly = unit.faction !== 'dead';
+    ctx.fillStyle = !friendly ? '#9cf38a' : unit.hasActed ? '#8a7040' : '#f0c866';
     const dot = Math.max(2, scale) + (marked ? 1.4 : 0);
     ctx.fillRect(x0 + unit.x * scale - (marked ? 0.7 : 0), y0 + unit.y * scale - (marked ? 0.7 : 0), dot, dot);
     if (marked) {
@@ -1648,7 +1653,6 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) 
     : 0;
   ctx.save();
   ctx.translate(rect.x, rect.y);
-  ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.72 : 1;
   ctx.fillStyle = 'rgba(16, 10, 6, 0.5)';
   ctx.beginPath();
   ctx.ellipse(s * 0.5, s * 0.86, s * 0.28, s * 0.075, 0, 0, Math.PI * 2);
@@ -1669,6 +1673,19 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) 
   }
   drawUnitSprite(ctx, unit, s);
   ctx.restore();
+  if (unit.faction === 'olundar' && !unit.hasActed && !walking) {
+    ctx.save();
+    ctx.translate(s * 0.8, s * 0.05);
+    ctx.rotate(Math.sin((frameNow + unit.y * 40) / 180) * 0.18);
+    drawPennon(ctx, 0, 0, s * 0.34, '#e2b15a');
+    ctx.restore();
+  } else if (unit.faction === 'olundar' && unit.hasActed) {
+    ctx.strokeStyle = 'rgba(36, 24, 16, 0.62)';
+    ctx.lineWidth = Math.max(1.5, s * 0.03);
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, s * 0.9, s * 0.18, s * 0.05, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   if (unit.fortified > 0) {
     ctx.strokeStyle = 'rgba(240, 200, 102, 0.92)';
     ctx.lineWidth = Math.max(2, s * 0.045);
@@ -1750,6 +1767,7 @@ function drawPennon(ctx, x, y, h, color) {
 }
 
 function drawHealthPip(ctx, x, y, w, h, pct) {
+  if (!(pct < 0.999)) return;
   const amount = Math.max(0, Math.min(1, pct));
   ctx.fillStyle = 'rgba(16, 10, 6, 0.75)';
   roundRect(ctx, x, y, w, h, h / 2);
@@ -1858,6 +1876,124 @@ function drawBrackets(ctx, rect, color, inset) {
     ctx.lineTo(cx + dx * len, cy);
   }
   ctx.stroke();
+}
+
+export function legalBuildTiles(state, buildingType, builder) {
+  if (!buildingType || !builder || builder.hasActed) return [];
+  const sites = [];
+  for (let y = builder.y - 1; y <= builder.y + 1; y += 1) {
+    for (let x = builder.x - 1; x <= builder.x + 1; x += 1) {
+      if (Math.abs(x - builder.x) + Math.abs(y - builder.y) > 1) continue;
+      if (canBuildOn(state, buildingType, x, y).ok) sites.push(key(x, y));
+    }
+  }
+  return sites;
+}
+
+export function hoverStrike(state, unit, x, y) {
+  if (!unit || unit.hasActed || unit.faction !== 'olundar' || !isVisible(state, x, y)) return null;
+  const enemy = state.units.find((item) => item.x === x && item.y === y && item.id !== unit.id);
+  if (enemy) {
+    const forecast = forecastUnitAttack(state, unit.id, enemy.id);
+    if (!forecast.ok) return null;
+    return { x, y, damage: forecast.damage, lethal: Boolean(forecast.lethal), label: forecast.lethal ? 'falls' : `−${forecast.damage}` };
+  }
+  const structure = state.buildings.find((item) => item.x === x && item.y === y && item.type !== 'road');
+  if (!structure) return null;
+  const forecast = forecastBuildingAttack(state, unit.id, structure.id);
+  if (!forecast.ok) return null;
+  return {
+    x,
+    y,
+    damage: forecast.damage,
+    lethal: Boolean(forecast.lethal),
+    label: forecast.portalReforms ? 'reforms' : forecast.lethal ? 'falls' : `−${forecast.damage}`
+  };
+}
+
+export function visibleMarchAnchor(state, moves) {
+  const city = state.buildings.find((building) => building.type === 'city' && building.faction === 'olundar');
+  const originX = city?.x ?? 0;
+  const originY = city?.y ?? 0;
+  let best = null;
+  let bestDist = Infinity;
+  for (const move of moves) {
+    if (!isVisible(state, move.x, move.y) && !isVisible(state, move.nx, move.ny)) continue;
+    const dist = Math.abs(move.nx - originX) + Math.abs(move.ny - originY);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { x: move.nx, y: move.ny };
+    }
+  }
+  return best;
+}
+
+function drawBuildWash(ctx, frame, hover, sites, state) {
+  if (!inBounds(hover.x, hover.y) || !isRevealed(state, hover.x, hover.y)) return;
+  if (sites.has(`${hover.x},${hover.y}`)) return;
+  const rect = tileRect(frame, hover.x, hover.y);
+  ctx.fillStyle = 'rgba(176, 42, 32, 0.28)';
+  ctx.fillRect(rect.x, rect.y, rect.s, rect.s);
+}
+
+function drawBuildGhost(ctx, frame, buildType, hover, sites, state) {
+  if (!inBounds(hover.x, hover.y) || !isRevealed(state, hover.x, hover.y)) return;
+  if (!sites.has(`${hover.x},${hover.y}`)) return;
+  const rect = tileRect(frame, hover.x, hover.y);
+  ctx.save();
+  ctx.translate(rect.x, rect.y);
+  ctx.globalAlpha = 0.78;
+  groundShadow(ctx, rect.s);
+  const painted = drawBuildingSprite(ctx, buildType, rect.s);
+  if (!painted) {
+    ctx.fillStyle = '#c9853a';
+    ctx.fillRect(rect.s * 0.12, rect.s * 0.4, rect.s * 0.76, rect.s * 0.22);
+  }
+  ctx.restore();
+}
+
+function drawStrikePreview(ctx, frame, unit, strike) {
+  const from = tileRect(frame, unit.x, unit.y);
+  const to = tileRect(frame, strike.x, strike.y);
+  const x1 = from.x + from.s / 2;
+  const y1 = from.y + from.s * 0.4;
+  const x2 = to.x + to.s / 2;
+  const y2 = to.y + to.s * 0.4;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(159, 45, 34, 0.95)';
+  ctx.lineWidth = Math.max(2, frame.tile * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.translate(x2, y2);
+  ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(159, 45, 34, 0.95)';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-frame.tile * 0.16, frame.tile * 0.075);
+  ctx.lineTo(-frame.tile * 0.16, -frame.tile * 0.075);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  const size = Math.max(13, Math.round(frame.tile * 0.26));
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const width = ctx.measureText(strike.label).width + size * 0.9;
+  const height = size + 6;
+  const left = to.x + (to.s - width) / 2;
+  const top = Math.max(4, to.y - height - 3);
+  ctx.fillStyle = 'rgba(255, 246, 232, 0.95)';
+  ctx.strokeStyle = '#9f2d22';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, left, top, width, height, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#9f2d22';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(strike.label, left + width / 2, top + height / 2 + 0.5);
+  ctx.restore();
 }
 
 function isAttackTarget(state, attacker, target) {

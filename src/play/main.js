@@ -38,7 +38,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleThreats } from './board.js';
+import { BUILDING_SPRITE_ORDER, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -152,7 +152,7 @@ function selectedGlance() {
   if (unit) return `${unit.name} · ${unit.x},${unit.y}`;
   if (building) return `${building.name} · ${building.x},${building.y}`;
   const ready = getReadyOlundarUnits(state).length;
-  return ready ? `${ready} units ready. Select one on the map.` : 'Select a unit, then choose a highlighted tile.';
+  return ready ? `${ready} gold pennants still owe an order.` : 'Select a unit, then choose a highlighted tile.';
 }
 
 function resourceChip(id, value, label) {
@@ -175,8 +175,13 @@ function buildingPortrait(building) {
 
 function orderGlance() {
   if (!hover) return selectedGlance();
-  const field = board.movementField();
+  const field = buildType ? new Map() : board.movementField();
   const parts = [hoverSummary(state, hover, field)];
+  if (buildType) {
+    const name = BUILDING_TYPES[buildType].name;
+    parts.push(board.buildSites().has(`${hover.x},${hover.y}`) ? `place ${name}` : `${name} will not stand here`);
+    return parts.join(' · ');
+  }
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
   if (!unit || unit.hasActed || unit.faction !== 'olundar') return parts.join(' · ');
   if (field.has(`${hover.x},${hover.y}`)) {
@@ -211,7 +216,7 @@ function fieldTab() {
   }
   if (!unit && !building) {
     const ready = getReadyOlundarUnits(state).length;
-    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold marks show where that unit can walk. Red ticks show weapon reach. A red bracket can be struck.</p>${buildHint()}</section>`;
+    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold pennants still owe an order. Gold steps are walks, crimson steps are exposed, and a red bracket can be struck.</p>${buildHint()}</section>`;
   }
   if (unit) return unitCard(unit);
   return buildingCard(building);
@@ -258,7 +263,8 @@ function unitCard(unit) {
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
       ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
       ${threatLine(unit)}
-      ${mine && !unit.hasActed ? '<p class="note">Gold marks are legal moves. Red ticks are weapon reach. A red bracket can be struck.</p>' : ''}
+      ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
+      ${buildType ? `<p class="note">The ghost shows where ${escapeHtml(BUILDING_TYPES[buildType].name)} can rise. A red wash will not take it.</p>` : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">Fortify</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
@@ -303,7 +309,7 @@ function buildButtons() {
 }
 
 function buildHint() {
-  return buildType ? `<p class="note">Click a green outline to place ${escapeHtml(BUILDING_TYPES[buildType].name)}.</p>` : '';
+  return buildType ? `<p class="note">The ghost shows where ${escapeHtml(BUILDING_TYPES[buildType].name)} can rise. A red wash will not take it.</p>` : '';
 }
 
 function councilTab() {
@@ -399,12 +405,12 @@ function onDockClick(event) {
   else if (cmd === 'arm-build') {
     buildType = button.dataset.building;
     state.selectedBuildingId = null;
-    renderChrome();
     paint();
+    renderChrome();
   } else if (cmd === 'cancel-build') {
     buildType = null;
-    renderChrome();
     paint();
+    renderChrome();
   } else if (cmd === 'train') run(trainCommand(state.selectedBuildingId, button.dataset.unit));
   else if (cmd === 'upgrade') run(upgradeCommand(state.selectedBuildingId));
   else if (cmd === 'diplomacy') run(diplomacyCommand(button.dataset.faction, button.dataset.action));
@@ -474,8 +480,8 @@ function actOnTile(tile) {
   if (state.status !== 'playing') return;
   const selected = state.units.find((unit) => unit.id === state.selectedUnitId);
   if (buildType && selected?.type === 'engineer') {
-    run(buildCommand(selected.id, buildType, tile.x, tile.y));
-    buildType = null;
+    const result = run(buildCommand(selected.id, buildType, tile.x, tile.y));
+    if (result?.ok !== false) buildType = null;
     return;
   }
   const visibleUnit = isVisible(state, tile.x, tile.y) ? unitAt(state, tile.x, tile.y) : null;
@@ -545,6 +551,7 @@ function run(command) {
   if (focus) board.ensureVisible(focus.x, focus.y);
   paint();
   renderChrome();
+  return result;
 }
 
 function motionCue(command) {
@@ -615,16 +622,19 @@ function marchPath(from, to) {
 }
 
 function playEnemyMarch(before) {
+  const moves = [];
   for (const unit of state.units) {
     const prev = before.find((item) => item.id === unit.id);
     if (!prev || (prev.x === unit.x && prev.y === unit.y)) continue;
     const path = marchPath(prev, unit);
     board.play({ kind: 'walk', unitId: unit.id, path, duration: Math.min(1100, 200 + path.length * 80) });
+    moves.push({ x: prev.x, y: prev.y, nx: unit.x, ny: unit.y });
   }
   for (const prev of before) {
     if (state.units.some((unit) => unit.id === prev.id)) continue;
     board.play({ kind: 'fall', type: prev.type, faction: prev.faction, x: prev.x, y: prev.y, duration: 680 });
   }
+  return visibleMarchAnchor(state, moves);
 }
 
 function requestEndTurn() {
@@ -638,7 +648,7 @@ function requestEndTurn() {
   }
   const before = state.units.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, type: unit.type, faction: unit.faction }));
   endTurn(state);
-  playEnemyMarch(before);
+  const watch = playEnemyMarch(before);
   endArmed = false;
   buildType = null;
   getCommandHistory().clear();
@@ -648,8 +658,11 @@ function requestEndTurn() {
   }).length;
   notice(marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`, 'good');
   playAudioCue('endTurn');
-  const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
-  if (!state.selectedUnitId && city) board.focus(city.x, city.y);
+  if (watch) board.ensureVisible(watch.x, watch.y);
+  else if (!state.selectedUnitId) {
+    const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+    if (city) board.focus(city.x, city.y);
+  }
   renderChrome();
   paint();
 }
