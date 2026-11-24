@@ -1759,12 +1759,28 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
   }
   ctx.save();
   ctx.translate(0, bob);
+  const arrive = activeMotion(unit.id, 'arrive');
+  if (arrive) {
+    const amount = 1 - (1 - motionAmount(arrive)) ** 2;
+    ctx.translate(s * 0.5, s * 0.86);
+    ctx.scale(0.4 + 0.6 * amount, 0.4 + 0.6 * amount);
+    ctx.globalAlpha *= 0.2 + 0.8 * amount;
+    ctx.translate(-s * 0.5, -s * 0.86);
+  }
   if (faceOf(unit, aim) > 0) {
     ctx.translate(s, 0);
     ctx.scale(-1, 1);
   }
   drawUnitSprite(ctx, unit, s);
   ctx.restore();
+  if (arrive) {
+    const amount = motionAmount(arrive);
+    ctx.strokeStyle = unit.faction === 'olundar' ? `rgba(240, 200, 102, ${1 - amount})` : `rgba(156, 243, 138, ${1 - amount})`;
+    ctx.lineWidth = Math.max(2, s * 0.04);
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.8, s * (0.1 + amount * 0.4), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   if (unit.faction === 'olundar' && !unit.hasActed && !walking) {
     ctx.save();
     ctx.translate(s * 0.8, s * 0.05);

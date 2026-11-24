@@ -714,6 +714,25 @@ function playEnemyMarch(before) {
   return visibleMarchAnchor(state, moves);
 }
 
+function playArrivals(before) {
+  const arrived = [];
+  for (const unit of state.units) {
+    if (before.some((item) => item.id === unit.id)) continue;
+    board.play({ kind: 'arrive', unitId: unit.id, duration: 700 });
+    arrived.push(unit);
+  }
+  return arrived;
+}
+
+function arrivalLine(units) {
+  const ours = units.filter((unit) => unit.faction === 'olundar');
+  const theirs = units.filter((unit) => unit.faction !== 'olundar' && isVisible(state, unit.x, unit.y));
+  const parts = [];
+  if (ours.length) parts.push(`${ours.map((unit) => unit.name).join(', ')} musters`);
+  if (theirs.length) parts.push(`${theirs.map((unit) => unit.name).join(', ')} takes the field`);
+  return parts.join('. ');
+}
+
 function requestEndTurn() {
   if (state.status !== 'playing') return;
   const warnings = getEndTurnWarnings(state);
@@ -728,6 +747,7 @@ function requestEndTurn() {
   const rising = state.buildings.filter((building) => building.faction === 'olundar' && building.turnsLeft > 0).map((building) => building.id);
   endTurn(state);
   const watch = playEnemyMarch(before);
+  const arrived = playArrivals(before);
   for (const id of rising) {
     const building = state.buildings.find((item) => item.id === id);
     if (building && building.turnsLeft === 0) board.play({ kind: 'rise', x: building.x, y: building.y, duration: 520 });
@@ -740,12 +760,19 @@ function requestEndTurn() {
     return unit.faction !== 'olundar' && prev && (prev.x !== unit.x || prev.y !== unit.y);
   }).length;
   const harvest = harvestLine(beforeStores);
+  const arrival = arrivalLine(arrived);
   const advance = marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`;
-  notice(harvest.text ? `${advance} Harvest ${harvest.text}.` : advance, 'good');
+  const bits = [advance];
+  if (harvest.text) bits.push(`Harvest ${harvest.text}.`);
+  if (arrival) bits.push(`${arrival}.`);
+  notice(bits.join(' '), 'good');
   ledgerPulse = new Set(harvest.pulsed);
   playAudioCue('endTurn');
   if (watch) board.ensureVisible(watch.x, watch.y);
-  else if (!state.selectedUnitId) {
+  else if (arrived.some((unit) => unit.faction === 'olundar')) {
+    const muster = arrived.find((unit) => unit.faction === 'olundar');
+    board.ensureVisible(muster.x, muster.y);
+  } else if (!state.selectedUnitId) {
     const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
     if (city) board.focus(city.x, city.y);
   }
