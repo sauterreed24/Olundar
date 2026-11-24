@@ -638,17 +638,51 @@ function paintKin(ctx, state, frame, selectedBuildingId) {
   for (const building of state.buildings) {
     if (!sharesYield(state, selected, building) || !isRevealed(state, building.x, building.y)) continue;
     const to = tileRect(frame, building.x, building.y);
+    const x1 = from.x + from.s * 0.5;
+    const y1 = from.y + from.s * 0.55;
+    const x2 = to.x + to.s * 0.5;
+    const y2 = to.y + to.s * 0.55;
     ctx.save();
     ctx.strokeStyle = 'rgba(226, 177, 90, 0.9)';
     ctx.lineWidth = Math.max(1.5, frame.tile * 0.028);
     ctx.setLineDash([Math.max(4, frame.tile * 0.12), Math.max(3, frame.tile * 0.08)]);
     ctx.beginPath();
-    ctx.moveTo(from.x + from.s * 0.5, from.y + from.s * 0.55);
-    ctx.lineTo(to.x + to.s * 0.5, to.y + to.s * 0.55);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.restore();
+    drawKinName(ctx, frame, (x1 + x2) / 2, (y1 + y2) / 2, sharedYieldNames(state, selected, building));
     drawBrackets(ctx, to, 'rgba(226, 177, 90, 0.95)', 0.12);
   }
+}
+
+function sharedYieldNames(state, selected, other) {
+  const ours = incomeForBuilding(state, selected);
+  const theirs = incomeForBuilding(state, other);
+  return Object.keys(ours).filter((key) => (ours[key] || 0) > 0 && (theirs[key] || 0) > 0);
+}
+
+function drawKinName(ctx, frame, x, y, names) {
+  if (!names?.length) return;
+  const label = names.join(', ');
+  const size = Math.max(11, Math.round(frame.tile * 0.2));
+  ctx.save();
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const width = ctx.measureText(label).width + size * 0.8;
+  const height = size + 3;
+  const left = x - width / 2;
+  const top = y - height / 2;
+  ctx.fillStyle = 'rgba(255, 246, 224, 0.96)';
+  ctx.strokeStyle = '#8a6230';
+  ctx.lineWidth = 1;
+  roundRect(ctx, left, top, width, height, 3);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#3a2416';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y + 0.5);
+  ctx.restore();
 }
 
 function paintDawn(ctx, frame) {
