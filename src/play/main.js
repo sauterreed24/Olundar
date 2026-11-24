@@ -48,7 +48,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, stoodBeside, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, dawnStepFor, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, stoodBeside, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -252,6 +252,8 @@ function selectedGlance() {
         ? `${base} · ${approach.cost} to ${building.name}`
         : `${base} · ${besidePhrase(building)}`;
     }
+    const dawn = dawnStepFor(state, unit);
+    if (dawn) return `${base} · opens ${dawn.tiles.length}`;
     return `${base} · ${unit.x},${unit.y}`;
   }
   if (building) {
@@ -564,6 +566,7 @@ function unitCard(unit) {
       ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
       <div class="actions">
         ${mine && !unit.hasActed ? stepUpButton(unit) : ''}
+        ${mine && !unit.hasActed ? dawnButton(unit) : ''}
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">${held ? `Hold ${escapeHtml(held.name)}` : 'Fortify'}</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
         ${buildType ? `<button type="button" data-cmd="cancel-build">Cancel build</button>` : ''}
@@ -597,6 +600,19 @@ function stepUpButton(unit) {
   const approach = approachFor(state, unit, building);
   if (!approach || approach.cost < 1 || !building) return '';
   return `<button type="button" data-cmd="step-up">Step up · ${approach.cost}</button>`;
+}
+
+function dawnButton(unit) {
+  const dawn = dawnStepFor(state, unit);
+  if (!dawn) return '';
+  return `<button type="button" data-cmd="dawn">Open ${dawn.tiles.length}</button>`;
+}
+
+function openDawn() {
+  const unit = state.units.find((item) => item.id === state.selectedUnitId);
+  const dawn = dawnStepFor(state, unit);
+  if (!unit || !dawn) return;
+  run(moveCommand(unit.id, dawn.x, dawn.y));
 }
 
 function stepUp() {
@@ -753,6 +769,7 @@ function onDockClick(event) {
   }
   if (cmd === 'fortify') fortifySelected();
   else if (cmd === 'step-up') stepUp();
+  else if (cmd === 'dawn') openDawn();
   else if (cmd === 'seat') takeSeat(button.dataset.unit);
   else if (cmd === 'coming') takeComing(button.dataset.building);
   else if (cmd === 'arm-build') {

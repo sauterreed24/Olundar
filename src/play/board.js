@@ -634,12 +634,14 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drawMusterFoot(ctx, frame, building, ground, ahead.get(building.id) || 0);
     }
   }
+  let drewRoute = false;
   if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
       && (hover.x !== selectedUnit.x || hover.y !== selectedUnit.y)) {
     const exposed = hostsReaching(state, selectedUnit.faction, hover.x, hover.y, selectedUnit.id).length > 0;
     drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0, exposed);
     drawMarchCost(ctx, frame, hover.x, hover.y, field.get(`${hover.x},${hover.y}`), exposed);
     paintStepDawn(ctx, frame, groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y));
+    drewRoute = true;
   } else if (!buildType && selectedUnit && selectedBuildingId) {
     const building = state.buildings.find((item) => item.id === selectedBuildingId);
     const approach = approachFromField(field, selectedUnit, building);
@@ -648,6 +650,15 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drawMovePath(ctx, frame, approach.path, field);
       drawApproachMark(ctx, frame, approach.x, approach.y);
       drawMarchCost(ctx, frame, approach.x, approach.y, approach.cost, false);
+      drewRoute = true;
+    }
+  }
+  if (!drewRoute && !buildType && selectedUnit && !selectedUnit.hasActed) {
+    const dawn = dawnFromField(state, selectedUnit, field);
+    if (dawn?.path?.length > 1) {
+      drawMovePath(ctx, frame, dawn.path, field);
+      drawMarchCost(ctx, frame, dawn.x, dawn.y, dawn.cost, false);
+      paintStepDawn(ctx, frame, dawn.tiles);
     }
   }
   paintImpacts(ctx, frame);
@@ -2523,6 +2534,27 @@ export function approachFor(state, unit, building) {
   const approach = approachFromField(movementField(state, unit), unit, building);
   if (!approach || (unit.hasActed && approach.cost > 0)) return null;
   return approach;
+}
+
+function dawnFromField(state, unit, field) {
+  if (!unit || !field) return null;
+  let best = null;
+  for (const [id, cost] of field) {
+    const [x, y] = id.split(',').map(Number);
+    if (x === unit.x && y === unit.y) continue;
+    const tiles = groundAStepWouldOpen(state, unit, x, y);
+    if (!tiles.length) continue;
+    if (!best || tiles.length > best.tiles.length || (tiles.length === best.tiles.length && cost < best.cost)) {
+      best = { x, y, cost, tiles };
+    }
+  }
+  if (!best) return null;
+  return { ...best, path: traceMovePath(field, unit, best.x, best.y) };
+}
+
+export function dawnStepFor(state, unit) {
+  if (!unit || unit.hasActed || unit.faction !== 'olundar') return null;
+  return dawnFromField(state, unit, movementField(state, unit));
 }
 
 function approachFromField(field, unit, building) {
