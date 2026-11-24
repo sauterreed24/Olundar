@@ -440,6 +440,7 @@ function paintImpacts(ctx, frame) {
     if (motion.kind === 'fall') drawFall(ctx, frame, motion);
     if (motion.kind === 'impact') drawImpact(ctx, frame, motion);
     if (motion.kind === 'damage') drawDamage(ctx, frame, motion);
+    if (motion.kind === 'mark') drawMark(ctx, frame, motion);
   }
 }
 
@@ -467,6 +468,18 @@ function drawDamage(ctx, frame, motion) {
   const y = rect.y + rect.s * (0.42 - amount * 0.36);
   ctx.strokeText(text, x, y);
   ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawMark(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRect(frame, motion.x, motion.y);
+  ctx.save();
+  ctx.strokeStyle = `rgba(240, 200, 102, ${1 - amount})`;
+  ctx.lineWidth = Math.max(2, rect.s * 0.045);
+  ctx.beginPath();
+  ctx.arc(rect.x + rect.s * 0.5, rect.y + rect.s * 0.58, rect.s * (0.18 + amount * 0.42), 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 

@@ -301,12 +301,16 @@ function resourceChip(id, value, label, net = 0) {
   const selected = holdings.find((item) => item.building.id === state.selectedBuildingId);
   const lead = holdings[0];
   const led = selected ? ' led' : '';
+  const place = selected && holdings.length > 1
+    ? ` · ${holdings.indexOf(selected) + 1} of ${holdings.length}`
+    : '';
+  const many = holdings.length > 1 ? `<small class="many" title="${holdings.length} holdings">${holdings.length}</small>` : '';
   const forecast = net ? `<small class="next${net < 0 ? ' drain' : ''}" title="next harvest">${net > 0 ? '+' : '−'}${Math.abs(net)}</small>` : '';
-  const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}${forecast}`;
+  const debit = `${due ? `<small>−${due}</small>` : ''}${bite ? `<small class="soon" title="each turn once mustered">−${bite}</small>` : ''}${forecast}${many}`;
   const hint = selected
-    ? ` title="${escapeHtml(`${selected.building.name} · ${label.toLowerCase()} +${selected.amount}`)}"`
+    ? ` title="${escapeHtml(`${selected.building.name} · ${label.toLowerCase()} +${selected.amount}${place}`)}"`
     : lead
-      ? ` title="${escapeHtml(`${lead.building.name} leads ${label.toLowerCase()}`)}"`
+      ? ` title="${escapeHtml(`${lead.building.name} leads ${label.toLowerCase()}${holdings.length > 1 ? ` · ${holdings.length}` : ''}`)}"`
       : '';
   return `<span class="res res-${id}${hot}${mark}${led}" data-store="${id}"${hint}>${RESOURCE_ICONS[id]}<span><b>${value}${debit}</b><em>${escapeHtml(label)}</em></span></span>`;
 }
@@ -334,6 +338,7 @@ function openHolding(id) {
   buildType = null;
   endArmed = false;
   board.ensureVisible(next.x, next.y);
+  board.play({ kind: 'mark', x: next.x, y: next.y, duration: 560 });
   paint();
   renderChrome();
 }

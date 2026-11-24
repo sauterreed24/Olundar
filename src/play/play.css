@@ -188,6 +188,14 @@ button.primary, button.armed {
   color: #ffb089;
 }
 
+.resources .res small.many {
+  margin-left: 0.22rem;
+  color: #f6efe2;
+  font-size: 0.62rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
 @keyframes ledger-flash {
   0% { box-shadow: 0 0 0 2px #f0c866, inset 0 0 0 99px rgba(240, 200, 102, 0.55); color: #24170f; }
   100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); color: #f6efe2; }
