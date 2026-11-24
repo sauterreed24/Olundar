@@ -161,7 +161,12 @@ function companyRoster() {
   const company = olundarCompany(state);
   if (!company.length) return '';
   return `<div class="company">${company.map((unit, index) => {
-    const classes = [unit.hasActed ? 'spent' : 'ready', unit.id === state.selectedUnitId ? 'current' : '', unit.fortified > 0 ? 'guard' : ''].filter(Boolean).join(' ');
+    const classes = [
+      unit.hasActed ? 'spent' : 'ready',
+      unit.id === state.selectedUnitId ? 'current' : '',
+      unit.fortified > 0 ? 'guard' : '',
+      endArmed && !unit.hasActed ? 'owing' : ''
+    ].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
     const guard = unit.fortified > 0 ? `<span class="seat-guard">${unit.fortified}</span>` : '';
