@@ -748,6 +748,21 @@ export function getReadyOlundarUnits(state) {
     .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
 }
 
+export function nextReadyOlundarUnit(state, currentId) {
+  const ready = getReadyOlundarUnits(state);
+  if (!ready.length) return null;
+  const company = state.units
+    .filter((unit) => unit.faction === 'olundar')
+    .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
+  const start = company.findIndex((unit) => unit.id === currentId);
+  const origin = start < 0 ? 0 : start;
+  for (let step = 1; step <= company.length; step += 1) {
+    const candidate = company[(origin + step) % company.length];
+    if (ready.some((unit) => unit.id === candidate.id)) return candidate;
+  }
+  return ready[0];
+}
+
 function unitCommandPriority(unit) {
   const def = getUnitDef(unit);
   if (def.tags.includes('recon')) return 1;

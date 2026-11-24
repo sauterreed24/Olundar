@@ -29,6 +29,7 @@ import {
   getEndTurnWarnings,
   getRallyForecast,
   getReadyOlundarUnits,
+  nextReadyOlundarUnit,
   getSunEdictStatus,
   getWarCouncil,
   isRevealed,
@@ -595,14 +596,16 @@ function run(command) {
     if (result?.ruinWhisper) extra.push(result.ruinWhisper.echo ? 'a ruin whispers' : 'ruins surveyed');
     text = `${text} ${extra.join('. ')}.`;
   }
-  notice(text, result?.ok === false ? 'bad' : 'good');
+  let nextUnit = null;
   if (result?.ok !== false) {
     if (opened.length) board.play({ kind: 'dawn', tiles: opened, duration: 760 });
     if (sighted.length) board.play({ kind: 'sight', tiles: sighted.map((unit) => ({ x: unit.x, y: unit.y })), duration: 880 });
     playAudioCue('ui');
     playCue(cue, result);
-    if (!opened.length && !sighted.length) handOffSpentUnit();
+    if (!opened.length && !sighted.length) nextUnit = handOffSpentUnit();
   }
+  if (nextUnit) text = `${text} ${nextUnit.name} is next.`;
+  notice(text, result?.ok === false ? 'bad' : 'good');
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);
   paint();
@@ -683,12 +686,14 @@ function playCue(cue, result) {
 
 function handOffSpentUnit() {
   const current = state.units.find((unit) => unit.id === state.selectedUnitId);
-  if (!current?.hasActed) return;
-  const ready = getReadyOlundarUnits(state);
-  if (!ready.length) return;
-  state.selectedUnitId = ready[0].id;
+  if (!current?.hasActed) return null;
+  const next = nextReadyOlundarUnit(state, current.id);
+  if (!next) return null;
+  state.selectedUnitId = next.id;
   state.selectedBuildingId = null;
-  board.ensureVisible(ready[0].x, ready[0].y);
+  board.ensureVisible(next.x, next.y);
+  board.play({ kind: 'beckon', unitId: next.id, duration: 560 });
+  return next;
 }
 
 function marchPath(from, to) {

@@ -1940,6 +1940,15 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
     ctx.arc(s * 0.5, s * 0.8, s * (0.1 + amount * 0.4), 0, Math.PI * 2);
     ctx.stroke();
   }
+  const beckon = activeMotion(unit.id, 'beckon');
+  if (beckon) {
+    const amount = motionAmount(beckon);
+    ctx.strokeStyle = `rgba(240, 200, 102, ${1 - amount})`;
+    ctx.lineWidth = Math.max(2, s * 0.05);
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.52, s * (0.62 - amount * 0.34), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   if (unit.faction === 'olundar' && !unit.hasActed && !walking) {
     ctx.save();
     ctx.translate(s * 0.8, s * 0.05);
