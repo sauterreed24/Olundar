@@ -587,7 +587,9 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   }
   if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
       && (hover.x !== selectedUnit.x || hover.y !== selectedUnit.y)) {
-    drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0);
+    const exposed = hostsReaching(state, selectedUnit.faction, hover.x, hover.y, selectedUnit.id).length > 0;
+    drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0, exposed);
+    drawMarchCost(ctx, frame, hover.x, hover.y, field.get(`${hover.x},${hover.y}`), exposed);
   }
   paintImpacts(ctx, frame);
   if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
@@ -2066,11 +2068,15 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
   ctx.restore();
 }
 
-function drawMoveGhost(ctx, frame, unit, hover, seat) {
+function drawMoveGhost(ctx, frame, unit, hover, seat, exposed = false) {
   const rect = tileRect(frame, hover.x, hover.y);
   const s = rect.s;
   ctx.save();
   ctx.translate(rect.x, rect.y);
+  if (exposed) {
+    ctx.fillStyle = 'rgba(176, 42, 32, 0.28)';
+    ctx.fillRect(0, s * 0.5, s, s * 0.5);
+  }
   ctx.globalAlpha = 0.72;
   groundShadow(ctx, s);
   ctx.save();
@@ -2087,6 +2093,30 @@ function drawMoveGhost(ctx, frame, unit, hover, seat) {
     ctx.fill();
   }
   if (seat) drawCompanyMark(ctx, s, seat, true);
+  ctx.restore();
+}
+
+function drawMarchCost(ctx, frame, x, y, cost, exposed = false) {
+  if (!Number.isFinite(cost)) return;
+  const rect = tileRect(frame, x, y);
+  const label = String(cost);
+  const size = Math.max(11, Math.round(frame.tile * 0.22));
+  ctx.save();
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const width = ctx.measureText(label).width + size * 0.7;
+  const height = size + 2;
+  const left = rect.x + (rect.s - width) / 2;
+  const top = rect.y + rect.s * 0.28;
+  ctx.fillStyle = exposed ? 'rgba(255, 236, 228, 0.96)' : 'rgba(255, 246, 224, 0.94)';
+  ctx.strokeStyle = exposed ? '#9f2d22' : '#6a4a28';
+  ctx.lineWidth = exposed ? 2 : 1;
+  roundRect(ctx, left, top, width, height, 3);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = exposed ? '#7a2418' : '#3a2416';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, left + width / 2, top + height / 2 + 0.5);
   ctx.restore();
 }
 
@@ -2227,26 +2257,7 @@ function drawMovePath(ctx, frame, path, field) {
   trace(Math.max(2.5, frame.tile * 0.065), 'rgba(214, 132, 32, 0.96)');
   path.forEach((step, index) => {
     if (index === 0) return;
-    const cost = field?.get(`${step.x},${step.y}`);
-    if (!Number.isFinite(cost)) return;
-    const rect = tileRect(frame, step.x, step.y);
-    const label = String(cost);
-    const size = Math.max(11, Math.round(frame.tile * 0.22));
-    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
-    const width = ctx.measureText(label).width + size * 0.7;
-    const height = size + 2;
-    const left = rect.x + (rect.s - width) / 2;
-    const top = rect.y + rect.s * 0.28;
-    ctx.fillStyle = 'rgba(255, 246, 224, 0.94)';
-    ctx.strokeStyle = '#6a4a28';
-    ctx.lineWidth = 1;
-    roundRect(ctx, left, top, width, height, 3);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#3a2416';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, left + width / 2, top + height / 2 + 0.5);
+    drawMarchCost(ctx, frame, step.x, step.y, field?.get(`${step.x},${step.y}`));
   });
   const last = path[path.length - 1];
   const prev = path[path.length - 2];
