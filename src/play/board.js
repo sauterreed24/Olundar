@@ -329,7 +329,10 @@ export function createBoard(canvas) {
     const route = hover && selectedUnit && field.has(`${hover.x},${hover.y}`)
       ? traceMovePath(field, selectedUnit, hover.x, hover.y)
       : [];
-    paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType);
+    const dawn = !buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
+      ? groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y)
+      : [];
+    paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType, dawn);
     paintWarClock(ctx, state, frame);
   }
 
@@ -705,7 +708,7 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
-function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null) {
+function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null, dawn = []) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
   ctx.save();
@@ -725,6 +728,10 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
       }
       ctx.fillRect(x0 + x * scale, y0 + y * scale, scale + 0.3, scale + 0.3);
     }
+  }
+  if (dawn?.length) {
+    ctx.fillStyle = '#f3d48a';
+    for (const tile of dawn) ctx.fillRect(x0 + tile.x * scale, y0 + tile.y * scale, scale + 0.3, scale + 0.3);
   }
   ctx.strokeStyle = '#e0a45a';
   ctx.lineWidth = Math.max(1, scale * 0.45);
