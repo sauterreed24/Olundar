@@ -13,6 +13,8 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getMarchAssaultVectors,
+  getDeadwalkerCampaign,
+  getWarCouncil,
   isEnemy,
   isRevealed,
   isVisible,
@@ -324,6 +326,7 @@ export function createBoard(canvas) {
     ctx.drawImage(pieces, 0, 0);
     paintVignette(ctx);
     paintMinimap(ctx, state, frame, selectedUnit);
+    paintWarClock(ctx, state, frame);
   }
 
   return {
@@ -710,6 +713,45 @@ function paintMinimap(ctx, state, frame, selectedUnit) {
   const viewCols = ctx.canvas.clientWidth / Math.max(1, frame.tile / frame.dpr);
   const viewRows = ctx.canvas.clientHeight / Math.max(1, frame.tile / frame.dpr);
   ctx.strokeRect(x0 + frame.camX * scale, y0 + frame.camY * scale, viewCols * scale, viewRows * scale);
+  ctx.restore();
+}
+
+export function warClock(state) {
+  const camp = getDeadwalkerCampaign(state);
+  const council = getWarCouncil(state);
+  const detail = camp.marchesSent
+    ? (camp.closest
+      ? `${camp.stage}. ${camp.closest.name} is ${camp.closest.distance} from the capital.`
+      : `${camp.stage}. ${camp.marchingCount} hunt the capital.`)
+    : `${camp.stage}. First march in ${camp.turnsToMarch}.`;
+  return { title: council.headline || 'War council', detail };
+}
+
+function paintWarClock(ctx, state, frame) {
+  const clock = warClock(state);
+  const pad = 14 * frame.dpr;
+  const size = Math.max(13, 15 * frame.dpr);
+  ctx.save();
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const titleW = ctx.measureText(clock.title).width;
+  ctx.font = `600 ${Math.round(size * 0.82)}px Palatino, Georgia, serif`;
+  const detailW = ctx.measureText(clock.detail).width;
+  const width = Math.max(titleW, detailW) + pad * 1.8;
+  const height = size * 2.6 + pad * 0.8;
+  ctx.fillStyle = 'rgba(255, 246, 224, 0.94)';
+  ctx.strokeStyle = '#8a6230';
+  ctx.lineWidth = Math.max(1, frame.dpr);
+  roundRect(ctx, pad, pad, width, height, 4 * frame.dpr);
+  ctx.fill();
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#6a3418';
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  ctx.fillText(clock.title, pad * 1.7, pad * 1.25);
+  ctx.fillStyle = '#3a2416';
+  ctx.font = `600 ${Math.round(size * 0.82)}px Palatino, Georgia, serif`;
+  ctx.fillText(clock.detail, pad * 1.7, pad * 1.25 + size * 1.2);
   ctx.restore();
 }
 

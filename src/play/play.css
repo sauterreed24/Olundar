@@ -340,6 +340,14 @@ button.primary, button.armed {
   color: var(--muted);
 }
 
+.aim {
+  margin: -0.35rem 0 0.7rem;
+  color: #6a3418;
+  font-size: 0.84rem;
+}
+
+.aim b { font-family: var(--serif); }
+
 .glance, .note {
   font-family: var(--sans);
   font-size: 0.84rem;

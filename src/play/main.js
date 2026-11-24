@@ -39,7 +39,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -133,6 +133,7 @@ function renderChrome() {
 
 function renderDock() {
   const glanceText = orderGlance();
+  const clock = warClock(state);
   dock.innerHTML = `
     <div class="tabs">
       ${tabButton('field', 'Field')}
@@ -141,6 +142,7 @@ function renderDock() {
       ${tabButton('log', 'Log')}
     </div>
     <p id="glance" class="glance">${escapeHtml(glanceText)}</p>
+    <p class="aim"><b>${escapeHtml(clock.title)}</b> ${escapeHtml(clock.detail)}</p>
     ${tab === 'field' ? fieldTab() : ''}
     ${tab === 'council' ? councilTab() : ''}
     ${tab === 'diplomacy' ? diplomacyTab() : ''}
