@@ -368,6 +368,27 @@ button.primary, button.armed {
   .company button.owing { animation: none; box-shadow: 0 0 0 2px #fff1c4; }
 }
 
+.company button.fresh {
+  border-color: #6f8f2e;
+  box-shadow: 0 0 0 2px #c6d36a, inset 0 0 0 99px rgba(143, 206, 98, 0.2);
+}
+
+.company button.current.fresh {
+  box-shadow: 0 0 0 2px #c6d36a, inset 0 0 0 99px rgba(143, 206, 98, 0.2);
+}
+
+.company .seat-new {
+  position: absolute;
+  right: 0.16rem;
+  bottom: 1.15rem;
+  z-index: 1;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2f5a24;
+}
+
 .company em {
   font-style: normal;
   max-width: 100%;

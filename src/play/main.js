@@ -74,6 +74,7 @@ let endArmed = false;
 let tab = 'field';
 let pointer = null;
 let ledgerPulse = new Set();
+let freshCompany = new Set();
 
 initAudioPreference();
 registerPwa();
@@ -165,12 +166,14 @@ function companyRoster() {
       unit.hasActed ? 'spent' : 'ready',
       unit.id === state.selectedUnitId ? 'current' : '',
       unit.fortified > 0 ? 'guard' : '',
-      endArmed && !unit.hasActed ? 'owing' : ''
+      endArmed && !unit.hasActed ? 'owing' : '',
+      freshCompany.has(unit.id) ? 'fresh' : ''
     ].filter(Boolean).join(' ');
     const name = unit.name.split(' ').slice(-1)[0];
     const key = index < 9 ? `<span class="seat-key">${index + 1}</span>` : '';
     const guard = unit.fortified > 0 ? `<span class="seat-guard">${unit.fortified}</span>` : '';
-    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}">${key}${guard}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
+    const fresh = freshCompany.has(unit.id) ? '<span class="seat-new">new</span>' : '';
+    return `<button type="button" class="${classes}" data-cmd="seat" data-unit="${unit.id}" title="${escapeHtml(unit.name)}${unit.fortified ? ` · guard ${unit.fortified}` : ''}">${key}${guard}${fresh}<span class="seat-face">${unitPortrait(unit)}</span><em>${escapeHtml(name)}</em></button>`;
   }).join('')}</div>`;
 }
 
@@ -827,6 +830,12 @@ function requestEndTurn() {
   endTurn(state);
   const watch = playEnemyMarch(before);
   const arrived = playArrivals(before);
+  const mustered = arrived.filter((unit) => unit.faction === 'olundar');
+  freshCompany = new Set(mustered.map((unit) => unit.id));
+  if (mustered.length && !watch) {
+    state.selectedUnitId = mustered[0].id;
+    state.selectedBuildingId = null;
+  }
   for (const id of rising) {
     const building = state.buildings.find((item) => item.id === id);
     if (building && building.turnsLeft === 0) board.play({ kind: 'rise', x: building.x, y: building.y, duration: 520 });
@@ -863,6 +872,7 @@ function requestEndTurn() {
   }
   renderChrome();
   ledgerPulse = new Set();
+  freshCompany = new Set();
   paint();
 }
 
