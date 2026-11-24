@@ -563,7 +563,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   for (const prop of props) {
     if (prop.building) {
       const loss = strike && prop.building.x === strike.x && prop.building.y === strike.y ? strike.damage : 0;
-      drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y), loss, yieldLabel(state, prop.building));
+      drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y), loss, musterLabel(prop.building) || yieldLabel(state, prop.building));
     } else {
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
       const aim = prop.unit.id === selectedUnit?.id ? hover : null;
@@ -2211,12 +2211,29 @@ export function hoverSummary(state, tile, field) {
   if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
   if (unit) parts.push(unit.name);
-  if (building) {
-    parts.push(building.name);
-    const yieldText = yieldLabel(state, building, 4);
-    if (yieldText) parts.push(yieldText);
-  }
+    if (building) {
+      parts.push(building.name);
+      const extra = holdingLine(state, building);
+      if (extra) parts.push(extra);
+    }
   return parts.join(' · ');
+}
+
+export function holdingLine(state, building) {
+  if (!building || building.type === 'road') return '';
+  const parts = [];
+  const yieldText = yieldLabel(state, building, 4);
+  if (yieldText) parts.push(yieldText);
+  const muster = musterLabel(building);
+  if (muster) parts.push(muster);
+  return parts.join(' · ');
+}
+
+function musterLabel(building) {
+  if (!building?.queue?.length || building.turnsLeft > 0) return '';
+  const current = building.queue[0];
+  const name = UNIT_TYPES[current.unitType]?.name || 'Troop';
+  return `${name.split(' ').slice(-1)[0]} in ${current.turnsLeft}`;
 }
 
 function yieldLabel(state, building, limit = 1) {

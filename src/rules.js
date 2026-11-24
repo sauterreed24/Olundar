@@ -3260,7 +3260,7 @@ export function startTraining(state, buildingId, unitType) {
   payCost(resources, unitDef.cost);
   building.queue.push({ unitType, turnsLeft: trainingTurnsFor(building, unitType) });
   addMessage(state, `${unitDef.name} training begun at ${building.name}.`, 'info');
-  return { ok: true };
+  return { ok: true, reason: `${unitDef.name} training begun.` };
 }
 
 export function upgradeBuilding(state, buildingId) {
@@ -3836,6 +3836,21 @@ export function incomeForBuilding(state, building) {
     income[resource] = amount + Math.ceil(amount * 0.35 * (building.upgraded || 0));
   }
   return income;
+}
+
+export function factionBooks(state, factionId = 'olundar') {
+  const income = { food: 0, wood: 0, stone: 0, iron: 0, gold: 0, influence: 0, morale: 0 };
+  for (const building of state.buildings) {
+    if (building.faction !== factionId || building.turnsLeft > 0) continue;
+    gainResources(income, incomeForBuilding(state, building));
+  }
+  if (factionId === 'olundar') {
+    const trades = state.factions.olundar?.trades || {};
+    for (const partner of Object.keys(trades)) {
+      if (trades[partner]) gainResources(income, { gold: 6, food: 2 });
+    }
+  }
+  return { income, upkeep: totalUpkeep(state, factionId) };
 }
 
 function totalUpkeep(state, factionId) {

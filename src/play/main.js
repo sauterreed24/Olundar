@@ -20,6 +20,7 @@ import {
   endTurn,
   forecastBuildingAttack,
   forecastUnitAttack,
+  factionBooks,
   formatCost,
   isEnemy,
   getAftermathMissions,
@@ -38,7 +39,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -150,7 +151,10 @@ function selectedGlance() {
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
   if (unit) return `${unit.name} · ${unit.x},${unit.y}`;
-  if (building) return `${building.name} · ${building.x},${building.y}`;
+  if (building) {
+    const extra = holdingLine(state, building);
+    return extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`;
+  }
   const ready = getReadyOlundarUnits(state).length;
   return ready ? `${ready} gold pennants still owe an order.` : 'Select a unit, then choose a highlighted tile.';
 }
@@ -220,10 +224,29 @@ function fieldTab() {
   }
   if (!unit && !building) {
     const ready = getReadyOlundarUnits(state).length;
-    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Gold pennants still owe an order. Gold steps are walks, crimson steps are exposed, and a red bracket can be struck.</p>${buildHint()}</section>`;
+    return `<section class="card"><h2>The valley holds</h2><p>${ready} unit${ready === 1 ? '' : 's'} still have orders. Select one on the map, or press N.</p><p class="note">Books next turn: ${escapeHtml(booksLine())}.</p><p class="note">Gold pennants still owe an order. Gold steps are walks, crimson steps are exposed, and a red bracket can be struck.</p>${buildHint()}</section>`;
   }
   if (unit) return unitCard(unit);
   return buildingCard(building);
+}
+
+function booksLine() {
+  const { income, upkeep } = factionBooks(state);
+  const parts = [];
+  for (const key of ['food', 'wood', 'stone', 'iron', 'gold', 'influence']) {
+    const earned = income[key] || 0;
+    const eaten = upkeep[key] || 0;
+    if (!earned && !eaten) continue;
+    if (earned && eaten) parts.push(`${key} +${earned} −${eaten}`);
+    else if (earned) parts.push(`${key} +${earned}`);
+    else parts.push(`${key} −${eaten}`);
+  }
+  return parts.join(', ');
+}
+
+function upkeepLine(def) {
+  const parts = Object.entries(def.upkeep || {}).filter(([, amount]) => amount).map(([id, amount]) => `${id} ${amount}`);
+  return parts.length ? `<p class="note">Upkeep ${escapeHtml(parts.join(', '))}.</p>` : '';
 }
 
 function threatLine(unit) {
@@ -264,6 +287,7 @@ function unitCard(unit) {
       </ul>
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
       <p>${escapeHtml(def.text)}</p>
+      ${upkeepLine(def)}
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
       ${unit.fortified > 0 ? '<p class="note">Fortified. The guard holds until this unit moves or strikes.</p>' : ''}
       ${threatLine(unit)}
@@ -297,6 +321,11 @@ function buildingCard(building) {
       <p class="muted">${building.hp}/${building.maxHp} HP</p>
       <p>${escapeHtml(def.text)}</p>
       ${building.turnsLeft > 0 ? `<p class="note">Finishes in ${building.turnsLeft} turn${building.turnsLeft === 1 ? '' : 's'}.</p>` : ''}
+      ${(building.queue || []).map((entry) => {
+        const trainee = UNIT_TYPES[entry.unitType];
+        const name = trainee?.name || 'A company';
+        return `<p class="note">${escapeHtml(name)} musters in ${entry.turnsLeft} turn${entry.turnsLeft === 1 ? '' : 's'}.</p>`;
+      }).join('')}
       <div class="actions">
         ${trains}
         ${mine && building.turnsLeft <= 0 ? `<button type="button" data-cmd="upgrade">Upgrade · ${escapeHtml(formatCost(upgradeCostFor(building)))}</button>` : ''}
