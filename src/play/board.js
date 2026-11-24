@@ -542,6 +542,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
 
+  const strike = !buildType && selectedUnit && hover ? hoverStrike(state, selectedUnit, hover.x, hover.y) : null;
   const props = [];
   for (const building of state.buildings) {
     if (building.type === 'road') continue;
@@ -557,19 +558,19 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   }
   props.sort((a, b) => a.y - b.y || a.x - b.x || a.rank - b.rank);
   for (const prop of props) {
-    if (prop.building) drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y));
-    else {
+    if (prop.building) {
+      const loss = strike && prop.building.x === strike.x && prop.building.y === strike.y ? strike.damage : 0;
+      drawBuilding(ctx, frame, prop.building, prop.building.id === selectedBuildingId, isVisible(state, prop.building.x, prop.building.y), loss);
+    } else {
       const attack = selectedUnit && !selectedUnit.hasActed && isAttackTarget(state, selectedUnit, prop.unit);
       const aim = prop.unit.id === selectedUnit?.id ? hover : null;
-      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim);
+      const loss = strike && prop.unit.x === strike.x && prop.unit.y === strike.y ? strike.damage : 0;
+      drawUnit(ctx, frame, prop.unit, prop.unit.id === selectedUnit?.id, attack, prop.place, aim, loss);
     }
   }
   paintImpacts(ctx, frame);
   if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
-  if (!buildType && selectedUnit && hover) {
-    const strike = hoverStrike(state, selectedUnit, hover.x, hover.y);
-    if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
-  }
+  if (strike) drawStrikePreview(ctx, frame, selectedUnit, strike);
   if (hover) {
     drawCoverMark(ctx, frame, state, hover);
     drawBrackets(ctx, tileRect(frame, hover.x, hover.y), 'rgba(255, 248, 220, 0.95)', 0.08);
@@ -718,6 +719,7 @@ function drawTerrainFace(ctx, rect, tile, seen, x, y, frame) {
 }
 
 function drawTerrainFeature(ctx, state, tile, rect, seen, x, y) {
+  if (tile.terrain !== 'river') drawShore(ctx, state, rect, seen, x, y);
   if (tile.terrain === 'forest') drawForest(ctx, rect, x, y, seen);
   else if (tile.terrain === 'hills') {
     if (!terrainPhotos.hills) drawHill(ctx, rect, seen, x, y);
@@ -1039,24 +1041,51 @@ function drawMountain(ctx, rect, seen, x, y) {
 
 function drawRiver(ctx, state, rect, seen, x, y) {
   const s = rect.s;
-  const bank = seen ? '#e6d3a6' : '#8d7b5c';
-  const lip = Math.max(3, s * 0.14);
+  const lip = Math.max(2, s * 0.045);
+  ctx.fillStyle = seen ? 'rgba(12, 36, 28, 0.45)' : 'rgba(16, 24, 18, 0.35)';
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (terrainName(state, x + dx, y + dy) === 'river') continue;
-    ctx.fillStyle = bank;
-    if (dx === 1) ctx.fillRect(rect.x + s - lip, rect.y, lip + 1, s);
+    if (dx === 1) ctx.fillRect(rect.x + s - lip, rect.y, lip, s);
     if (dx === -1) ctx.fillRect(rect.x, rect.y, lip, s);
-    if (dy === 1) ctx.fillRect(rect.x, rect.y + s - lip, s, lip + 1);
+    if (dy === 1) ctx.fillRect(rect.x, rect.y + s - lip, s, lip);
     if (dy === -1) ctx.fillRect(rect.x, rect.y, s, lip);
   }
-  ctx.strokeStyle = seen ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.28)';
-  ctx.lineWidth = Math.max(1.6, s * 0.045);
+  const east = terrainName(state, x + 1, y) === 'river';
+  const west = terrainName(state, x - 1, y) === 'river';
+  const south = terrainName(state, x, y + 1) === 'river';
+  const north = terrainName(state, x, y - 1) === 'river';
+  ctx.strokeStyle = seen ? 'rgba(214, 240, 255, 0.42)' : 'rgba(214, 240, 255, 0.18)';
+  ctx.lineWidth = Math.max(1.2, s * 0.028);
   ctx.lineCap = 'round';
-  const j = (hash(x, y) % 10) / 50;
   ctx.beginPath();
-  ctx.moveTo(rect.x + s * (0.22 + j), rect.y + s * 0.06);
-  ctx.quadraticCurveTo(rect.x + s * (0.72 - j), rect.y + s * 0.46, rect.x + s * (0.3 + j), rect.y + s * 0.94);
+  if ((north || south) && !(east || west)) {
+    ctx.moveTo(rect.x + s * 0.46, rect.y + s * 0.02);
+    ctx.quadraticCurveTo(rect.x + s * 0.62, rect.y + s * 0.5, rect.x + s * 0.42, rect.y + s * 0.98);
+  } else {
+    ctx.moveTo(rect.x + s * 0.02, rect.y + s * 0.46);
+    ctx.quadraticCurveTo(rect.x + s * 0.5, rect.y + s * 0.64, rect.x + s * 0.98, rect.y + s * 0.4);
+  }
   ctx.stroke();
+}
+
+function drawShore(ctx, state, rect, seen, x, y) {
+  const s = rect.s;
+  const depth = Math.max(4, s * 0.16);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (terrainName(state, x + dx, y + dy) !== 'river') continue;
+    const vertical = dy !== 0;
+    const x0 = dx < 0 ? rect.x : dx > 0 ? rect.x + s - depth : rect.x;
+    const y0 = dy < 0 ? rect.y : dy > 0 ? rect.y + s - depth : rect.y;
+    const w = vertical ? s : depth;
+    const h = vertical ? depth : s;
+    const g = vertical
+      ? ctx.createLinearGradient(0, dy < 0 ? y0 : y0 + h, 0, dy < 0 ? y0 + h : y0)
+      : ctx.createLinearGradient(dx < 0 ? x0 : x0 + w, 0, dx < 0 ? x0 + w : x0, 0);
+    g.addColorStop(0, seen ? 'rgba(18, 52, 38, 0.42)' : 'rgba(16, 28, 20, 0.28)');
+    g.addColorStop(1, 'rgba(18, 52, 38, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, y0, w, h);
+  }
 }
 
 function drawMarsh(ctx, rect, seen, x, y) {
@@ -1211,7 +1240,7 @@ function drawBuildingSprite(ctx, type, s) {
   return true;
 }
 
-function drawBuilding(ctx, frame, building, selected, seen) {
+function drawBuilding(ctx, frame, building, selected, seen, pending = 0) {
   const rect = tileRect(frame, building.x, building.y);
   const color = FACTION_INK[building.faction] || '#f0c866';
   const s = rect.s;
@@ -1234,7 +1263,7 @@ function drawBuilding(ctx, frame, building, selected, seen) {
     else drawLivingWork(ctx, building, s, color);
     if (building.upgraded) drawFinial(ctx, s * 0.5, s * 0.18, s);
   }
-  drawHealthPip(ctx, s * 0.22, s * 0.93, s * 0.56, Math.max(3, s * 0.04), building.hp / building.maxHp);
+  drawHealthPip(ctx, s * 0.22, s * 0.93, s * 0.56, Math.max(4, s * 0.055), building.hp / building.maxHp, pending / building.maxHp);
   if (building.turnsLeft > 0) drawScaffold(ctx, s);
   if (selected) drawBrackets(ctx, { x: s * 0.04, y: s * 0.04, s: s * 0.92 }, '#f4d48a', 0.02);
   ctx.restore();
@@ -1672,7 +1701,7 @@ function faceOf(unit, aim) {
   return facing.get(unit.id) || -1;
 }
 
-function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) {
+function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, pending = 0) {
   const spot = place || { x: unit.x, y: unit.y };
   const rect = tileRectAt(frame, spot.x, spot.y);
   const s = rect.s;
@@ -1739,7 +1768,7 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null) 
     ctx.lineWidth = Math.max(1, s * 0.02);
     ctx.stroke();
   }
-  drawHealthPip(ctx, s * 0.26, s * 0.9, s * 0.48, Math.max(3, s * 0.04), unit.hp / unit.maxHp);
+  drawHealthPip(ctx, s * 0.22, s * 0.9, s * 0.56, Math.max(4, s * 0.055), unit.hp / unit.maxHp, pending / unit.maxHp);
   if (attack) drawBrackets(ctx, { x: s * 0.02, y: s * 0.02, s: s * 0.96 }, '#d23b2e', 0);
   if (selected) {
     const glow = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(frameNow / 180));
@@ -1795,15 +1824,25 @@ function drawPennon(ctx, x, y, h, color) {
   ctx.fill();
 }
 
-function drawHealthPip(ctx, x, y, w, h, pct) {
-  if (!(pct < 0.999)) return;
+function drawHealthPip(ctx, x, y, w, h, pct, loss = 0) {
   const amount = Math.max(0, Math.min(1, pct));
-  ctx.fillStyle = 'rgba(16, 10, 6, 0.75)';
+  const doomed = Math.max(0, Math.min(amount, loss));
+  if (!(amount < 0.999) && !(doomed > 0)) return;
+  const kept = Math.max(0, amount - doomed);
+  ctx.fillStyle = 'rgba(16, 10, 6, 0.82)';
   roundRect(ctx, x, y, w, h, h / 2);
   ctx.fill();
-  ctx.fillStyle = amount > 0.55 ? '#8fce62' : amount > 0.28 ? '#e2b15a' : '#d4543c';
-  roundRect(ctx, x, y, Math.max(h, w * amount), h, h / 2);
-  ctx.fill();
+  if (kept > 0) {
+    ctx.fillStyle = kept > 0.55 ? '#8fce62' : kept > 0.28 ? '#e2b15a' : '#d4543c';
+    roundRect(ctx, x, y, Math.max(h, w * kept), h, h / 2);
+    ctx.fill();
+  }
+  if (doomed > 0) {
+    const width = Math.min(w - w * kept, Math.max(Math.min(h, w * doomed), w * doomed));
+    ctx.fillStyle = 'rgba(210, 64, 48, 0.92)';
+    roundRect(ctx, x + w * kept, y, Math.max(1, width), h, h / 2);
+    ctx.fill();
+  }
 }
 
 export function traceMovePath(field, origin, x, y) {
