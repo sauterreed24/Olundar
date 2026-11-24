@@ -325,7 +325,10 @@ export function createBoard(canvas) {
     ctx.drawImage(terrain, 0, 0);
     ctx.drawImage(pieces, 0, 0);
     paintVignette(ctx);
-    paintMinimap(ctx, state, frame, selectedUnit, field);
+    const route = hover && selectedUnit && field.has(`${hover.x},${hover.y}`)
+      ? traceMovePath(field, selectedUnit, hover.x, hover.y)
+      : [];
+    paintMinimap(ctx, state, frame, selectedUnit, field, route);
     paintWarClock(ctx, state, frame);
   }
 
@@ -691,7 +694,7 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
-function paintMinimap(ctx, state, frame, selectedUnit, field) {
+function paintMinimap(ctx, state, frame, selectedUnit, field, route = []) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
   ctx.save();
@@ -729,6 +732,17 @@ function paintMinimap(ctx, state, frame, selectedUnit, field) {
       }
     }
   }
+  if (selectedUnit && !selectedUnit.hasActed && selectedUnit.faction === 'olundar') {
+    const range = UNIT_TYPES[selectedUnit.type]?.range || 1;
+    ctx.fillStyle = '#b42318';
+    for (let y = selectedUnit.y - range; y <= selectedUnit.y + range; y += 1) {
+      for (let x = selectedUnit.x - range; x <= selectedUnit.x + range; x += 1) {
+        const distance = Math.abs(x - selectedUnit.x) + Math.abs(y - selectedUnit.y);
+        if (distance === 0 || distance > range || !isVisible(state, x, y)) continue;
+        ctx.fillRect(x0 + x * scale + scale * 0.28, y0 + y * scale + scale * 0.28, Math.max(1.1, scale * 0.44), Math.max(1.1, scale * 0.44));
+      }
+    }
+  }
   if (field?.size) {
     for (const id of field.keys()) {
       const [x, y] = id.split(',').map(Number);
@@ -762,6 +776,19 @@ function paintMinimap(ctx, state, frame, selectedUnit, field) {
     ctx.lineWidth = Math.max(1, frame.dpr);
     ctx.beginPath();
     motion.path.forEach((step, index) => {
+      const px = x0 + (step.x + 0.5) * scale;
+      const py = y0 + (step.y + 0.5) * scale;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+  if (route.length > 1) {
+    ctx.strokeStyle = '#ffe08a';
+    ctx.lineWidth = Math.max(1.4, scale * 0.42);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    route.forEach((step, index) => {
       const px = x0 + (step.x + 0.5) * scale;
       const py = y0 + (step.y + 0.5) * scale;
       if (index === 0) ctx.moveTo(px, py);
