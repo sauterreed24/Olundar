@@ -748,6 +748,12 @@ export function olundarCompany(state) {
     .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
 }
 
+export function companySeat(state, unit) {
+  if (!unit || unit.faction !== 'olundar') return 0;
+  const index = olundarCompany(state).findIndex((item) => item.id === unit.id);
+  return index >= 0 && index < 9 ? index + 1 : 0;
+}
+
 export function comingCompanySeats(state) {
   const phantoms = [];
   for (const building of state.buildings) {

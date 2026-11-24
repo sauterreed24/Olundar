@@ -22,6 +22,7 @@ import {
   incomeForBuilding,
   moveCostFor,
   olundarCompany,
+  companySeat,
   comingCompanySeats,
   tileAt
 } from '../rules.js';
@@ -2654,7 +2655,10 @@ export function hoverSummary(state, tile, field) {
   if (cover) parts.push(cover);
   if (Number.isFinite(move)) parts.push(`move ${move}`);
   if (Number.isFinite(move) && (terrain.move || 1) > 1) parts.push('slow');
-  if (unit) parts.push(unit.name);
+  if (unit) {
+    const seat = companySeat(state, unit);
+    parts.push(seat ? `${unit.name} · seat ${seat}` : unit.name);
+  }
     if (building) {
       parts.push(building.name);
       const extra = holdingLine(state, building);

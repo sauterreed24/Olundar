@@ -32,6 +32,7 @@ import {
   getRallyForecast,
   getReadyOlundarUnits,
   olundarCompany,
+  companySeat,
   comingCompanySeats,
   nextReadyOlundarUnit,
   getSunEdictStatus,
@@ -227,7 +228,10 @@ function nextOrder() {
 function selectedGlance() {
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
-  if (unit) return `${unit.name} · ${unit.x},${unit.y}`;
+  if (unit) {
+    const seat = companySeat(state, unit);
+    return seat ? `Seat ${seat} · ${unit.name} · ${unit.x},${unit.y}` : `${unit.name} · ${unit.x},${unit.y}`;
+  }
   if (building) {
     const extra = holdingLine(state, building);
     return extra ? `${building.name} · ${building.x},${building.y} · ${extra}` : `${building.name} · ${building.x},${building.y}`;
@@ -419,13 +423,15 @@ function unitCard(unit) {
           ? 'No haven or banner in reach.'
           : '';
   const mine = unit.faction === 'olundar';
+  const seat = companySeat(state, unit);
+  const role = seat ? `Seat ${seat} · ${def.role}` : def.role;
   return `
     <section class="card unit-card">
       <div class="unit-head">
         ${unitPortrait(unit)}
         <div>
           <h2>${escapeHtml(unit.name)}</h2>
-          <p class="role">${escapeHtml(def.role)}</p>
+          <p class="role">${escapeHtml(role)}</p>
         </div>
       </div>
       <ul class="stats">
@@ -1045,6 +1051,7 @@ function selectNext() {
   state.selectedUnitId = next.id;
   state.selectedBuildingId = null;
   board.ensureVisible(next.x, next.y);
+  board.play({ kind: 'beckon', unitId: next.id, duration: 460 });
   renderChrome();
   paint();
 }
