@@ -335,7 +335,8 @@ export function createBoard(canvas) {
     const dawn = !buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
       ? groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y)
       : [];
-    paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType, dawn);
+    const selectedBuilding = state.buildings.find((building) => building.id === selectedBuildingId) || null;
+    paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType, dawn, selectedBuilding);
     paintWarClock(ctx, state, frame);
   }
 
@@ -733,7 +734,7 @@ function minimapBox(canvasWidth, frame) {
   return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
 }
 
-function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null, dawn = []) {
+function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites = null, buildType = null, dawn = [], selectedBuilding = null) {
   const box = minimapBox(ctx.canvas.width, frame);
   const { scale, width, height, x0, y0 } = box;
   ctx.save();
@@ -806,6 +807,11 @@ function paintMinimap(ctx, state, frame, selectedUnit, field, route = [], sites 
     if (!isRevealed(state, building.x, building.y)) continue;
     ctx.fillStyle = building.faction === 'dead' ? '#d8ff9a' : '#fff6e0';
     ctx.fillRect(x0 + building.x * scale - 0.5, y0 + building.y * scale - 0.5, scale + 1.2, scale + 1.2);
+  }
+  if (selectedBuilding && isRevealed(state, selectedBuilding.x, selectedBuilding.y)) {
+    ctx.strokeStyle = '#fff6d8';
+    ctx.lineWidth = Math.max(1.6, frame.dpr);
+    ctx.strokeRect(x0 + selectedBuilding.x * scale - 2.2, y0 + selectedBuilding.y * scale - 2.2, scale + 4.4, scale + 4.4);
   }
   ctx.strokeStyle = '#f3d48a';
   ctx.lineWidth = Math.max(1.4, frame.dpr);
