@@ -748,6 +748,32 @@ export function olundarCompany(state) {
     .sort((a, b) => unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x);
 }
 
+export function comingCompanySeats(state) {
+  const phantoms = [];
+  for (const building of state.buildings) {
+    if (building.faction !== 'olundar' || building.turnsLeft > 0 || !building.queue?.length) continue;
+    const entry = building.queue[0];
+    if (!UNIT_TYPES[entry.unitType]) continue;
+    const ground = findSpawnNear(state, building.x, building.y, building.faction);
+    phantoms.push({
+      id: `coming:${building.id}`,
+      buildingId: building.id,
+      type: entry.unitType,
+      faction: 'olundar',
+      x: ground?.x ?? building.x,
+      y: ground?.y ?? building.y
+    });
+  }
+  const company = [...olundarCompany(state), ...phantoms].sort((a, b) => (
+    unitCommandPriority(a) - unitCommandPriority(b) || a.y - b.y || a.x - b.x || String(a.id).localeCompare(String(b.id))
+  ));
+  const seats = new Map();
+  company.forEach((unit, index) => {
+    if (unit.buildingId) seats.set(unit.buildingId, index + 1);
+  });
+  return seats;
+}
+
 export function getReadyOlundarUnits(state) {
   return olundarCompany(state).filter((unit) => !unit.hasActed);
 }

@@ -22,6 +22,7 @@ import {
   incomeForBuilding,
   moveCostFor,
   olundarCompany,
+  comingCompanySeats,
   tileAt
 } from '../rules.js';
 
@@ -590,11 +591,12 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     }
   }
   if (!buildType) {
+    const ahead = comingCompanySeats(state);
     for (const building of state.buildings) {
       const ground = musterGround(state, building);
       if (!ground || !isRevealed(state, ground.x, ground.y)) continue;
       if (ground.x < x0 || ground.y < y0 || ground.x >= x1 || ground.y >= y1) continue;
-      drawMusterFoot(ctx, frame, building, ground);
+      drawMusterFoot(ctx, frame, building, ground, ahead.get(building.id) || 0);
     }
   }
   if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
@@ -1551,7 +1553,7 @@ function drawMusterGhost(ctx, s, building) {
   ctx.restore();
 }
 
-function drawMusterFoot(ctx, frame, building, ground) {
+function drawMusterFoot(ctx, frame, building, ground, seat = 0) {
   const current = building.queue[0];
   const soon = current.turnsLeft <= 1;
   const rect = tileRect(frame, ground.x, ground.y);
@@ -1560,6 +1562,7 @@ function drawMusterFoot(ctx, frame, building, ground) {
   ctx.save();
   ctx.translate(rect.x, rect.y);
   ctx.globalAlpha = soon ? 0.82 : 0.45;
+  ctx.save();
   ctx.translate(s * 0.5, s * 0.86);
   ctx.scale(scale, scale);
   ctx.translate(-s * 0.5, -s * 0.86);
@@ -1574,6 +1577,9 @@ function drawMusterFoot(ctx, frame, building, ground) {
   }
   drawUnitSprite(ctx, { type: current.unitType, faction: building.faction }, s);
   ctx.restore();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  if (seat) drawCompanyMark(ctx, s, seat, soon);
   ctx.restore();
   ctx.save();
   ctx.strokeStyle = soon ? 'rgba(226, 177, 90, 0.98)' : 'rgba(226, 177, 90, 0.55)';
@@ -2667,7 +2673,9 @@ export function holdingLine(state, building) {
   const muster = musterLabel(building);
   if (muster) {
     const ground = musterGround(state, building);
-    parts.push(ground ? `${muster} · steps to ${ground.x},${ground.y}` : `${muster} · no open ground`);
+    const ahead = comingCompanySeats(state).get(building.id);
+    const seat = ahead ? ` · seat ${ahead}` : '';
+    parts.push(ground ? `${muster} · steps to ${ground.x},${ground.y}${seat}` : `${muster} · no open ground${seat}`);
   }
   return parts.join(' · ');
 }

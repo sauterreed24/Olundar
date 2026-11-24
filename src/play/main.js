@@ -32,6 +32,7 @@ import {
   getRallyForecast,
   getReadyOlundarUnits,
   olundarCompany,
+  comingCompanySeats,
   nextReadyOlundarUnit,
   getSunEdictStatus,
   getWarCouncil,
@@ -181,6 +182,7 @@ function companyRoster() {
 
 function comingCompany() {
   const seats = [];
+  const ahead = comingCompanySeats(state);
   for (const building of state.buildings) {
     if (building.faction !== 'olundar' || building.turnsLeft > 0 || !building.queue?.length) continue;
     const entry = building.queue[0];
@@ -193,6 +195,7 @@ function comingCompany() {
       name: def.name,
       waiting: building.queue.length - 1,
       ground: musterGround(state, building),
+      ahead: ahead.get(building.id) || 0,
       y: building.y,
       x: building.x
     });
@@ -210,8 +213,9 @@ function comingSeat(seat) {
   ].filter(Boolean).join(' ');
   const wait = `musters in ${seat.turnsLeft} turn${seat.turnsLeft === 1 ? '' : 's'}`;
   const place = seat.ground ? ` · steps to ${seat.ground.x},${seat.ground.y}` : ' · no open ground';
+  const taken = seat.ahead ? ` · takes seat ${seat.ahead}` : '';
   const extra = seat.waiting ? ` · ${seat.waiting} more waiting` : '';
-  return `<button type="button" class="${classes}" data-cmd="coming" data-building="${seat.buildingId}" title="${escapeHtml(`${seat.name} ${wait}${place}${extra}`)}"><span class="seat-soon">in ${seat.turnsLeft}</span><span class="seat-face">${unitPortrait({ type: seat.unitType, faction: 'olundar' })}</span><em>${escapeHtml(short)}</em></button>`;
+  return `<button type="button" class="${classes}" data-cmd="coming" data-building="${seat.buildingId}" title="${escapeHtml(`${seat.name} ${wait}${place}${taken}${extra}`)}"><span class="seat-soon">in ${seat.turnsLeft}</span><span class="seat-face">${unitPortrait({ type: seat.unitType, faction: 'olundar' })}</span><em>${escapeHtml(short)}</em></button>`;
 }
 
 function nextOrder() {
