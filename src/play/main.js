@@ -68,6 +68,7 @@ let buildType = null;
 let endArmed = false;
 let tab = 'field';
 let pointer = null;
+let ledgerPulse = new Set();
 
 initAudioPreference();
 registerPwa();
@@ -160,7 +161,8 @@ function selectedGlance() {
 }
 
 function resourceChip(id, value, label) {
-  return `<span class="res res-${id}">${RESOURCE_ICONS[id]}<span><b>${value}</b><em>${escapeHtml(label)}</em></span></span>`;
+  const hot = ledgerPulse.has(id) ? ' pulse' : '';
+  return `<span class="res res-${id}${hot}">${RESOURCE_ICONS[id]}<span><b>${value}</b><em>${escapeHtml(label)}</em></span></span>`;
 }
 
 function unitPortrait(unit) {
@@ -722,8 +724,14 @@ function requestEndTurn() {
     return;
   }
   const before = state.units.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, type: unit.type, faction: unit.faction }));
+  const beforeStores = resourceSnapshot();
+  const rising = state.buildings.filter((building) => building.faction === 'olundar' && building.turnsLeft > 0).map((building) => building.id);
   endTurn(state);
   const watch = playEnemyMarch(before);
+  for (const id of rising) {
+    const building = state.buildings.find((item) => item.id === id);
+    if (building && building.turnsLeft === 0) board.play({ kind: 'rise', x: building.x, y: building.y, duration: 520 });
+  }
   endArmed = false;
   buildType = null;
   getCommandHistory().clear();
@@ -731,7 +739,10 @@ function requestEndTurn() {
     const prev = before.find((item) => item.id === unit.id);
     return unit.faction !== 'olundar' && prev && (prev.x !== unit.x || prev.y !== unit.y);
   }).length;
-  notice(marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`, 'good');
+  const harvest = harvestLine(beforeStores);
+  const advance = marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`;
+  notice(harvest.text ? `${advance} Harvest ${harvest.text}.` : advance, 'good');
+  ledgerPulse = new Set(harvest.pulsed);
   playAudioCue('endTurn');
   if (watch) board.ensureVisible(watch.x, watch.y);
   else if (!state.selectedUnitId) {
@@ -739,7 +750,33 @@ function requestEndTurn() {
     if (city) board.focus(city.x, city.y);
   }
   renderChrome();
+  ledgerPulse = new Set();
   paint();
+}
+
+function resourceSnapshot() {
+  const resources = state.factions.olundar.resources;
+  const snap = { people: state.factions.olundar.population };
+  for (const key of ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']) snap[key] = resources[key] || 0;
+  return snap;
+}
+
+function harvestLine(before) {
+  const resources = state.factions.olundar.resources;
+  const parts = [];
+  const pulsed = [];
+  for (const key of ['food', 'wood', 'stone', 'iron', 'gold', 'influence', 'morale']) {
+    const delta = (resources[key] || 0) - (before[key] || 0);
+    if (!delta) continue;
+    parts.push(`${key} ${delta > 0 ? '+' : '−'}${Math.abs(delta)}`);
+    pulsed.push(key);
+  }
+  const people = state.factions.olundar.population - before.people;
+  if (people) {
+    parts.push(`people ${people > 0 ? '+' : '−'}${Math.abs(people)}`);
+    pulsed.push('people');
+  }
+  return { text: parts.join(', '), pulsed };
 }
 
 function selectNext() {
