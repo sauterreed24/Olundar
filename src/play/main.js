@@ -400,12 +400,28 @@ function onDockClick(event) {
 }
 
 function onPointerDown(event) {
+  const mapTile = board.minimapAt(event.clientX, event.clientY);
+  if (mapTile) {
+    pointer = { minimap: true, id: event.pointerId, moved: true };
+    canvas.setPointerCapture(event.pointerId);
+    board.focus(mapTile.x, mapTile.y);
+    paint();
+    return;
+  }
   const tile = board.tileAtPoint(event.clientX, event.clientY);
   pointer = { x: event.clientX, y: event.clientY, tile, moved: false, id: event.pointerId };
   canvas.setPointerCapture(event.pointerId);
 }
 
 function onPointerMove(event) {
+  if (pointer?.minimap && pointer.id === event.pointerId) {
+    const mapTile = board.minimapAt(event.clientX, event.clientY);
+    if (mapTile) {
+      board.focus(mapTile.x, mapTile.y);
+      paint();
+    }
+    return;
+  }
   const tile = board.tileAtPoint(event.clientX, event.clientY);
   if (pointer && pointer.id === event.pointerId) {
     const dx = event.clientX - pointer.x;
@@ -427,6 +443,10 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (pointer?.minimap) {
+    pointer = null;
+    return;
+  }
   if (!pointer || pointer.moved) {
     pointer = null;
     return;
@@ -544,6 +564,9 @@ function playCue(cue, result) {
   if (cue.kind === 'strike') {
     board.play(cue);
     board.play({ kind: 'impact', x: cue.tx, y: cue.ty, duration: 540 });
+    if (Number.isFinite(result?.damage)) {
+      board.play({ kind: 'damage', x: cue.tx, y: cue.ty, text: `−${result.damage}`, duration: 780 });
+    }
     if (result?.targetDestroyed && cue.defender?.type) {
       board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 620 });
     }
@@ -562,6 +585,34 @@ function handOffSpentUnit() {
   board.ensureVisible(ready[0].x, ready[0].y);
 }
 
+function marchPath(from, to) {
+  const path = [{ x: from.x, y: from.y }];
+  let x = from.x;
+  let y = from.y;
+  while (x !== to.x) {
+    x += Math.sign(to.x - x);
+    path.push({ x, y });
+  }
+  while (y !== to.y) {
+    y += Math.sign(to.y - y);
+    path.push({ x, y });
+  }
+  return path;
+}
+
+function playEnemyMarch(before) {
+  for (const unit of state.units) {
+    const prev = before.find((item) => item.id === unit.id);
+    if (!prev || (prev.x === unit.x && prev.y === unit.y)) continue;
+    const path = marchPath(prev, unit);
+    board.play({ kind: 'walk', unitId: unit.id, path, duration: Math.min(1100, 200 + path.length * 80) });
+  }
+  for (const prev of before) {
+    if (state.units.some((unit) => unit.id === prev.id)) continue;
+    board.play({ kind: 'fall', type: prev.type, faction: prev.faction, x: prev.x, y: prev.y, duration: 680 });
+  }
+}
+
 function requestEndTurn() {
   if (state.status !== 'playing') return;
   const warnings = getEndTurnWarnings(state);
@@ -571,11 +622,17 @@ function requestEndTurn() {
     renderChrome();
     return;
   }
+  const before = state.units.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, type: unit.type, faction: unit.faction }));
   endTurn(state);
+  playEnemyMarch(before);
   endArmed = false;
   buildType = null;
   getCommandHistory().clear();
-  notice(`Turn ${state.turn}.`, 'good');
+  const marched = state.units.filter((unit) => {
+    const prev = before.find((item) => item.id === unit.id);
+    return unit.faction !== 'olundar' && prev && (prev.x !== unit.x || prev.y !== unit.y);
+  }).length;
+  notice(marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`, 'good');
   playAudioCue('endTurn');
   const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
   if (!state.selectedUnitId && city) board.focus(city.x, city.y);

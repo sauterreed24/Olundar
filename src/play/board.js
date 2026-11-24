@@ -268,6 +268,18 @@ export function createBoard(canvas) {
     return inBounds(tx, ty) ? { x: tx, y: ty } : null;
   }
 
+  function minimapAt(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const frame = layout();
+    const box = minimapBox(canvas.width, frame);
+    const px = (clientX - rect.left) * frame.dpr;
+    const py = (clientY - rect.top) * frame.dpr;
+    if (px < box.x0 || py < box.y0 || px >= box.x0 + box.width || py >= box.y0 + box.height) return null;
+    const tx = Math.floor((px - box.x0) / box.scale);
+    const ty = Math.floor((py - box.y0) / box.scale);
+    return inBounds(tx, ty) ? { x: tx, y: ty } : null;
+  }
+
   function ensureField(state, unit) {
     const id = unit ? `${unit.id}:${unit.x},${unit.y}:${unit.hasActed}:${state.turn}` : '';
     if (id !== view.fieldKey) {
@@ -312,7 +324,7 @@ export function createBoard(canvas) {
     ctx.drawImage(terrain, 0, 0);
     ctx.drawImage(pieces, 0, 0);
     paintVignette(ctx);
-    paintMinimap(ctx, state, frame);
+    paintMinimap(ctx, state, frame, selectedUnit);
   }
 
   return {
@@ -322,6 +334,7 @@ export function createBoard(canvas) {
     pan,
     panByPixels,
     tileAtPoint,
+    minimapAt,
     paint,
     play,
     clearMotion,
@@ -413,6 +426,7 @@ function paintImpacts(ctx, frame) {
   for (const motion of motions) {
     if (motion.kind === 'fall') drawFall(ctx, frame, motion);
     if (motion.kind === 'impact') drawImpact(ctx, frame, motion);
+    if (motion.kind === 'damage') drawDamage(ctx, frame, motion);
   }
 }
 
@@ -423,6 +437,23 @@ function drawFall(ctx, frame, motion) {
   ctx.globalAlpha = 1 - amount;
   ctx.translate(rect.x, rect.y);
   drawUnitSprite(ctx, { type: motion.type, faction: motion.faction }, rect.s);
+  ctx.restore();
+}
+
+function drawDamage(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRect(frame, motion.x, motion.y);
+  const text = motion.text;
+  ctx.save();
+  ctx.font = `700 ${Math.max(13, frame.tile * 0.28)}px Palatino, Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.lineWidth = Math.max(3, frame.tile * 0.06);
+  ctx.strokeStyle = `rgba(42, 16, 10, ${1 - amount})`;
+  ctx.fillStyle = `rgba(255, 236, 196, ${1 - amount})`;
+  const x = rect.x + rect.s / 2;
+  const y = rect.y + rect.s * (0.42 - amount * 0.36);
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
   ctx.restore();
 }
 
@@ -566,13 +597,17 @@ function paintMarches(ctx, state, frame) {
   }
 }
 
-function paintMinimap(ctx, state, frame) {
-  const scale = Math.max(2, Math.min(4, frame.tile * 0.08));
+function minimapBox(canvasWidth, frame) {
+  const scale = Math.max(3, Math.min(5, frame.tile * 0.09));
   const pad = 12 * frame.dpr;
   const width = MAP_WIDTH * scale;
   const height = MAP_HEIGHT * scale;
-  const x0 = ctx.canvas.width - width - pad;
-  const y0 = pad;
+  return { scale, width, height, x0: canvasWidth - width - pad, y0: pad };
+}
+
+function paintMinimap(ctx, state, frame, selectedUnit) {
+  const box = minimapBox(ctx.canvas.width, frame);
+  const { scale, width, height, x0, y0 } = box;
   ctx.save();
   ctx.fillStyle = '#140e0a';
   roundRect(ctx, x0 - 7, y0 - 7, width + 14, height + 14, 3);
@@ -599,8 +634,15 @@ function paintMinimap(ctx, state, frame) {
   }
   for (const unit of state.units) {
     if (!isVisible(state, unit.x, unit.y)) continue;
+    const marked = unit.id === selectedUnit?.id;
     ctx.fillStyle = unit.faction === 'dead' ? '#9cf38a' : '#f0c866';
-    ctx.fillRect(x0 + unit.x * scale, y0 + unit.y * scale, Math.max(2, scale), Math.max(2, scale));
+    const dot = Math.max(2, scale) + (marked ? 1.4 : 0);
+    ctx.fillRect(x0 + unit.x * scale - (marked ? 0.7 : 0), y0 + unit.y * scale - (marked ? 0.7 : 0), dot, dot);
+    if (marked) {
+      ctx.strokeStyle = '#fff6d8';
+      ctx.lineWidth = Math.max(1, frame.dpr);
+      ctx.strokeRect(x0 + unit.x * scale - 1.2, y0 + unit.y * scale - 1.2, dot + 1.6, dot + 1.6);
+    }
   }
   ctx.strokeStyle = '#f4d48a';
   ctx.lineWidth = Math.max(1, frame.dpr);
@@ -1524,9 +1566,9 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null) {
   ctx.save();
   ctx.translate(rect.x, rect.y);
   ctx.globalAlpha = unit.hasActed && unit.faction === 'olundar' ? 0.72 : 1;
-  ctx.fillStyle = 'rgba(20, 12, 8, 0.38)';
+  ctx.fillStyle = 'rgba(16, 10, 6, 0.5)';
   ctx.beginPath();
-  ctx.ellipse(s * 0.5, s * 0.84, s * 0.24, s * 0.065, 0, 0, Math.PI * 2);
+  ctx.ellipse(s * 0.5, s * 0.86, s * 0.28, s * 0.075, 0, 0, Math.PI * 2);
   ctx.fill();
   if (walking) {
     const step = 0.5 + 0.5 * Math.sin(motionAmount(walking) * Math.PI * 6);
@@ -1666,6 +1708,18 @@ function drawMovePath(ctx, frame, path) {
   };
   trace(Math.max(5, frame.tile * 0.14), 'rgba(92, 48, 12, 0.85)');
   trace(Math.max(2.5, frame.tile * 0.065), 'rgba(214, 132, 32, 0.96)');
+  const last = path[path.length - 1];
+  const prev = path[path.length - 2];
+  const end = tileRect(frame, last.x, last.y);
+  const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+  ctx.translate(end.x + end.s / 2, end.y + end.s * 0.62);
+  ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(214, 132, 32, 0.96)';
+  ctx.beginPath();
+  ctx.moveTo(frame.tile * 0.18, 0);
+  ctx.lineTo(-frame.tile * 0.1, frame.tile * 0.1);
+  ctx.lineTo(-frame.tile * 0.1, -frame.tile * 0.1);
+  ctx.fill();
   ctx.restore();
 }
 
