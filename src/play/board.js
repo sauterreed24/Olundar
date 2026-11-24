@@ -590,6 +590,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     const exposed = hostsReaching(state, selectedUnit.faction, hover.x, hover.y, selectedUnit.id).length > 0;
     drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0, exposed);
     drawMarchCost(ctx, frame, hover.x, hover.y, field.get(`${hover.x},${hover.y}`), exposed);
+    paintStepDawn(ctx, frame, groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y));
   }
   paintImpacts(ctx, frame);
   if (buildType && hover) drawBuildGhost(ctx, frame, buildType, hover, sites, state);
@@ -2066,6 +2067,37 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
     drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, `rgba(244, 212, 138, ${glow})`, 0);
   }
   ctx.restore();
+}
+
+export function groundAStepWouldOpen(state, unit, x, y) {
+  const def = UNIT_TYPES[unit?.type];
+  if (!def || !inBounds(x, y)) return [];
+  const tile = tileAt(state, x, y);
+  const bonus = tile ? Math.max(-1, TERRAIN[tile.terrain]?.sight || 0) : 0;
+  const radius = Math.max(1, (def.sight || 1) + bonus);
+  const tiles = [];
+  for (let ty = y - radius; ty <= y + radius; ty += 1) {
+    for (let tx = x - radius; tx <= x + radius; tx += 1) {
+      if (!inBounds(tx, ty) || Math.abs(tx - x) + Math.abs(ty - y) > radius) continue;
+      if (isRevealed(state, tx, ty)) continue;
+      tiles.push({ x: tx, y: ty });
+    }
+  }
+  return tiles;
+}
+
+function paintStepDawn(ctx, frame, tiles) {
+  if (!tiles?.length) return;
+  const x0 = Math.floor(frame.camX);
+  const y0 = Math.floor(frame.camY);
+  const x1 = x0 + frame.cols;
+  const y1 = y0 + frame.rows;
+  ctx.fillStyle = 'rgba(255, 214, 140, 0.42)';
+  for (const tile of tiles) {
+    if (tile.x < x0 || tile.y < y0 || tile.x >= x1 || tile.y >= y1) continue;
+    const rect = tileRect(frame, tile.x, tile.y);
+    ctx.fillRect(rect.x, rect.y, rect.s, rect.s);
+  }
 }
 
 function drawMoveGhost(ctx, frame, unit, hover, seat, exposed = false) {

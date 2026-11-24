@@ -44,7 +44,7 @@ import {
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
-import { BUILDING_SPRITE_ORDER, coverClause, createBoard, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
+import { BUILDING_SPRITE_ORDER, coverClause, createBoard, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, plannedYieldLabel, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
 
 const SAVE_KEY = 'olundar.deadwalker.prototype.save';
 const SAVE_SLOTS_KEY = 'olundar.deadwalker.prototype.saveSlots';
@@ -259,6 +259,8 @@ function orderGlance() {
   if (field.has(`${hover.x},${hover.y}`)) {
     const hosts = hostsReaching(state, unit.faction, hover.x, hover.y, unit.id);
     parts.push(hosts.length ? `exposed to ${hosts.map((enemy) => enemy.name).join(', ')}` : 'covered');
+    const opened = groundAStepWouldOpen(state, unit, hover.x, hover.y);
+    if (opened.length) parts.push(`${opened.length} new ground`);
   }
   if (isVisible(state, hover.x, hover.y)) {
     const enemy = unitAt(state, hover.x, hover.y);
