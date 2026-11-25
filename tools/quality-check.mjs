@@ -2039,6 +2039,40 @@ check('marches gather into waves and the board stays light on old devices', () =
   assert(play.includes('function turnBanner') && play.includes('function playCollapses'), 'The turn should open on a banner and razed works should collapse.');
 });
 
+check('every company can step into hard ground, and Vorgath\'s death breaks the horde', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-hard-ground' });
+  const legion = addUnit(state, 'legionary', 'olundar', 30, 20);
+  for (const [x, y] of [[30, 20], [31, 20]]) state.units = state.units.filter((unit) => unit.id === legion.id || unit.x !== x || unit.y !== y);
+  state.buildings = state.buildings.filter((building) => building.x !== 31 || building.y !== 20);
+  const blighted = tileAt(state, 31, 20);
+  blighted.terrain = 'blight';
+  blighted.road = false;
+  updateVisibility(state);
+  assert(movementField(state, legion).has('31,20'), 'A two-move company should still be able to step onto a single blight or marsh tile.');
+  const step = moveUnit(state, legion.id, 31, 20);
+  assert(step.ok, step.reason || 'The legionary should march one tile into the blight.');
+
+  const siege = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-broken-crown' });
+  for (let turn = 0; turn < 14; turn += 1) endTurn(siege);
+  const boss = siege.units.find((unit) => unit.type === 'lichBoss');
+  const hunter = addUnit(siege, 'legionary', 'olundar', boss.x - 1, boss.y);
+  boss.hp = 1;
+  updateVisibility(siege);
+  const slay = attackUnit(siege, hunter.id, boss.id);
+  assert(slay.ok && slay.targetDestroyed && siege.flags.bossSlain, 'The hunter should slay Vorgath.');
+  const deadBefore = siege.units.filter((unit) => unit.faction === 'dead').length;
+  const worksBefore = siege.buildings.filter((building) => building.faction === 'dead').length;
+  const stray = tileAt(siege, 12, 26);
+  stray.terrain = 'blight';
+  stray.blight = 5;
+  for (let turn = 0; turn < 12; turn += 1) endTurn(siege);
+  assert(!siege.units.some((unit) => unit.faction === 'dead' && unit.march), 'Marches should falter once the Hollow Crown is slain.');
+  assert(siege.units.filter((unit) => unit.faction === 'dead').length <= deadBefore, 'No new dead should rise after Vorgath falls.');
+  assert(siege.buildings.filter((building) => building.faction === 'dead').length <= worksBefore, 'No new deadwork should rise after Vorgath falls.');
+  assert(tileAt(siege, 12, 26).terrain !== 'blight' && !tileAt(siege, 12, 26).blight, 'Grave-blight should wither where no deadwork feeds it.');
+  assert(getDeadwalkerCampaign(siege).broken, 'The war clock should know the Crown is broken.');
+});
+
 for (const { name, fn } of checks) {
   try {
     fn();

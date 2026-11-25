@@ -1212,7 +1212,11 @@ function turnBanner(events) {
   const lost = events.filter((event) => event.kind === 'strike' && event.targetFaction === 'olundar' && event.targetKind === 'unit' && event.lethal).length;
   let subtitle = '';
   let tone = 'info';
-  if (surge) {
+  const broken = events.find((event) => event.kind === 'broken');
+  if (broken) {
+    subtitle = 'The marches falter. No more dead will rise';
+    tone = 'good';
+  } else if (surge) {
     subtitle = `The march surges: ${surge.count} dead strike together`;
     tone = 'danger';
   } else if (march) {

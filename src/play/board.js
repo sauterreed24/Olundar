@@ -181,7 +181,7 @@ export function movementField(state, unit) {
     const current = queue.shift();
     for (const next of neighbors4(current.x, current.y)) {
       if (!canEnter(state, unit, next.x, next.y)) continue;
-      const step = moveCostFor(state, unit, next.x, next.y, current);
+      const step = Math.min(moveCostFor(state, unit, next.x, next.y, current), range);
       const cost = current.cost + step;
       if (cost > range) continue;
       const id = key(next.x, next.y);
@@ -1286,6 +1286,9 @@ export function warClock(state) {
       ? `${camp.stage}. ${camp.closest.name} is ${camp.closest.distance} from the capital.`
       : `${camp.stage}. ${camp.marchingCount} hunt the capital.`)
     : `${camp.stage}. First march in ${camp.turnsToMarch}.`;
+  if (camp.broken) {
+    return { title: 'The Crown is broken', detail: `${camp.remaining} dead remain. No more will rise. Break the Bone Portal.` };
+  }
   const wave = camp.waves?.[0];
   if (wave) {
     const where = wave.revealed ? ` at ${wave.x},${wave.y}` : '';
