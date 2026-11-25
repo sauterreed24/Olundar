@@ -98,6 +98,10 @@ The prototype uses a simple readable model:
 - Selecting an Olundaran unit and targeting a visible enemy previews damage, range, HP outcome, defensive modifiers, siege bonuses, and portal reformation risk.
 - After a successful attack, the Orders panel keeps a Last Strike readout and the struck map tile receives an impact marker so combat decisions feel confirmed instead of silent.
 - The portal cannot be permanently destroyed until Vorgath is dead.
+- **Counterblows.** A unit that survives a melee blow strikes back at half its normal damage (at least 1). Ranged attacks from beyond arm's reach are never answered. This makes the order of attacks a decision. Archers soften the line, and infantry finish it, so a wounded scout should not poke a grave knight. The same rule protects a braced Olundaran line when the dead attack it.
+- **Field ranks.** A blow earns 1 experience and a kill earns 2. At 3, 8, and 15 experience a living unit becomes a Veteran, an Elite, and a Legend. Each rank gives +1 attack and +2 max HP and heals the unit a little. Promotions show on the board as a burst and a rank badge, so the player gets attached to the companies that carried the war.
+- **Spoils.** Each dead unit killed by Olundar pays a few grave-goods. Destroying deadwork pays a larger cache. This makes aggression pay for itself instead of being a pure cost.
+- **The enemy turn is shown, not summarized.** Every enemy strike is recorded and replayed in sequence after End Turn, so each wound on the line has a visible cause.
 
 ## Units
 
@@ -179,6 +183,11 @@ The Deadwalker AI follows a survival-horror strategy pattern:
 5. Attack units first, then buildings.
 6. Convert fallen living cities into Necropolises.
 7. Gather menace and dispatch directed **marches on Olundar Prime** (the March of the Hollow Crown).
+8. Raise **barrow raids** close to the capital in the opening turns.
+
+### Barrow raids
+
+The map is wide, and the first march often takes twenty turns or more to cross it. Before raids existed, a careful player could play thirty turns without a fight. Barrow raids fill that gap. On difficulty-set turns (6, 11, and 17 on Standard), a small band of grave-dead rises from an old barrow six to nine tiles from Olundar Prime. The site favors ruins, forest, hills, and marsh on the side facing the portal. Each raid is announced a turn early: the barrow is revealed and marked with a "rises next turn" label, and the war clock names it. Later raids add a corpse archer and then a grave knight. The raiders march on the capital and pay spoils when they are killed. This teaches combat, counterblows, and ranks early, when the stakes are low.
 
 This gives the player a visible long-term enemy growth curve instead of isolated wave defense.
 

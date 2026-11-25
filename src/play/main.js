@@ -44,7 +44,9 @@ import {
   canBuildOn,
   serializeState,
   unitAt,
-  upgradeCostFor
+  upgradeCostFor,
+  unitRank,
+  nextUnitRank
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
@@ -464,6 +466,11 @@ function orderGlance() {
         const blow = forecast.lethal ? `${forecast.damage} damage, falls` : `${forecast.damage} damage, ${forecast.targetHpAfter} left`;
         const why = coverClause(forecast);
         parts.push(why ? `${blow} · ${why}` : blow);
+        if (forecast.counter > 0) {
+          parts.push(forecast.counter >= unit.hp ? `strikes back for ${forecast.counter}: ${unit.name} would fall` : `strikes back for ${forecast.counter}`);
+        } else if (!forecast.lethal && forecast.distance > 1) {
+          parts.push('out of reach of a counterblow');
+        }
       }
     }
     const structure = state.buildings.find((item) => item.x === hover.x && item.y === hover.y && item.type !== 'road');
@@ -555,10 +562,11 @@ function unitCard(unit) {
       <ul class="stats">
         <li><b>${unit.hp}/${unit.maxHp}</b><span>Health</span></li>
         <li><b>${def.move}</b><span>Move</span></li>
-        <li><b>${def.attack}</b><span>Attack</span></li>
+        <li><b>${def.attack + unitRank(unit).attack}</b><span>Attack</span></li>
         <li><b>${def.range}</b><span>Range</span></li>
       </ul>
       <div class="bar"><span style="width:${Math.round(100 * unit.hp / unit.maxHp)}%"></span></div>
+      ${rankLine(unit)}
       <p>${escapeHtml(def.text)}</p>
       ${upkeepLine(def)}
       ${rally ? `<p class="note">${escapeHtml(rally)}</p>` : ''}
@@ -576,6 +584,20 @@ function unitCard(unit) {
       </div>
     </section>
   `;
+}
+
+function rankLine(unit) {
+  if (unit.faction === 'dead') return '';
+  const rank = unitRank(unit);
+  const next = nextUnitRank(unit);
+  const xp = unit.xp || 0;
+  const title = rank.name || 'Recruit';
+  if (!next) return `<p class="rank-line"><b>${title}</b> · ${xp} XP · the highest rank.</p>`;
+  const floor = rank.minXp;
+  const pct = Math.round(100 * (xp - floor) / Math.max(1, next.minXp - floor));
+  return `
+      <p class="rank-line"><b>${title}</b> · ${xp}/${next.minXp} XP to ${next.name} (+1 attack, +2 max HP)</p>
+      <div class="bar xp"><span style="width:${pct}%"></span></div>`;
 }
 
 function heldBuilding(unit) {
@@ -927,6 +949,17 @@ function run(command, options = {}) {
     if (result?.ruinWhisper) extra.push(result.ruinWhisper.echo ? 'a ruin whispers' : 'ruins surveyed');
     text = `${text} ${extra.join('. ')}.`;
   }
+  if (result?.ok !== false && command.type === 'attack' && result?.targetName) {
+    const extra = [result.portalReforms
+      ? `${result.attackerName} strikes ${result.targetName}, but it reforms`
+      : result.targetDestroyed
+        ? `${result.attackerName} destroys ${result.targetName}`
+        : `${result.attackerName} hits ${result.targetName} for ${result.damage}, ${result.targetHpAfter} left`];
+    if (result.counterDamage > 0) extra.push(result.attackerDestroyed ? `The counterblow kills ${result.attackerName}` : `Takes ${result.counterDamage} back`);
+    if (result.spoils) extra.push(`Spoils: ${formatCost(result.spoils)}`);
+    if (result.promotion) extra.push(`${result.promotion.name} earns ${result.promotion.rank} rank`);
+    text = `${extra.join('. ')}.`;
+  }
   let nextUnit = null;
   if (result?.ok !== false) {
     if (opened.length) board.play({ kind: 'dawn', tiles: opened, duration: 760 });
@@ -998,8 +1031,11 @@ function motionCue(command) {
     return {
       kind: 'strike',
       unitId: unit.id,
+      fx: unit.x,
+      fy: unit.y,
       tx: target.x,
       ty: target.y,
+      attacker: { type: unit.type },
       defender: { type: target.type, faction: target.faction },
       duration: 460
     };
@@ -1012,17 +1048,42 @@ function motionCue(command) {
 function playCue(cue, result) {
   if (!cue) return;
   if (cue.kind === 'strike') {
+    const ranged = Math.abs(cue.fx - cue.tx) + Math.abs(cue.fy - cue.ty) > 1;
+    const land = ranged ? 300 : 0;
     board.play(cue);
-    board.play({ kind: 'impact', x: cue.tx, y: cue.ty, duration: 540 });
+    if (ranged) board.play({ kind: 'volley', fromX: cue.fx, fromY: cue.fy, x: cue.tx, y: cue.ty, faction: 'olundar', duration: 320 });
+    board.play({ kind: 'impact', x: cue.tx, y: cue.ty, duration: 540, delay: land });
+    playAudioCue('attack');
     if (Number.isFinite(result?.damage)) {
-      board.play({ kind: 'damage', x: cue.tx, y: cue.ty, text: `−${result.damage}`, duration: 780 });
+      board.play({ kind: 'damage', x: cue.tx, y: cue.ty, text: `−${result.damage}`, duration: 900, delay: land });
     }
     if (result?.targetDestroyed && cue.defender?.type) {
-      board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 620 });
+      board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 620, delay: land, ghost: Boolean(land) });
     }
+    if (result?.counterDamage > 0) {
+      board.play({ kind: 'impact', x: cue.fx, y: cue.fy, duration: 480, delay: 360 });
+      board.play({ kind: 'damage', x: cue.fx, y: cue.fy, text: `−${result.counterDamage}`, tone: 'hurt', duration: 900, delay: 360 });
+      if (result.attackerDestroyed && cue.attacker) {
+        board.play({ kind: 'fall', type: cue.attacker.type, faction: 'olundar', x: cue.fx, y: cue.fy, duration: 620, delay: 360, ghost: true });
+      }
+    }
+    playRewards(result, cue.tx, cue.ty, cue.fx, cue.fy, land);
     return;
   }
   board.play(cue);
+}
+
+function playRewards(result, tx, ty, fx, fy, delay = 0) {
+  if (result?.spoils) {
+    board.play({ kind: 'damage', x: tx, y: ty, text: `+${formatCost(result.spoils)}`, tone: 'spoils', size: 0.22, lift: 0.1, duration: 1500, delay: delay + 280 });
+    setTimeout(() => playAudioCue('discovery'), delay + 280);
+  }
+  if (result?.promotion) {
+    const { x, y } = result.attackerDestroyed ? { x: tx, y: ty } : { x: fx, y: fy };
+    board.play({ kind: 'promote', x, y, duration: 900, delay: delay + 420 });
+    board.play({ kind: 'damage', x, y, text: `${result.promotion.rank}!`, tone: 'rank', size: 0.26, lift: 0.05, duration: 1600, delay: delay + 420 });
+    setTimeout(() => playAudioCue('glory'), delay + 420);
+  }
 }
 
 function handOffSpentUnit() {
@@ -1052,20 +1113,86 @@ function marchPath(from, to) {
   return path;
 }
 
-function playEnemyMarch(before) {
+function playEnemyMarch(before, events = []) {
   const moves = [];
+  let walkEnd = 0;
   for (const unit of state.units) {
     const prev = before.find((item) => item.id === unit.id);
     if (!prev || (prev.x === unit.x && prev.y === unit.y)) continue;
     const path = marchPath(prev, unit);
-    board.play({ kind: 'walk', unitId: unit.id, path, duration: Math.min(1100, 200 + path.length * 80) });
+    const duration = Math.min(1100, 200 + path.length * 80);
+    board.play({ kind: 'walk', unitId: unit.id, path, duration });
+    if (isVisible(state, unit.x, unit.y) || isVisible(state, prev.x, prev.y)) walkEnd = Math.max(walkEnd, duration);
     moves.push({ x: prev.x, y: prev.y, nx: unit.x, ny: unit.y });
   }
+  const deaths = playEnemyStrikes(events, walkEnd);
   for (const prev of before) {
     if (state.units.some((unit) => unit.id === prev.id)) continue;
-    board.play({ kind: 'fall', type: prev.type, faction: prev.faction, x: prev.x, y: prev.y, duration: 680 });
+    const delay = deaths.get(prev.id) || 0;
+    board.play({ kind: 'fall', type: prev.type, faction: prev.faction, x: prev.x, y: prev.y, duration: 680, delay, ghost: delay > 0 });
   }
   return visibleMarchAnchor(state, moves);
+}
+
+// Replay the strikes of the night one after another, so every wound on the line
+// has a visible cause: lunge or arrow, impact, number, and the counterblow.
+function playEnemyStrikes(events, start) {
+  const deaths = new Map();
+  const shown = events.filter((event) => event.kind === 'strike' && event.attackerFaction !== 'olundar'
+    && (event.targetFaction === 'olundar' || isVisible(state, event.to.x, event.to.y) || isVisible(state, event.from.x, event.from.y)));
+  const step = shown.length > 10 ? 150 : 260;
+  let at = start + 120;
+  let cues = 0;
+  for (const event of events) {
+    if (event.kind === 'promotion' && event.faction === 'olundar') {
+      board.play({ kind: 'promote', x: event.x, y: event.y, duration: 900, delay: at });
+      board.play({ kind: 'damage', x: event.x, y: event.y, text: `${event.rank}!`, tone: 'rank', size: 0.26, lift: 0.05, duration: 1600, delay: at });
+      continue;
+    }
+    if (event.kind === 'raid') {
+      board.play({ kind: 'mark', x: event.x, y: event.y, duration: 900 });
+      continue;
+    }
+    if (!shown.includes(event)) continue;
+    const ranged = Math.abs(event.from.x - event.to.x) + Math.abs(event.from.y - event.to.y) > 1;
+    const land = at + (ranged ? 260 : 120);
+    const mover = state.units.find((unit) => unit.id === event.attackerId);
+    if (mover || event.counterLethal) board.play({ kind: 'strike', unitId: event.attackerId, tx: event.to.x, ty: event.to.y, duration: 360, delay: at });
+    if (ranged) board.play({ kind: 'volley', fromX: event.from.x, fromY: event.from.y, x: event.to.x, y: event.to.y, faction: event.attackerFaction, duration: 300, delay: at });
+    board.play({ kind: 'impact', x: event.to.x, y: event.to.y, duration: 480, delay: land });
+    board.play({ kind: 'damage', x: event.to.x, y: event.to.y, text: `−${event.damage}`, tone: event.targetFaction === 'olundar' ? 'hurt' : 'hit', duration: 900, delay: land });
+    if (event.lethal && event.targetKind === 'unit') deaths.set(event.targetId, land);
+    if (event.counter > 0) {
+      board.play({ kind: 'impact', x: event.from.x, y: event.from.y, duration: 420, delay: land + 160 });
+      board.play({ kind: 'damage', x: event.from.x, y: event.from.y, text: `−${event.counter}`, tone: event.attackerFaction === 'olundar' ? 'hurt' : 'hit', duration: 900, delay: land + 160 });
+      if (event.counterLethal) deaths.set(event.attackerId, land + 160);
+    }
+    if (cues < 6) {
+      cues += 1;
+      setTimeout(() => playAudioCue('attack'), land);
+    }
+    at += step;
+  }
+  return deaths;
+}
+
+function nightReport(events) {
+  let wounds = 0;
+  let lost = 0;
+  let felled = 0;
+  for (const event of events) {
+    if (event.kind !== 'strike') continue;
+    if (event.targetFaction === 'olundar' && event.targetKind === 'unit') {
+      wounds += event.damage;
+      if (event.lethal) lost += 1;
+    }
+    if (event.attackerFaction === 'olundar' && event.counterLethal) lost += 1;
+    if (event.targetFaction === 'olundar' && event.counterLethal) felled += 1;
+  }
+  const parts = [];
+  if (wounds) parts.push(`the line takes ${wounds} wounds${lost ? `, ${lost} fall` : ''}`);
+  if (felled) parts.push(`counterblows fell ${felled}`);
+  return parts.join(', ');
 }
 
 function playArrivals(before, halls = []) {
@@ -1132,7 +1259,8 @@ function requestEndTurn() {
     .filter((building) => building.turnsLeft <= 0 && building.queue?.[0]?.turnsLeft === 1)
     .map((building) => ({ x: building.x, y: building.y, type: building.queue[0].unitType, faction: building.faction }));
   endTurn(state);
-  const watch = playEnemyMarch(before);
+  const events = Array.isArray(state.turnEvents) ? state.turnEvents.slice() : [];
+  const watch = playEnemyMarch(before, events);
   const arrived = playArrivals(before, halls);
   const mustered = arrived.filter((unit) => unit.faction === 'olundar');
   freshCompany = new Set(mustered.map((unit) => unit.id));
@@ -1156,6 +1284,9 @@ function requestEndTurn() {
   const works = worksLine(rising);
   const advance = marched ? `Turn ${state.turn}. ${marched} hosts advance.` : `Turn ${state.turn}.`;
   const bits = [advance];
+  const night = nightReport(events);
+  if (night) bits.push(`${night.replace(/^./, (c) => c.toUpperCase())}.`);
+  if (events.some((event) => event.kind === 'raid')) bits.push('Barrow-dead rise.');
   if (harvest.text) bits.push(`Harvest ${harvest.text}.`);
   if (works) bits.push(`${works}.`);
   if (arrival) bits.push(`${arrival}.`);

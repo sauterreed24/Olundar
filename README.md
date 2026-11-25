@@ -16,6 +16,11 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
 - **The March of the Hollow Crown:** the Deadwalkers gather menace and periodically dispatch escalating, telegraphed marches directed at Olundar Prime, conscripting their eastern horde and reinforcing from the nearest deadwork so ignoring the war is fatal and harder difficulties bite sooner.
+- **Barrow raids:** small bands of grave-dead claw out of old barrows a few tiles from Olundar Prime in the opening turns (turn 6 on Standard). Each raid is announced a turn ahead, and its barrow is marked on the map, so the first fights come long before the main march.
+- **Counterblows:** a defender that survives a melee blow strikes back at half strength. Archers and onagers firing from beyond arm's reach are safe. The attack preview shows the blow you will take back, and whether it would kill your unit.
+- **Field ranks:** blows and kills earn experience. Units rise to Veteran, Elite, and Legend, gaining attack and max HP with each rank. A rank badge appears on the figure, and the unit card shows progress to the next rank.
+- **Spoils of war:** killing the dead pays grave-goods (gold, wood, iron), and razing Bone Pits, Grave Forges, and Necropolises pays a larger cache.
+- **The enemy turn plays out:** after End Turn, every enemy strike replays in order, with a lunge or arrow, the impact, the wound, and any counterblow. The turn notice sums up the wounds your line took.
 - **Rally healing:** wounded living units recover when resting beside friendly cities and outposts (and faster near a Sun Shrine), so attrition becomes a rotate-and-heal rhythm instead of a one-way death spiral.
 - Campaign setup with named scenarios, editable seeds, and difficulty presets that change resources, Deadwalker spawn cadence, and the timing, size, and growth of marches on Olundar.
 - A War Council panel that turns current campaign state into readable priorities, pressure indicators, and next-step guidance.
@@ -67,7 +72,8 @@ Browsers that support installation will expose an **Install** button after the a
 The campaign opens on a square tactical board. Terrain is drawn once and reused, so hovering does not rebuild the map. The dock on the right is the only command panel.
 
 - Click one of your units. Gold tiles are the legal moves. Click a gold tile to move.
-- Click an enemy outlined in red to attack.
+- Click an enemy outlined in red to attack. The preview shows the damage you deal and any counterblow you will take back. Soften the line with archers, then finish with infantry.
+- Watch for a green barrow marked "rises next turn". Grave-dead come out of it and march on the capital. Kill them for spoils and experience.
 - Click a city or camp to train. An engineer can place a building, then click a green outline.
 - Press `N` for the next ready unit. Press `E` to end the turn. If anyone is still ready, press `E` again to confirm.
 - Drag the map to look around. Arrow keys pan. `Ctrl/Cmd+Z` undoes the last order.

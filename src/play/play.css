@@ -624,6 +624,24 @@ button.primary, button.armed {
   background: linear-gradient(90deg, #a56b28, #f0d48a);
 }
 
+.card .bar.xp {
+  height: 0.28rem;
+  margin-top: -0.3rem;
+}
+
+.card .bar.xp span {
+  background: linear-gradient(90deg, #b07a1e, #ffd96a);
+}
+
+.rank-line {
+  margin: 0.45rem 0 0.4rem;
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: #6a4a1c;
+}
+
+.rank-line b { color: #8a5a10; letter-spacing: 0.02em; }
+
 .log p { font-family: var(--sans); font-size: 0.86rem; }
 .log .good { color: #1f6b32; }
 .log .danger, .log .bad { color: var(--danger); }
