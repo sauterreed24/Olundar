@@ -1061,8 +1061,15 @@ function playCue(cue, result) {
     if (Number.isFinite(result?.damage)) {
       board.play({ kind: 'damage', x: cue.tx, y: cue.ty, text: `−${result.damage}`, duration: 900, delay: land });
     }
-    if (result?.targetDestroyed && cue.defender?.type) {
-      board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 620, delay: land, ghost: Boolean(land) });
+    if (result?.targetDestroyed && cue.defender?.type && result.type === 'building') {
+      board.play({ kind: 'collapse', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 900, delay: land });
+      setTimeout(() => board.shake(2), land);
+    } else if (result?.targetDestroyed && cue.defender?.type) {
+      board.play({ kind: 'fall', type: cue.defender.type, faction: cue.defender.faction, x: cue.tx, y: cue.ty, duration: 720, delay: land, ghost: Boolean(land) });
+      setTimeout(() => board.shake(cue.defender.type === 'lichBoss' ? 2 : 1), land);
+    }
+    if (result?.targetDestroyed && cue.defender?.type === 'lichBoss') {
+      board.play({ kind: 'banner', title: 'Vorgath falls', subtitle: 'The Bone Portal can now be broken', tone: 'good', duration: 2600, delay: land + 300 });
     }
     if (result?.counterDamage > 0) {
       board.play({ kind: 'impact', x: cue.fx, y: cue.fy, duration: 480, delay: 360 });
@@ -1166,6 +1173,7 @@ function playEnemyStrikes(events, start) {
     board.play({ kind: 'impact', x: event.to.x, y: event.to.y, duration: 480, delay: land });
     board.play({ kind: 'damage', x: event.to.x, y: event.to.y, text: `−${event.damage}`, tone: event.targetFaction === 'olundar' ? 'hurt' : 'hit', duration: 900, delay: land });
     if (event.lethal && event.targetKind === 'unit') deaths.set(event.targetId, land);
+    if (event.lethal && event.targetFaction === 'olundar') setTimeout(() => board.shake(1), land);
     if (event.counter > 0) {
       board.play({ kind: 'impact', x: event.from.x, y: event.from.y, duration: 420, delay: land + 160 });
       board.play({ kind: 'damage', x: event.from.x, y: event.from.y, text: `−${event.counter}`, tone: event.attackerFaction === 'olundar' ? 'hurt' : 'hit', duration: 900, delay: land + 160 });
@@ -1178,6 +1186,49 @@ function playEnemyStrikes(events, start) {
     at += step;
   }
   return deaths;
+}
+
+function playCollapses(standing, events) {
+  for (const prev of standing) {
+    if (state.buildings.some((building) => building.id === prev.id)) continue;
+    if (prev.type === 'road' || !isRevealed(state, prev.x, prev.y)) continue;
+    const blow = events.find((event) => event.kind === 'strike' && event.targetId === prev.id && event.lethal);
+    const delay = blow ? 900 : 300;
+    board.play({ kind: 'collapse', type: prev.type, faction: prev.faction, x: prev.x, y: prev.y, duration: 900, delay });
+    if (prev.faction === 'olundar') setTimeout(() => board.shake(2), delay);
+  }
+}
+
+// A short banner names the turn and the one thing that mattered most in the night.
+function turnBanner(events) {
+  if (state.status !== 'playing') {
+    const won = state.status === 'won';
+    board.play({ kind: 'banner', title: won ? 'Victory' : 'Olundar Prime falls', subtitle: won ? 'The Bone Portal is broken' : 'The living age ends', tone: won ? 'good' : 'danger', duration: 3200 });
+    return;
+  }
+  const march = events.find((event) => event.kind === 'march');
+  const surge = events.find((event) => event.kind === 'surge');
+  const raid = events.find((event) => event.kind === 'raid');
+  const lost = events.filter((event) => event.kind === 'strike' && event.targetFaction === 'olundar' && event.targetKind === 'unit' && event.lethal).length;
+  let subtitle = '';
+  let tone = 'info';
+  if (surge) {
+    subtitle = `The march surges: ${surge.count} dead strike together`;
+    tone = 'danger';
+  } else if (march) {
+    subtitle = `The Hollow Crown sends ${march.count} dead against the capital`;
+    tone = 'danger';
+  } else if (raid) {
+    subtitle = 'Barrow-dead claw free';
+    tone = 'danger';
+  } else if (lost) {
+    subtitle = `${lost} ${lost === 1 ? 'company falls' : 'companies fall'} in the night`;
+    tone = 'danger';
+  } else if (events.some((event) => event.kind === 'promotion' && event.faction === 'olundar')) {
+    subtitle = 'Veterans rise from the line';
+    tone = 'good';
+  }
+  board.play({ kind: 'banner', title: `Turn ${state.turn}`, subtitle, tone, duration: subtitle ? 1900 : 1250 });
 }
 
 function nightReport(events) {
@@ -1257,6 +1308,7 @@ function requestEndTurn() {
     return;
   }
   const before = state.units.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, type: unit.type, faction: unit.faction }));
+  const standing = state.buildings.map((building) => ({ id: building.id, x: building.x, y: building.y, type: building.type, faction: building.faction }));
   const beforeStores = resourceSnapshot();
   const rising = state.buildings.filter((building) => building.faction === 'olundar' && building.turnsLeft > 0).map((building) => building.id);
   const halls = state.buildings
@@ -1265,6 +1317,8 @@ function requestEndTurn() {
   endTurn(state);
   const events = Array.isArray(state.turnEvents) ? state.turnEvents.slice() : [];
   const watch = playEnemyMarch(before, events);
+  playCollapses(standing, events);
+  turnBanner(events);
   const arrived = playArrivals(before, halls);
   const mustered = arrived.filter((unit) => unit.faction === 'olundar');
   freshCompany = new Set(mustered.map((unit) => unit.id));
@@ -1306,7 +1360,7 @@ function requestEndTurn() {
     if (held) board.ensureVisible(held.x, held.y);
     else if (!state.selectedUnitId) {
       const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
-      if (city) board.focus(city.x, city.y);
+      if (city) board.glideTo(city.x, city.y);
     }
   }
   renderChrome();

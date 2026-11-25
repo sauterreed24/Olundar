@@ -257,6 +257,7 @@ button.primary, button.armed {
 }
 
 .map-frame {
+  position: relative;
   min-width: 0;
   min-height: 0;
   padding: 10px;
@@ -265,13 +266,22 @@ button.primary, button.armed {
   box-shadow: inset 0 0 0 1px rgba(240, 200, 102, 0.28);
 }
 
+.board-terrain {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  background: #120e0a;
+}
+
 #board {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   display: block;
   touch-action: none;
   cursor: crosshair;
-  background: #120e0a;
+  background: transparent;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65), inset 0 0 0 1px rgba(255, 236, 200, 0.08);
 }
 
@@ -697,4 +707,27 @@ button.primary, button.armed {
   .resources { order: 3; flex-basis: 100%; }
   .dock { border-left: 0; border-top: 1px solid var(--line); }
   .map-frame { padding: 6px; }
+}
+
+.map-frame.shake { animation: board-shake 260ms cubic-bezier(.36, .07, .19, .97); }
+.map-frame.shake-hard { animation: board-shake-hard 420ms cubic-bezier(.36, .07, .19, .97); }
+
+@keyframes board-shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(-2px, 1px, 0); }
+  50% { transform: translate3d(2px, -1px, 0); }
+  75% { transform: translate3d(-1px, 0, 0); }
+}
+
+@keyframes board-shake-hard {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  15% { transform: translate3d(-5px, 2px, 0); }
+  30% { transform: translate3d(4px, -3px, 0); }
+  45% { transform: translate3d(-3px, 2px, 0); }
+  60% { transform: translate3d(3px, -1px, 0); }
+  80% { transform: translate3d(-1px, 1px, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-frame.shake, .map-frame.shake-hard { animation: none; }
 }

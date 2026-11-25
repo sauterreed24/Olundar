@@ -513,7 +513,9 @@ function createDeadwalkerCampaignState(difficulty, scenarioMarch = null) {
     lastMarchTurn: 0,
     lastMarchSize: 0,
     raidsRisen: 0,
-    raid: null
+    raid: null,
+    waveSeq: 0,
+    waves: []
   };
 }
 
@@ -531,7 +533,14 @@ function normalizeDeadwalkerCampaign(state) {
     lastMarchTurn: Math.max(0, Number(raw.lastMarchTurn) || 0),
     lastMarchSize: Math.max(0, Number(raw.lastMarchSize) || 0),
     raidsRisen: Math.max(0, Number(raw.raidsRisen) || 0),
-    raid: normalizeBarrowRaid(raw.raid)
+    raid: normalizeBarrowRaid(raw.raid),
+    waveSeq: Math.max(0, Number(raw.waveSeq) || 0),
+    waves: Array.isArray(raw.waves)
+      ? raw.waves
+        .filter((wave) => wave && [wave.id, wave.x, wave.y, wave.turn].every(Number.isInteger) && inBounds(wave.x, wave.y))
+        .map((wave) => ({ id: wave.id, x: wave.x, y: wave.y, turn: wave.turn, surged: Boolean(wave.surged) }))
+        .slice(-4)
+      : []
   };
 }
 
@@ -2591,7 +2600,7 @@ export function getDeadwalkerCampaign(state) {
       .sort((a, b) => a.distance - b.distance)[0]
     : null;
   const turnsToMarch = Math.max(0, camp.nextMarchTurn - state.turn);
-  const nextSize = Math.min(config.cap || Infinity, config.size + config.growth * camp.marchesSent);
+  const nextSize = marchSizeFor(state, config, camp);
   const stage = camp.menace >= 28 ? 'Onslaught' : camp.menace >= 12 ? 'Marching' : 'Gathering';
   const imminent = state.status === 'playing' && turnsToMarch <= 1 && state.turn + 1 >= config.firstTurn;
   const summary = camp.marchesSent
@@ -2609,6 +2618,7 @@ export function getDeadwalkerCampaign(state) {
     revealedMarchingCount: visibleMarchers.length,
     closest: closest ? { name: closest.unit.name, distance: closest.distance, x: closest.unit.x, y: closest.unit.y } : null,
     raid: getBarrowRaid(state),
+    waves: getMarchWaves(state),
     summary
   };
 }
@@ -2865,10 +2875,19 @@ function canPassThrough(state, unit, x, y) {
   return !(building && isEnemy(state, unit.faction, building.faction));
 }
 
+// Ground-only passability for long AI plans: terrain and hostile works block,
+// units do not (they move; the walker stops short of whoever stands in the way).
+function canCrossGround(state, unit, x, y) {
+  const tile = tileAt(state, x, y);
+  if (!tile || !TERRAIN[tile.terrain].passable) return false;
+  const building = buildingAt(state, x, y);
+  return !(building && isEnemy(state, unit.faction, building.faction));
+}
+
 export function findPath(state, unit, tx, ty, maxCost = Infinity, options = {}) {
   if (!inBounds(tx, ty)) return null;
-  if (!canEnter(state, unit, tx, ty) && !(unit.x === tx && unit.y === ty)) return null;
-  const passable = options.passFriendly ? canPassThrough : canEnter;
+  if (!options.ignoreUnits && !canEnter(state, unit, tx, ty) && !(unit.x === tx && unit.y === ty)) return null;
+  const passable = options.ignoreUnits ? canCrossGround : options.passFriendly ? canPassThrough : canEnter;
   const startKey = idx(unit.x, unit.y);
   const targetKey = idx(tx, ty);
   const costs = new Map([[startKey, 0]]);
@@ -4254,6 +4273,7 @@ function runDeadwalkerTurn(state) {
   if (state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
   advanceDeadwalkerMarch(state, pressure);
   advanceBarrowRaids(state);
+  updateMarchWaves(state);
 
   const capital = olundarCapital(state);
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
@@ -4267,6 +4287,11 @@ function runDeadwalkerTurn(state) {
       if (plan.mode === 'retreat' && executeDeadwalkerRetreat(state, unit, plan.target)) continue;
       const acted = aiTryAttack(state, unit, quarry);
       if (acted) continue;
+      if (plan.mode === 'hold') {
+        unit.hasActed = true;
+        unit.fortified = Math.max(unit.fortified || 0, 1);
+        continue;
+      }
       const from = { x: unit.x, y: unit.y };
       aiAdvanceToward(state, unit, plan.target.x, plan.target.y);
       const stuck = unit.x === from.x && unit.y === from.y;
@@ -4330,35 +4355,110 @@ function advanceDeadwalkerMarch(state, pressure) {
 function dispatchDeadwalkerMarch(state, config, camp) {
   const capital = olundarCapital(state);
   if (!capital) return 0;
-  const size = Math.min(config.cap || Infinity, config.size + config.growth * camp.marchesSent);
+  const size = marchSizeFor(state, config, camp);
   let mustered = 0;
+  const origin = forwardDeadwork(state, capital);
+  const rally = marchRallyPoint(state, origin || capital, capital);
+  // A new march that rallies where another still gathers swells that wave instead.
+  const joining = rally ? (camp.waves || []).find((wave) => !wave.surged && manhattan(wave.x, wave.y, rally.x, rally.y) <= 2) : null;
+  if (!joining) camp.waveSeq = (camp.waveSeq || 0) + 1;
+  const waveId = joining ? joining.id : camp.waveSeq;
+  const enlist = (unit) => {
+    unit.march = true;
+    unit.wave = waveId;
+  };
   // Conscript the standing dead nearest to Olundar so the eastern horde turns west.
   const standing = state.units
     .filter((unit) => unit.faction === 'dead' && !unit.march && getUnitDef(unit)?.tags.includes('boss') !== true)
     .sort((a, b) => manhattan(a.x, a.y, capital.x, capital.y) - manhattan(b.x, b.y, capital.x, capital.y));
   for (const unit of standing) {
     if (mustered >= size) break;
-    unit.march = true;
+    enlist(unit);
     // The Hollow Crown re-knits the bones of every conscript before it marches.
     unit.hp = unit.maxHp || getUnitDef(unit)?.hp || unit.hp;
     mustered += 1;
   }
   // Reinforce the shortfall from the deadwork closest to the capital.
-  const origin = forwardDeadwork(state, capital);
-  const composition = marchComposition(camp.menace);
+  const composition = marchComposition(camp.menace, olundarFieldArmy(state));
   let index = 0;
   while (mustered < size && origin) {
     const spawn = findSpawnNear(state, origin.x, origin.y, 'dead');
     if (!spawn) break;
     const unit = addUnit(state, composition[index % composition.length], 'dead', spawn.x, spawn.y);
-    unit.march = true;
+    enlist(unit);
     mustered += 1;
     index += 1;
   }
   if (mustered > 0) {
-    addMessage(state, `The Hollow Crown marshals a march of ${mustered} dead toward Olundar Prime.`, 'danger');
+    if (rally && !joining) {
+      camp.waves = [...(camp.waves || []).filter((wave) => !wave.surged), { id: waveId, x: rally.x, y: rally.y, turn: state.turn, surged: false }].slice(-4);
+    }
+    addMessage(state, `The Hollow Crown marshals a march of ${mustered} dead toward Olundar Prime.${rally && isRevealed(state, rally.x, rally.y) ? ` It will gather at ${rally.x},${rally.y} before it strikes.` : ' It will gather before it strikes.'}`, 'danger');
+    recordTurnEvent(state, { kind: 'march', count: mustered });
   }
   return mustered;
+}
+
+// Marches gather at a rally point on the road to the capital, then surge together
+// once most of the wave has arrived (or the Crown tires of waiting). A wave that
+// lands at once is a real assault; a trickle is only a kill zone.
+const WAVE_RALLY_DISTANCE = 9;
+const WAVE_PATIENCE = 12;
+
+function marchRallyPoint(state, origin, capital) {
+  const walker = { id: 'rally', type: 'boneThrall', faction: 'dead', x: origin.x, y: origin.y };
+  const route = findPath(state, walker, capital.x, capital.y, Infinity, { ignoreUnits: true });
+  if (!route) return null;
+  let best = null;
+  for (const key of route.path) {
+    const point = xy(key);
+    const gap = Math.abs(manhattan(point.x, point.y, capital.x, capital.y) - WAVE_RALLY_DISTANCE);
+    if (!best || gap < best.gap) best = { ...point, gap };
+  }
+  return best ? { x: best.x, y: best.y } : null;
+}
+
+function updateMarchWaves(state) {
+  const camp = state.deadwalker;
+  if (!camp?.waves?.length) return;
+  for (const wave of camp.waves) {
+    if (wave.surged) continue;
+    const members = state.units.filter((unit) => unit.faction === 'dead' && unit.wave === wave.id);
+    if (!members.length) {
+      wave.surged = true;
+      continue;
+    }
+    const gathered = members.filter((unit) => manhattan(unit.x, unit.y, wave.x, wave.y) <= 3).length;
+    if (gathered >= Math.ceil(members.length * 0.6) || state.turn - wave.turn >= WAVE_PATIENCE) {
+      wave.surged = true;
+      addMessage(state, `The march surges from ${isRevealed(state, wave.x, wave.y) ? `${wave.x},${wave.y}` : 'the fog'}: ${members.length} dead fall on Olundar Prime together.`, 'danger');
+      recordTurnEvent(state, { kind: 'surge', x: wave.x, y: wave.y, count: members.length });
+    }
+  }
+  camp.waves = camp.waves.filter((wave) => !wave.surged || state.turn - wave.turn < 2);
+}
+
+function gatheringWave(state, unit) {
+  if (!unit.wave) return null;
+  return state.deadwalker?.waves?.find((wave) => wave.id === unit.wave && !wave.surged) || null;
+}
+
+export function getMarchWaves(state) {
+  return (state.deadwalker?.waves || [])
+    .filter((wave) => !wave.surged)
+    .map((wave) => {
+      const members = state.units.filter((unit) => unit.faction === 'dead' && unit.wave === wave.id);
+      return {
+        id: wave.id,
+        x: wave.x,
+        y: wave.y,
+        size: members.length,
+        gathered: members.filter((unit) => manhattan(unit.x, unit.y, wave.x, wave.y) <= 3).length,
+        revealed: isRevealed(state, wave.x, wave.y),
+        turnsLeft: Math.max(0, wave.turn + WAVE_PATIENCE - state.turn)
+      };
+    })
+    .filter((wave) => wave.size > 0);
 }
 
 // Barrow raids: small bands of grave-dead claw out of old barrows close to the
@@ -4444,7 +4544,22 @@ function forwardDeadwork(state, capital) {
     || null;
 }
 
-function marchComposition(menace) {
+function olundarFieldArmy(state) {
+  const army = state.units.filter((unit) => unit.faction === 'olundar' && !['engineer', 'scout'].includes(unit.type));
+  return { total: army.length, ranged: army.filter((unit) => getUnitDef(unit)?.range > 1).length };
+}
+
+// The Crown answers strength: a large standing army draws a larger march (one more
+// marcher per five companies, at most three beyond the difficulty cap), and a wall
+// of archers draws armored grave knights. Turtling buys time, never safety.
+function marchSizeFor(state, config, camp) {
+  const base = Math.min(config.cap || Infinity, config.size + config.growth * camp.marchesSent);
+  const answer = Math.min(3, Math.floor(olundarFieldArmy(state).total / 5));
+  return base + answer;
+}
+
+function marchComposition(menace, army = { total: 0, ranged: 0 }) {
+  if (army.ranged >= 6 && menace >= 8) return ['graveKnight', 'boneThrall', 'graveKnight', 'corpseArcher'];
   if (menace >= 28) return ['boneThrall', 'corpseArcher', 'graveKnight', 'graveKnight'];
   if (menace >= 16) return ['boneThrall', 'boneThrall', 'corpseArcher', 'graveKnight'];
   if (menace >= 8) return ['boneThrall', 'boneThrall', 'corpseArcher'];
@@ -4452,10 +4567,15 @@ function marchComposition(menace) {
 }
 
 function deadwalkerMarchPlan(state, unit, capital) {
-  const retreat = woundedDeadwalkerRetreatTarget(state, unit);
+  const wave = gatheringWave(state, unit);
+  const retreat = wave ? null : woundedDeadwalkerRetreatTarget(state, unit);
   if (retreat) return { mode: 'retreat', target: retreat };
   const onager = priorityOnagerTarget(state, unit, capital);
   if (onager) return { mode: 'onager', target: onager };
+  if (wave) {
+    if (manhattan(unit.x, unit.y, wave.x, wave.y) <= 1) return { mode: 'hold', target: { x: unit.x, y: unit.y } };
+    return { mode: 'gather', target: { x: wave.x, y: wave.y } };
+  }
   return { mode: 'flank', target: deadwalkerFlankTarget(state, unit, capital) || capital };
 }
 
@@ -4527,7 +4647,7 @@ function numericId(id) {
 // reliably navigate mountains, rivers, and rival armies instead of stalling.
 function aiAdvanceToward(state, unit, tx, ty) {
   const def = getUnitDef(unit);
-  const goal = openApproachTile(state, unit, tx, ty);
+  const goal = openApproachTile(state, unit, tx, ty) || { x: tx, y: ty };
   if (goal) {
     if (goal.x === unit.x && goal.y === unit.y) {
       unit.hasActed = true;
@@ -4536,13 +4656,14 @@ function aiAdvanceToward(state, unit, tx, ty) {
     }
     const route = approachRoute(state, unit, tx, ty, goal);
     if (route && route.path.length) {
-      let budget = def.move;
+      let budget = def.move + forcedMarchBonus(state, unit);
       let from = { x: unit.x, y: unit.y };
       let landed = null;
       for (const key of route.path) {
         const point = xy(key);
         const step = moveCostFor(state, unit, point.x, point.y, from);
         if (step > budget || !canPassThrough(state, unit, point.x, point.y)) break;
+        if (point.x === tx && point.y === ty && !canEnter(state, unit, point.x, point.y)) break;
         budget -= step;
         from = point;
         if (canEnter(state, unit, point.x, point.y)) landed = point;
@@ -4561,8 +4682,16 @@ function aiAdvanceToward(state, unit, tx, ty) {
 
 // The nearest open tile beside a target can be walled in by its defenders. Try the
 // other open ground around the target, nearest first, until one has a real route.
+// The marching dead do not tire: far from the capital they cover an extra tile a
+// turn, then slow to their true pace once Olundar's walls are in sight.
+function forcedMarchBonus(state, unit) {
+  if (!unit.march || unit.faction !== 'dead') return 0;
+  const capital = olundarCapital(state);
+  return capital && manhattan(unit.x, unit.y, capital.x, capital.y) > 12 ? 1 : 0;
+}
+
 function approachRoute(state, unit, tx, ty, goal) {
-  const first = findPath(state, unit, goal.x, goal.y, Infinity, { passFriendly: true });
+  const first = canEnter(state, unit, goal.x, goal.y) ? findPath(state, unit, goal.x, goal.y, Infinity, { passFriendly: true }) : null;
   if (first) return first;
   const candidates = [];
   for (let y = ty - 3; y <= ty + 3; y += 1) {
@@ -4578,7 +4707,8 @@ function approachRoute(state, unit, tx, ty, goal) {
     const route = findPath(state, unit, candidate.x, candidate.y, Infinity, { passFriendly: true });
     if (route) return route;
   }
-  return null;
+  // Every approach is held: plan over the ground alone and press as far as it opens.
+  return findPath(state, unit, tx, ty, Infinity, { ignoreUnits: true });
 }
 
 function openApproachTile(state, unit, tx, ty) {
