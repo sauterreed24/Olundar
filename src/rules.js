@@ -534,6 +534,7 @@ function normalizeDeadwalkerCampaign(state) {
     lastMarchSize: Math.max(0, Number(raw.lastMarchSize) || 0),
     raidsRisen: Math.max(0, Number(raw.raidsRisen) || 0),
     raid: normalizeBarrowRaid(raw.raid),
+    broken: Boolean(raw.broken),
     waveSeq: Math.max(0, Number(raw.waveSeq) || 0),
     waves: Array.isArray(raw.waves)
       ? raw.waves
@@ -2619,6 +2620,8 @@ export function getDeadwalkerCampaign(state) {
     closest: closest ? { name: closest.unit.name, distance: closest.distance, x: closest.unit.x, y: closest.unit.y } : null,
     raid: getBarrowRaid(state),
     waves: getMarchWaves(state),
+    broken: Boolean(state.flags.bossSlain),
+    remaining: state.units.filter((unit) => unit.faction === 'dead').length,
     summary
   };
 }
@@ -2900,7 +2903,8 @@ export function findPath(state, unit, tx, ty, maxCost = Infinity, options = {}) 
     if (currentKey === targetKey) break;
     for (const n of neighbors4(current.x, current.y)) {
       if (!passable(state, unit, n.x, n.y) && !(n.x === tx && n.y === ty)) continue;
-      const step = moveCostFor(state, unit, n.x, n.y, current);
+      // A company can always take one step onto passable ground by spending its whole march.
+      const step = Math.min(moveCostFor(state, unit, n.x, n.y, current), maxCost);
       const nextCost = current.cost + step;
       if (nextCost > maxCost) continue;
       const key = idx(n.x, n.y);
@@ -4157,16 +4161,33 @@ function payUpkeepWithMoralePenalty(state, factionId, upkeep) {
 }
 
 function processBlight(state) {
+  const held = new Set();
   for (const building of state.buildings.filter((b) => b.faction === 'dead')) {
     const radius = building.type === 'portal' ? 4 : building.type === 'necropolis' ? 3 : 2;
     for (let y = building.y - radius; y <= building.y + radius; y += 1) {
       for (let x = building.x - radius; x <= building.x + radius; x += 1) {
         if (!inBounds(x, y) || manhattan(building.x, building.y, x, y) > radius) continue;
+        held.add(idx(x, y));
         const tile = tileAt(state, x, y);
         if (tile.terrain === 'mountains' || tile.terrain === 'river') continue;
         const resistance = nearBuilding(state, x, y, 'shrine', null, 2) ? 1 : 0;
         tile.blight = Math.min(9, (tile.blight || 0) + 1 - resistance);
-        if (tile.blight >= 4) tile.terrain = 'blight';
+        if (tile.blight >= 4) {
+          if (tile.terrain !== 'blight' && !tile.baseTerrain) tile.baseTerrain = tile.terrain;
+          tile.terrain = 'blight';
+        }
+      }
+    }
+  }
+  // Without the Hollow Crown the grave-blight withers wherever no deadwork still feeds it.
+  if (state.flags.bossSlain) {
+    for (let y = 0; y < MAP_HEIGHT; y += 1) {
+      for (let x = 0; x < MAP_WIDTH; x += 1) {
+        if (held.has(idx(x, y))) continue;
+        const tile = tileAt(state, x, y);
+        if (!tile.blight && tile.terrain !== 'blight') continue;
+        tile.blight = Math.max(0, (tile.blight || 0) - 1);
+        if (tile.terrain === 'blight' && tile.blight < 4) tile.terrain = healedTerrain(tile);
       }
     }
   }
@@ -4191,9 +4212,13 @@ function cleanseAround(state, cx, cy, radius) {
       if (!inBounds(x, y) || manhattan(cx, cy, x, y) > radius) continue;
       const tile = tileAt(state, x, y);
       tile.blight = Math.max(0, (tile.blight || 0) - 4);
-      if (tile.terrain === 'blight' && tile.blight < 4) tile.terrain = tile.baseTerrain || 'plains';
+      if (tile.terrain === 'blight' && tile.blight < 4) tile.terrain = healedTerrain(tile);
     }
   }
+}
+
+function healedTerrain(tile) {
+  return tile.baseTerrain && tile.baseTerrain !== 'blight' ? tile.baseTerrain : 'plains';
 }
 
 // Wounded living units recover when resting in friendly territory so attrition is a
@@ -4267,13 +4292,19 @@ function runNonPlayerTurns(state) {
 function runDeadwalkerTurn(state) {
   const deadBuildings = state.buildings.filter((b) => b.faction === 'dead' && b.turnsLeft <= 0);
   const pressure = deadwalkerPressureFor(state);
-  if (state.turn >= pressure.startTurn && state.turn % pressure.thrallEvery === 0) spawnUndeadFrom(state, 'portal', 'boneThrall');
-  if (state.turn >= pressure.startTurn && state.turn % pressure.archerEvery === 0) spawnUndeadFrom(state, 'portal', 'corpseArcher');
-  if (state.turn >= pressure.startTurn && state.turn % pressure.knightEvery === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
-  if (state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
-  advanceDeadwalkerMarch(state, pressure);
-  advanceBarrowRaids(state);
-  updateMarchWaves(state);
+  // With the Hollow Crown slain the horde loses its will: no marches, no new
+  // deadwork, and no new dead. The last act is a siege with a finish line.
+  const broken = Boolean(state.flags.bossSlain);
+  if (broken) breakTheMarches(state);
+  if (!broken && state.turn >= pressure.startTurn && state.turn % pressure.thrallEvery === 0) spawnUndeadFrom(state, 'portal', 'boneThrall');
+  if (!broken && state.turn >= pressure.startTurn && state.turn % pressure.archerEvery === 0) spawnUndeadFrom(state, 'portal', 'corpseArcher');
+  if (!broken && state.turn >= pressure.startTurn && state.turn % pressure.knightEvery === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
+  if (!broken && state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
+  if (!broken) {
+    advanceDeadwalkerMarch(state, pressure);
+    advanceBarrowRaids(state);
+    updateMarchWaves(state);
+  }
 
   const capital = olundarCapital(state);
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
@@ -4326,6 +4357,25 @@ function runDeadwalkerTurn(state) {
       if (target.ref.hp <= 0) destroyBuilding(state, target.ref.id, 'dead');
     }
   }
+}
+
+function breakTheMarches(state) {
+  const camp = state.deadwalker;
+  if (camp?.broken) return;
+  let faltered = 0;
+  for (const unit of state.units) {
+    if (unit.faction !== 'dead' || !unit.march) continue;
+    unit.march = false;
+    unit.wave = 0;
+    faltered += 1;
+  }
+  if (camp) {
+    camp.broken = true;
+    camp.waves = [];
+    camp.raid = null;
+  }
+  addMessage(state, `With the Hollow Crown slain, the marches falter${faltered ? `: ${faltered} dead lose their road to Olundar Prime` : ''}. No new deadwork rises and no new dead are raised. Break the Bone Portal.`, 'good');
+  recordTurnEvent(state, { kind: 'broken', count: faltered });
 }
 
 function olundarCapital(state) {
@@ -4661,7 +4711,7 @@ function aiAdvanceToward(state, unit, tx, ty) {
       let landed = null;
       for (const key of route.path) {
         const point = xy(key);
-        const step = moveCostFor(state, unit, point.x, point.y, from);
+        const step = Math.min(moveCostFor(state, unit, point.x, point.y, from), def.move);
         if (step > budget || !canPassThrough(state, unit, point.x, point.y)) break;
         if (point.x === tx && point.y === ty && !canEnter(state, unit, point.x, point.y)) break;
         budget -= step;
@@ -5034,7 +5084,7 @@ function aiMoveToward(state, unit, tx, ty) {
   const def = getUnitDef(unit);
   const options = neighbors4(unit.x, unit.y)
     .filter((p) => canEnter(state, unit, p.x, p.y))
-    .map((p) => ({ ...p, cost: moveCostFor(state, unit, p.x, p.y, unit), dist: manhattan(p.x, p.y, tx, ty) }))
+    .map((p) => ({ ...p, cost: Math.min(moveCostFor(state, unit, p.x, p.y, unit), def.move), dist: manhattan(p.x, p.y, tx, ty) }))
     .filter((p) => p.cost <= def.move)
     .sort((a, b) => (a.dist + a.cost * 0.2) - (b.dist + b.cost * 0.2));
   const pick = options[0];

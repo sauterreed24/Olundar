@@ -234,6 +234,19 @@ Future versions can deepen these policies with festivals, emergency labor, oath 
 - No hidden mandatory hotkeys.
 - Local save, export, and JSON save import from the first prototype.
 
+## The final act
+
+Before this pass the campaign could not be won with a normal army. Living units pay 3 movement to enter blight, and infantry and archers have 2, so no legionary, archer, or onager could step onto the blight around the portal. Now every company can always move one tile onto passable ground by spending its whole move, as in most tactics games. The same rule unsticks 2-move dead in marshes.
+
+Killing Vorgath is the turning point of the war. With the Hollow Crown slain:
+
+- every march falters and loses its road to Olundar Prime
+- no new deadwork rises, and the portal and grave forges raise no more dead
+- grave-blight withers by one level a turn wherever no surviving deadwork feeds it, so each razed pit or forge opens the road
+- the war clock reads "The Crown is broken" and counts the dead that remain
+
+This keeps the climax where the design wants it, at the duel with Vorgath, and makes the portal assault a finite siege instead of a grind against endless spawns. In scripted campaigns, an attacking bot that keeps a home guard of six and pushes with the rest from turn 30 kills Vorgath around turns 56 to 89 and breaks the portal between turns 91 and 139 in seven of eight Standard and Hollow Crown campaigns.
+
 ## Win and loss
 
 ### Win
