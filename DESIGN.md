@@ -99,7 +99,7 @@ The prototype uses a simple readable model:
 - After a successful attack, the Orders panel keeps a Last Strike readout and the struck map tile receives an impact marker so combat decisions feel confirmed instead of silent.
 - The portal cannot be permanently destroyed until Vorgath is dead.
 - **Counterblows.** A unit that survives a melee blow strikes back at half its normal damage (at least 1). Ranged attacks from beyond arm's reach are never answered. This makes the order of attacks a decision. Archers soften the line, and infantry finish it, so a wounded scout should not poke a grave knight. The same rule protects a braced Olundaran line when the dead attack it.
-- **Field ranks.** A blow earns 1 experience and a kill earns 2. At 3, 7, and 12 experience a living unit becomes a Veteran, an Elite, and a Legend. Each rank gives +1 attack and +2 max HP and heals the unit a little. Promotions show on the board as a burst and a rank badge, so the player gets attached to the companies that carried the war.
+- **Field ranks.** A blow earns 1 experience and a kill earns 2. At 3, 8, and 15 experience a living unit becomes a Veteran, an Elite, and a Legend. Each rank gives +1 attack and +2 max HP and heals the unit a little. Promotions show on the board as a burst and a rank badge, so the player gets attached to the companies that carried the war.
 - **Spoils.** Each dead unit killed by Olundar pays a few grave-goods. Destroying deadwork pays a larger cache. This makes aggression pay for itself instead of being a pure cost.
 - **The enemy turn is shown, not summarized.** Every enemy strike is recorded and replayed in sequence after End Turn, so each wound on the line has a visible cause.
 

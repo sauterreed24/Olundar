@@ -3248,8 +3248,8 @@ function resolveCounterblow(state, defender, attacker, damage) {
 export const UNIT_RANKS = [
   { id: 'recruit', name: '', minXp: 0, attack: 0, hp: 0 },
   { id: 'veteran', name: 'Veteran', minXp: 3, attack: 1, hp: 2 },
-  { id: 'elite', name: 'Elite', minXp: 7, attack: 2, hp: 4 },
-  { id: 'legend', name: 'Legend', minXp: 12, attack: 3, hp: 6 }
+  { id: 'elite', name: 'Elite', minXp: 8, attack: 2, hp: 4 },
+  { id: 'legend', name: 'Legend', minXp: 15, attack: 3, hp: 6 }
 ];
 
 export function unitRank(unit) {
