@@ -46,7 +46,8 @@ import {
   unitAt,
   upgradeCostFor,
   unitRank,
-  nextUnitRank
+  nextUnitRank,
+  canStillMove
 } from '../rules.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
@@ -463,7 +464,8 @@ function orderGlance() {
     if (enemy && enemy.id !== unit.id) {
       const forecast = forecastUnitAttack(state, unit.id, enemy.id);
       if (forecast.ok) {
-        const blow = forecast.lethal ? `${forecast.damage} damage, falls` : `${forecast.damage} damage, ${forecast.targetHpAfter} left`;
+        const charge = forecast.charge ? ` (charge +${forecast.charge})` : '';
+        const blow = forecast.lethal ? `${forecast.damage} damage${charge}, falls` : `${forecast.damage} damage${charge}, ${forecast.targetHpAfter} left`;
         const why = coverClause(forecast);
         parts.push(why ? `${blow} · ${why}` : blow);
         if (forecast.counter > 0) {
@@ -573,11 +575,12 @@ function unitCard(unit) {
       ${unit.fortified > 0 ? `<p class="note">${held ? `Holds ${escapeHtml(held.name)} until this unit moves or strikes.` : 'Fortified. The guard holds until this unit moves or strikes.'}</p>` : ''}
       ${stoodNote(unit)}
       ${threatLine(unit)}
-      ${mine && !unit.hasActed ? '<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck.</p>' : ''}
+      ${mine && !unit.hasActed && unit.moved ? '<p class="note">Marched this turn. A red bracket can still be struck, or fortify to end its order.</p>' : ''}
+      ${mine && !unit.hasActed && !unit.moved ? `<p class="note">The pennant means this order is still open. Crimson steps are exposed. A red bracket can be struck${def.tags.includes('mounted') ? '. Riding 2 or more tiles before striking charges for +2' : ''}.</p>` : ''}
       ${buildType ? `<p class="note">The chip is the yield once the holding stands. Gold brackets mark richer ground. A red wash will not take it.</p>` : ''}
       <div class="actions">
-        ${mine && !unit.hasActed ? stepUpButton(unit) : ''}
-        ${mine && !unit.hasActed ? dawnButton(unit) : ''}
+        ${mine && canStillMove(unit) ? stepUpButton(unit) : ''}
+        ${mine && canStillMove(unit) ? dawnButton(unit) : ''}
         ${mine && !unit.hasActed ? `<button type="button" data-cmd="fortify">${held ? `Hold ${escapeHtml(held.name)}` : 'Fortify'}</button>` : ''}
         ${mine && unit.type === 'engineer' && !unit.hasActed ? buildButtons() : ''}
         ${buildType ? `<button type="button" data-cmd="cancel-build">Cancel build</button>` : ''}
@@ -909,7 +912,7 @@ function actOnTile(tile) {
     paint();
     return;
   }
-  if (selected && !selected.hasActed && board.movementField().has(`${tile.x},${tile.y}`)) {
+  if (selected && canStillMove(selected) && board.movementField().has(`${tile.x},${tile.y}`)) {
     run(moveCommand(selected.id, tile.x, tile.y));
     return;
   }
@@ -979,6 +982,7 @@ function run(command, options = {}) {
     if (held) text = `${text} Stands beside ${held.name}.`;
   }
   if (nextUnit) text = `${text} ${nextUnit.name} is next.`;
+  if (command.type === 'move' && result?.strikeReady) text = `${text} A foe is in reach: strike now, or fortify.`;
   notice(text, result?.ok === false ? 'bad' : 'good');
   const focus = state.units.find((unit) => unit.id === state.selectedUnitId) || state.buildings.find((building) => building.id === state.selectedBuildingId);
   if (focus) board.ensureVisible(focus.x, focus.y);

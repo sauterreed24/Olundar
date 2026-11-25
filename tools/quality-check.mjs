@@ -312,6 +312,7 @@ check('first-turn guide gives actionable live onboarding', () => {
   assert(ironHandoffGuide.steps.find((step) => step.id === 'iron').detail.includes('Engineer refreshes next turn'), 'Blocked iron guide should explain the hold-and-refresh handoff.');
   assert(ironHandoffGuide.steps.find((step) => step.id === 'iron').detail.includes('Scout or hold safely'), 'Blocked iron guide should match the actual scout-or-hold recovery orders.');
   engineer.hasActed = false;
+  engineer.moved = false;
   const ironRoad = startConstruction(state, engineer.id, 'road', engineer.x, engineer.y - 1);
   assert(ironRoad.ok, ironRoad.reason || 'Guide setup iron-road commitment failed.');
   const ironRouteGuide = getFirstTurnsGuide(state);
@@ -355,6 +356,7 @@ check('siege operations track midgame victory work', () => {
   legion.x = bonePit.x - 1;
   legion.y = bonePit.y;
   legion.hasActed = false;
+  legion.moved = false;
   bonePit.hp = 1;
   const beforeInfluence = state.factions.olundar.resources.influence;
   const attack = attackBuilding(state, legion.id, bonePit.id);
@@ -573,6 +575,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(lens.markers.some((marker) => marker.kind === 'missionTarget' && marker.x === active.x && marker.y === active.y), 'Missions lens should mark the active target.');
 
   engineer.hasActed = false;
+  engineer.moved = false;
   const moved = moveUnit(state, engineer.id, active.x, active.y);
   assert(moved.ok, moved.reason || 'Engineer should be able to move to the repair mission.');
   missions = getAftermathMissions(state);
@@ -624,6 +627,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(routeMarker.site === 'Road camp' && routeMarker.type === 'escort' && routeMarker.chainStep === 1 && routeMarker.chainLimit === 2, 'Missions lens should expose site metadata for canvas mission art.');
   const scout = routeState.units.find((unit) => unit.faction === 'olundar' && ['scout', 'cavalry'].includes(unit.type));
   scout.hasActed = false;
+  scout.moved = false;
   const beforeRouteResources = resourceTotal(routeState);
   const firstMove = moveUnit(routeState, scout.id, firstRoute.x, firstRoute.y);
   assert(firstMove.ok, firstMove.reason || 'Scout should be able to complete the first route mission.');
@@ -635,6 +639,7 @@ check('aftermath missions turn rulings into map objectives', () => {
   assert(completedFirstRoute.terrainRewardText && completedFirstRoute.resultText.includes('follow-up marker'), 'Completed route missions should record terrain rewards and follow-up text.');
   assert(resourceTotal(routeState) > beforeRouteResources, 'Terrain rewards should add resources beyond the base mission result.');
   scout.hasActed = false;
+  scout.moved = false;
   const secondMove = moveUnit(routeState, scout.id, followUp.x, followUp.y);
   assert(secondMove.ok, secondMove.reason || 'Scout should be able to complete the safe-mile waypoint.');
   routeMissions = getAftermathMissions(routeState);
@@ -1417,6 +1422,7 @@ check('combat can damage enemies and protects portal before boss death', () => {
   onager.x = portal.x;
   onager.y = portal.y - 3;
   onager.hasActed = false;
+  onager.moved = false;
   portal.hp = 1;
   const result = attackBuilding(state, onager.id, portal.id);
   assert(result.ok, result.reason || 'Portal attack failed.');
@@ -1432,6 +1438,7 @@ check('battle forecasts match combat without mutating state', () => {
   legion.x = thrall.x - 1;
   legion.y = thrall.y;
   legion.hasActed = false;
+  legion.moved = false;
   const beforeHp = thrall.hp;
   const forecast = forecastUnitAttack(state, legion.id, thrall.id);
   assert(forecast.ok, forecast.reason || 'Unit forecast failed.');
@@ -1447,6 +1454,7 @@ check('battle forecasts match combat without mutating state', () => {
   archer.x = portal.x;
   archer.y = portal.y - 3;
   archer.hasActed = false;
+  archer.moved = false;
   portal.hp = 1;
   const buildingForecast = forecastBuildingAttack(buildingState, archer.id, portal.id);
   assert(buildingForecast.ok, buildingForecast.reason || 'Building forecast failed.');
@@ -1696,6 +1704,7 @@ check('Undo stack reverses any player action without desync', () => {
   for (let i = 0; i < 80; i += 1) {
     const activeScout = longState.units.find((u) => u.faction === 'olundar' && u.type === 'scout');
     activeScout.hasActed = false;
+    activeScout.moved = false;
     const destination = [
       { x: activeScout.x + 1, y: activeScout.y },
       { x: activeScout.x - 1, y: activeScout.y },
@@ -1954,6 +1963,48 @@ check('counterblows, field ranks, spoils, and barrow raids make early fights cou
   assert(reloaded.turnEvents.some((event) => event.kind === 'raid'), 'The barrow raid should rise on its turn.');
   assert(reloaded.units.some((unit) => unit.raid && unit.march && unit.faction === 'dead'), 'Barrow-dead should march on the capital.');
   assert(pending.turn <= 8, 'The first barrow raid should land in the opening turns on Standard.');
+});
+
+check('companies can march then strike, cavalry charges, and marches reach the capital', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-march-strike' });
+  const legion = state.units.find((unit) => unit.faction === 'olundar' && unit.type === 'legionary');
+  state.units = state.units.filter((unit) => unit.faction !== 'dead' || Math.abs(unit.x - legion.x) + Math.abs(unit.y - legion.y) > 6);
+  const destination = [[legion.x + 1, legion.y], [legion.x, legion.y + 1], [legion.x - 1, legion.y], [legion.x, legion.y - 1]]
+    .find(([x, y]) => findPath(state, legion, x, y, UNIT_TYPES.legionary.move));
+  assert(destination, 'March-strike test needs an open step.');
+  const [dx, dy] = destination;
+  const foeTile = [[dx + 1, dy], [dx, dy + 1], [dx - 1, dy], [dx, dy - 1]].find(([x, y]) => (x !== legion.x || y !== legion.y) && !unitAt(state, x, y));
+  const thrall = addUnit(state, 'boneThrall', 'dead', foeTile[0], foeTile[1]);
+  updateVisibility(state);
+  const moved = moveUnit(state, legion.id, dx, dy);
+  assert(moved.ok && moved.strikeReady && !legion.hasActed && legion.moved, 'A company that marches into reach should keep its strike.');
+  assert(!moveUnit(state, legion.id, legion.x, legion.y + 1).ok, 'A company should only march once per turn.');
+  const struck = attackUnit(state, legion.id, thrall.id);
+  assert(struck.ok && legion.hasActed, 'The marched company should strike, and the strike should end its order.');
+
+  const lone = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-march-alone' });
+  const scout = lone.units.find((unit) => unit.faction === 'olundar' && unit.type === 'scout');
+  const step = [[scout.x + 1, scout.y], [scout.x - 1, scout.y], [scout.x, scout.y + 1], [scout.x, scout.y - 1]].find(([x, y]) => findPath(lone, scout, x, y, UNIT_TYPES.scout.move));
+  const quiet = moveUnit(lone, scout.id, step[0], step[1]);
+  assert(quiet.ok && !quiet.strikeReady && scout.hasActed, 'A march with no foe in reach should spend the order.');
+
+  const rider = addUnit(state, 'cavalry', 'olundar', 2, 2);
+  const target = addUnit(state, 'boneThrall', 'dead', 3, 2);
+  const still = forecastUnitAttack(state, rider.id, target.id);
+  rider.moved = true;
+  rider.charge = 3;
+  const charging = forecastUnitAttack(state, rider.id, target.id);
+  assert(still.ok && charging.ok && charging.charge === 2 && charging.damage === still.damage + 2, 'Cavalry that rides 2 or more tiles before striking should charge for +2.');
+
+  const siege = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'seed-0' });
+  const capital = siege.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  capital.hp = 100000;
+  let arrived = null;
+  for (let turn = 0; turn < 45 && !arrived; turn += 1) {
+    endTurn(siege);
+    if (siege.units.some((unit) => unit.faction === 'dead' && unit.march && !unit.raid && Math.abs(unit.x - capital.x) + Math.abs(unit.y - capital.y) <= 6)) arrived = siege.turn;
+  }
+  assert(arrived && arrived <= 45, 'A Standard march should reach the capital instead of stalling at a choke or a walled-in approach.');
 });
 
 for (const { name, fn } of checks) {

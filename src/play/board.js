@@ -17,6 +17,7 @@ import {
   getBarrowRaid,
   getDeadwalkerCampaign,
   getWarCouncil,
+  canStillMove,
   isEnemy,
   isRevealed,
   isVisible,
@@ -170,7 +171,7 @@ export function loadUnitSprites() {
 }
 
 export function movementField(state, unit) {
-  if (!unit || unit.hasActed) return new Map();
+  if (!canStillMove(unit)) return new Map();
   const range = effectiveMoveRange(state, unit);
   const costs = new Map([[key(unit.x, unit.y), 0]]);
   const queue = [{ x: unit.x, y: unit.y, cost: 0 }];
@@ -314,10 +315,10 @@ export function createBoard(canvas) {
   }
 
   function ensureField(state, unit) {
-    const id = unit ? `${unit.id}:${unit.x},${unit.y}:${unit.hasActed}:${state.turn}` : '';
+    const id = unit ? `${unit.id}:${unit.x},${unit.y}:${unit.hasActed}:${unit.moved}:${state.turn}` : '';
     if (id !== view.fieldKey) {
       view.fieldKey = id;
-      view.field = unit && unit.faction === 'olundar' && !unit.hasActed ? movementField(state, unit) : new Map();
+      view.field = unit && unit.faction === 'olundar' && canStillMove(unit) ? movementField(state, unit) : new Map();
     }
     return view.field;
   }
@@ -355,7 +356,7 @@ export function createBoard(canvas) {
     const route = hover && selectedUnit && field.has(`${hover.x},${hover.y}`)
       ? traceMovePath(field, selectedUnit, hover.x, hover.y)
       : [];
-    const dawn = !buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
+    const dawn = !buildType && hover && selectedUnit && canStillMove(selectedUnit) && field.has(`${hover.x},${hover.y}`)
       ? groundAStepWouldOpen(state, selectedUnit, hover.x, hover.y)
       : [];
     const selectedBuilding = state.buildings.find((building) => building.id === selectedBuildingId) || null;
@@ -715,7 +716,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
     }
   }
   let drewRoute = false;
-  if (!buildType && hover && selectedUnit && !selectedUnit.hasActed && field.has(`${hover.x},${hover.y}`)
+  if (!buildType && hover && selectedUnit && canStillMove(selectedUnit) && field.has(`${hover.x},${hover.y}`)
       && (hover.x !== selectedUnit.x || hover.y !== selectedUnit.y)) {
     const exposed = hostsReaching(state, selectedUnit.faction, hover.x, hover.y, selectedUnit.id).length > 0;
     drawMoveGhost(ctx, frame, selectedUnit, hover, seats.get(selectedUnit.id) || 0, exposed);
@@ -733,7 +734,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
       drewRoute = true;
     }
   }
-  if (!drewRoute && !buildType && selectedUnit && !selectedUnit.hasActed) {
+  if (!drewRoute && !buildType && selectedUnit && canStillMove(selectedUnit)) {
     const dawn = dawnFromField(state, selectedUnit, field);
     if (dawn?.path?.length > 1) {
       drawMovePath(ctx, frame, dawn.path, field);
@@ -2695,7 +2696,7 @@ export function traceMovePath(field, origin, x, y) {
 export function approachFor(state, unit, building) {
   if (!unit || !building || unit.faction !== 'olundar') return null;
   const approach = approachFromField(movementField(state, unit), unit, building);
-  if (!approach || (unit.hasActed && approach.cost > 0)) return null;
+  if (!approach || (!canStillMove(unit) && approach.cost > 0)) return null;
   return approach;
 }
 
@@ -2716,7 +2717,7 @@ function dawnFromField(state, unit, field) {
 }
 
 export function dawnStepFor(state, unit) {
-  if (!unit || unit.hasActed || unit.faction !== 'olundar') return null;
+  if (!canStillMove(unit) || unit.faction !== 'olundar') return null;
   return dawnFromField(state, unit, movementField(state, unit));
 }
 
