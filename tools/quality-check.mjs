@@ -65,7 +65,8 @@ import {
   getCoalitionInterceptLanes,
   getRallyForecast,
   formatCampaignChronicle,
-  unitRank
+  unitRank,
+  getMarchWaves
 } from '../src/rules.js';
 import { movementField } from '../src/play/board.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
@@ -2005,6 +2006,37 @@ check('companies can march then strike, cavalry charges, and marches reach the c
     if (siege.units.some((unit) => unit.faction === 'dead' && unit.march && !unit.raid && Math.abs(unit.x - capital.x) + Math.abs(unit.y - capital.y) <= 6)) arrived = siege.turn;
   }
   assert(arrived && arrived <= 45, 'A Standard march should reach the capital instead of stalling at a choke or a walled-in approach.');
+});
+
+check('marches gather into waves and the board stays light on old devices', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-waves' });
+  const capital = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
+  capital.hp = 100000;
+  let wave = null;
+  for (let turn = 0; turn < 30 && !wave; turn += 1) {
+    endTurn(state);
+    wave = getMarchWaves(state)[0] || null;
+  }
+  assert(wave && wave.size > 0, 'A dispatched march should gather as a wave at a rally point.');
+  const gap = Math.abs(Math.abs(wave.x - capital.x) + Math.abs(wave.y - capital.y) - 9);
+  assert(gap <= 2, 'The rally point should sit on the road about nine tiles from the capital.');
+  const reloaded = deserializeState(serializeState(state));
+  assert(getMarchWaves(reloaded).some((item) => item.id === wave.id), 'A gathering wave should survive save and load.');
+  let surged = false;
+  for (let turn = 0; turn < 14 && !surged; turn += 1) {
+    endTurn(reloaded);
+    surged = reloaded.turnEvents.some((event) => event.kind === 'surge');
+  }
+  assert(surged, 'A gathering wave should surge on the capital once massed or out of patience.');
+
+  const board = readProjectFile('src/play/board.js');
+  const play = readProjectFile('src/play/main.js');
+  const css = readProjectFile('src/play/play.css');
+  assert(!board.includes("const pieces = document.createElement('canvas')") && board.includes("terrain.className = 'board-terrain'") && css.includes('.board-terrain'), 'Pieces should draw straight onto the board above a stacked terrain canvas, with no full-screen copy per frame.');
+  assert(board.includes('function governFrame') && board.includes('FRAME_BUDGET_MS') && board.includes('quality.lowPower ? 66 : 33'), 'A frame governor should lower resolution and slow the idle flourish on slow devices.');
+  assert(board.includes('function glideCamera') && board.includes("motion.kind === 'collapse'") && board.includes('function paintBanners') && css.includes('@keyframes board-shake'), 'Camera glides, collapses, turn banners, and screen shake should exist.');
+  assert(css.includes('prefers-reduced-motion') && board.includes('reducedMotion()'), 'Every new motion should respect reduced motion.');
+  assert(play.includes('function turnBanner') && play.includes('function playCollapses'), 'The turn should open on a banner and razed works should collapse.');
 });
 
 for (const { name, fn } of checks) {

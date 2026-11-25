@@ -198,6 +198,8 @@ Local-target hatred alone let the Deadwalkers feast on the nearest rival civiliz
 
 Marches must actually arrive. Three things used to stall them, and the first march rarely reached Olundar before turn 50. First, conscripts were often already wounded from fighting Veyr and Mireclan, so they turned back at once to heal. Second, marchers could not plan a route through their own crowd. Third, the open tile beside the capital they aimed for was often walled in by Olundar's own units, so they paced in place. Now the Hollow Crown re-knits every conscript to full health, retreating dead heal 3 HP a turn at a deadwork, and marchers plan through their own ranks. When the nearest approach is walled in, they try other open ground near the target. Marchers also ignore living hosts that are not pacted with Olundar unless boxed in. Once a marcher reaches its flank lane, it assaults the city instead of waiting there. Across eight seeds, the first march now comes within six tiles of the capital around turn 44 on Chronicle, 30 on Standard, 24 on Legion, and 22 on Hollow Crown.
 
+Marches also arrive as **waves**. A march used to trickle in one corpse at a time, and a trickle is only a kill zone for archers. Now each dispatched march picks a rally point on its road, about nine tiles from the capital, and its members gather there. Once 60% of the wave is within three tiles of the rally point, or after twelve turns of waiting, the wave surges on Olundar Prime together. A march that would rally where another wave still gathers joins that wave instead. The rally point is marked on the map with a red standard and a "gathers n/m" count, and the war clock names it, so a player can strike the wave while it masses. Far from the capital, marchers make a forced march (+1 move). They drop to their true pace within twelve tiles, so the fight at the walls stays fair. The march also answers Olundar's strength: one extra marcher per five fighting companies (at most three beyond the cap), and grave knights when Olundar fields six or more ranged units.
+
 Marches are designed to be felt, fair, and legible:
 
 - **Telegraphed.** The Deadwalker Intent panel shows the next march's countdown, projected size, and how many dead are already marching, so pressure is never an un-signposted ambush.
@@ -251,6 +253,15 @@ Olundar loses its city or collapses beyond recovery. The current prototype hard-
 - Turtling should buy time, never victory; escalating menace eventually forces the player out to kill Vorgath and shatter the portal.
 - Allies should matter but never play the game for the player.
 - Pressure actions should be tempting during emergencies but dangerous long-term.
+
+## Rendering and device budget
+
+The board must stay smooth on older phones:
+
+- **Two stacked canvases.** Terrain (fog, ground, features, roads, vignette) is painted onto its own canvas underneath the board. It is repainted only when the camera, fog, turn, or works change. Units, overlays, the minimap, and effects draw straight onto the transparent board canvas above it, so a frame never copies a full-screen bitmap. This cut the cost of an idle frame from about 54 ms to 5 ms at 4× CPU throttle.
+- **Idle at 30 fps.** Pennants and selection glow repaint at most every 33 ms, or 66 ms in low-power mode. Walks, strikes, and camera glides still run every frame.
+- **Frame governor.** If a frame repeatedly takes more than 14 ms, the board steps its render resolution down from 2× to 1.5× to 1× CSS pixels and switches to low-power idle.
+- **Motion respects the player.** Camera glides, banners, collapses, falls, and screen shake are skipped under reduced motion.
 
 ## Quality gate philosophy
 

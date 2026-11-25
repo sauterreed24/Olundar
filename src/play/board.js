@@ -15,6 +15,7 @@ import {
   forecastUnitAttack,
   getMarchAssaultVectors,
   getBarrowRaid,
+  getMarchWaves,
   getDeadwalkerCampaign,
   getWarCouncil,
   canStillMove,
@@ -214,12 +215,16 @@ export function reachersFor(state, building) {
 }
 
 export function createBoard(canvas) {
+  // Two stacked canvases: the terrain layer sits underneath and is repainted only
+  // when the camera, fog, or works change. Pieces draw straight onto the board
+  // canvas above it, so a frame never copies a full-screen bitmap.
   const terrain = document.createElement('canvas');
-  const pieces = document.createElement('canvas');
+  terrain.className = 'board-terrain';
+  terrain.setAttribute('aria-hidden', 'true');
+  if (canvas.parentNode) canvas.parentNode.insertBefore(terrain, canvas);
   const view = {
     canvas,
     terrain,
-    pieces,
     camX: 0,
     camY: 0,
     tile: 48,
@@ -233,11 +238,15 @@ export function createBoard(canvas) {
   function resize() {
     const width = Math.max(320, canvas.clientWidth || 960);
     const height = Math.max(240, canvas.clientHeight || 640);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    for (const surface of [canvas, terrain, pieces]) {
+    const dpr = renderScale();
+    for (const surface of [canvas, terrain]) {
       surface.width = Math.floor(width * dpr);
       surface.height = Math.floor(height * dpr);
     }
+    terrain.style.left = `${canvas.offsetLeft}px`;
+    terrain.style.top = `${canvas.offsetTop}px`;
+    terrain.style.width = `${canvas.clientWidth}px`;
+    terrain.style.height = `${canvas.clientHeight}px`;
     view.tile = Math.max(42, Math.min(78, Math.floor(Math.min(width / 16, height / 11))));
     view.cacheKey = '';
   }
@@ -255,6 +264,7 @@ export function createBoard(canvas) {
   }
 
   function focus(x, y) {
+    glide = null;
     const cols = canvas.clientWidth / view.tile;
     const rows = canvas.clientHeight / view.tile;
     view.camX = clamp(x - cols / 2 + 0.5, 0, Math.max(0, MAP_WIDTH - cols));
@@ -263,7 +273,63 @@ export function createBoard(canvas) {
     return layout();
   }
 
+  // Camera glides: a short eased pan instead of a jump cut, so the eye can follow
+  // the next unit, the enemy march, or the capital after a turn.
+  let glide = null;
+  function glideCamera(camX, camY) {
+    const dist = Math.hypot(camX - view.camX, camY - view.camY);
+    if (dist < 0.01) return;
+    if (reducedMotion() || dist > 40) {
+      glide = null;
+      view.camX = camX;
+      view.camY = camY;
+      view.cacheKey = '';
+      return;
+    }
+    glide = { fromX: view.camX, fromY: view.camY, toX: camX, toY: camY, start: clock(), duration: clamp(200 + dist * 26, 240, 560) };
+    startClock();
+  }
+  cameraStep = (time) => {
+    if (!glide) return false;
+    const t = clamp((time - glide.start) / glide.duration, 0, 1);
+    const eased = 1 - (1 - t) ** 3;
+    view.camX = glide.fromX + (glide.toX - glide.fromX) * eased;
+    view.camY = glide.fromY + (glide.toY - glide.fromY) * eased;
+    view.cacheKey = '';
+    if (t >= 1) glide = null;
+    return true;
+  };
+
+  function glideTo(x, y) {
+    const cols = canvas.clientWidth / view.tile;
+    const rows = canvas.clientHeight / view.tile;
+    glideCamera(
+      clamp(x - cols / 2 + 0.5, 0, Math.max(0, MAP_WIDTH - cols)),
+      clamp(y - rows / 2 + 0.5, 0, Math.max(0, MAP_HEIGHT - rows))
+    );
+  }
+
+  function shake(strength = 1) {
+    const frameEl = canvas.parentNode;
+    if (!frameEl || reducedMotion()) return;
+    frameEl.classList.remove('shake', 'shake-hard');
+    void frameEl.offsetWidth;
+    frameEl.classList.add(strength > 1 ? 'shake-hard' : 'shake');
+  }
+
+  if (typeof ResizeObserver === 'function') {
+    let last = '';
+    new ResizeObserver(() => {
+      const size = `${canvas.clientWidth}x${canvas.clientHeight}@${canvas.offsetLeft},${canvas.offsetTop}`;
+      if (size === last) return;
+      last = size;
+      resize();
+      repaint?.();
+    }).observe(canvas);
+  }
+
   function pan(dxTiles, dyTiles) {
+    glide = null;
     const cols = canvas.clientWidth / view.tile;
     const rows = canvas.clientHeight / view.tile;
     view.camX = clamp(view.camX + dxTiles, 0, Math.max(0, MAP_WIDTH - cols));
@@ -288,9 +354,7 @@ export function createBoard(canvas) {
     camX = clamp(camX, 0, Math.max(0, MAP_WIDTH - cols));
     camY = clamp(camY, 0, Math.max(0, MAP_HEIGHT - rows));
     if (camX === view.camX && camY === view.camY) return;
-    view.camX = camX;
-    view.camY = camY;
-    view.cacheKey = '';
+    glideCamera(camX, camY);
   }
 
   function tileAtPoint(clientX, clientY) {
@@ -346,13 +410,9 @@ export function createBoard(canvas) {
       paintTerrain(terrain, state, frame);
     }
     noteIdle(Boolean(selectedUnit && !selectedUnit.hasActed));
-    paintPieces(pieces, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
+    const started = clock();
+    paintPieces(canvas, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType });
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(terrain, 0, 0);
-    ctx.drawImage(pieces, 0, 0);
-    paintVignette(ctx);
     const route = hover && selectedUnit && field.has(`${hover.x},${hover.y}`)
       ? traceMovePath(field, selectedUnit, hover.x, hover.y)
       : [];
@@ -362,6 +422,8 @@ export function createBoard(canvas) {
     const selectedBuilding = state.buildings.find((building) => building.id === selectedBuildingId) || null;
     paintMinimap(ctx, state, frame, selectedUnit, field, route, buildType ? sites : null, buildType, dawn, selectedBuilding);
     paintWarClock(ctx, state, frame);
+    paintBanners(ctx, frame);
+    if (governFrame(clock() - started)) resize();
   }
 
   return {
@@ -376,9 +438,41 @@ export function createBoard(canvas) {
     play,
     clearMotion,
     watch,
+    quality: () => ({ scale: quality.scale, lowPower: quality.lowPower, dpr: renderScale() }),
+    glideTo,
+    shake,
     movementField: () => view.field,
     buildSites: () => view.buildSites
   };
+}
+
+// Frame governor: if a device cannot paint a frame inside its budget, step the
+// render resolution down (2x -> 1.5x -> 1x of CSS pixels) and slow the idle
+// flourish, so older phones stay responsive instead of stuttering.
+const quality = { scale: 1, lowPower: false, slow: 0, average: 0 };
+let cameraStep = null;
+const FRAME_BUDGET_MS = 14;
+
+function renderScale() {
+  const native = Math.min(typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1), 2);
+  return Math.max(1, native * quality.scale);
+}
+
+function governFrame(cost) {
+  quality.average = quality.average ? quality.average * 0.85 + cost * 0.15 : cost;
+  if (quality.average <= FRAME_BUDGET_MS) {
+    quality.slow = Math.max(0, quality.slow - 1);
+    return false;
+  }
+  quality.slow += 1;
+  if (quality.slow < 12) return false;
+  quality.slow = 0;
+  quality.average = 0;
+  quality.lowPower = true;
+  const native = Math.min(typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1), 2);
+  if (native * quality.scale <= 1) return false;
+  quality.scale = Math.max(1 / native, quality.scale - 0.25);
+  return true;
 }
 
 function watch(callback) {
@@ -415,12 +509,18 @@ function clock() {
 function startClock() {
   if (rafId || typeof requestAnimationFrame !== 'function') return;
   const step = (time) => {
-    frameNow = time;
     for (let index = motions.length - 1; index >= 0; index -= 1) {
       if (time - motions[index].started >= motions[index].duration) motions.splice(index, 1);
     }
-    repaint?.();
-    if (motions.length || idleOn) rafId = requestAnimationFrame(step);
+    const gliding = Boolean(cameraStep?.(time));
+    // Idle flourish (pennants, selection glow) does not need 60 frames a second.
+    const idleOnly = !gliding && !motions.some((motion) => !motion.delay || time >= motion.started);
+    const gap = quality.lowPower ? 66 : 33;
+    if (!idleOnly || time - frameNow >= gap) {
+      frameNow = time;
+      repaint?.();
+    }
+    if (motions.length || idleOn || gliding) rafId = requestAnimationFrame(step);
     else rafId = 0;
   };
   rafId = requestAnimationFrame(step);
@@ -476,6 +576,7 @@ function paintImpacts(ctx, frame) {
     if (motion.kind === 'mark') drawMark(ctx, frame, motion);
     if (motion.kind === 'volley') drawVolley(ctx, frame, motion);
     if (motion.kind === 'promote') drawPromote(ctx, frame, motion);
+    if (motion.kind === 'collapse') drawCollapse(ctx, frame, motion);
   }
 }
 
@@ -542,14 +643,100 @@ function drawPromote(ctx, frame, motion) {
   ctx.restore();
 }
 
+function drawDust(ctx, rect, amount, tint = '120, 96, 70') {
+  if (amount <= 0) return;
+  const cx = rect.x + rect.s / 2;
+  const cy = rect.y + rect.s * 0.84;
+  ctx.save();
+  for (let index = 0; index < 9; index += 1) {
+    const angle = Math.PI + (index / 8) * Math.PI;
+    const reach = rect.s * (0.12 + amount * (0.3 + (index % 3) * 0.08));
+    const radius = rect.s * (0.05 + amount * 0.07) * (1 + (index % 2) * 0.4);
+    ctx.fillStyle = `rgba(${tint}, ${0.42 * (1 - amount)})`;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach * 0.35 - amount * rect.s * 0.12, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCollapse(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRect(frame, motion.x, motion.y);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x - rect.s, rect.y - rect.s, rect.s * 3, rect.s * 1.96);
+  ctx.clip();
+  ctx.globalAlpha = Math.max(0, 1 - amount ** 1.6);
+  ctx.translate(rect.x + Math.sin(amount * 40) * rect.s * 0.025 * (1 - amount), rect.y + amount * amount * rect.s * 0.28);
+  drawBuildingSprite(ctx, motion.type, rect.s);
+  ctx.restore();
+  drawDust(ctx, rect, Math.min(1, amount * 1.1), motion.faction === 'dead' ? '96, 120, 86' : '130, 104, 76');
+}
+
+function paintBanners(ctx, frame) {
+  for (const motion of motions) {
+    if (motion.kind !== 'banner' || !begun(motion)) continue;
+    const amount = motionAmount(motion);
+    const slide = amount < 0.18 ? 1 - (amount / 0.18) : 0;
+    const fade = amount > 0.78 ? 1 - (amount - 0.78) / 0.22 : 1;
+    const eased = slide ** 3;
+    const w = ctx.canvas.width;
+    const size = Math.max(18, Math.round(26 * frame.dpr));
+    const sub = Math.round(size * 0.56);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+    const titleW = ctx.measureText(motion.title).width;
+    ctx.font = `600 ${sub}px Palatino, Georgia, serif`;
+    const subW = motion.subtitle ? ctx.measureText(motion.subtitle).width : 0;
+    const width = Math.max(titleW, subW) + size * 3;
+    const height = motion.subtitle ? size * 2.5 : size * 1.7;
+    const x = (w - width) / 2 - eased * w * 0.6;
+    const y = ctx.canvas.height * 0.16;
+    const ink = motion.tone === 'danger' ? '#7a1c16' : motion.tone === 'good' ? '#2f6a2a' : '#6a3418';
+    ctx.fillStyle = 'rgba(255, 244, 220, 0.95)';
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(2, 2 * frame.dpr);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + width, y);
+    ctx.lineTo(x + width - size * 0.5, y + height / 2);
+    ctx.lineTo(x + width, y + height);
+    ctx.lineTo(x, y + height);
+    ctx.lineTo(x + size * 0.5, y + height / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+    ctx.fillText(motion.title, x + width / 2, y + (motion.subtitle ? size * 0.85 : height / 2));
+    if (motion.subtitle) {
+      ctx.fillStyle = '#3a2416';
+      ctx.font = `600 ${sub}px Palatino, Georgia, serif`;
+      ctx.fillText(motion.subtitle, x + width / 2, y + size * 1.8);
+    }
+    ctx.restore();
+  }
+}
+
 function drawFall(ctx, frame, motion, fixed = null) {
   const amount = fixed ?? motionAmount(motion);
-  const rect = tileRectAt(frame, motion.x, motion.y + amount * 0.12);
+  const rect = tileRectAt(frame, motion.x, motion.y);
+  const s = rect.s;
+  // Topple toward the ground from the feet, sink a little, and fade into dust.
+  const tip = Math.min(1, amount * 1.6);
+  const lean = (1 - (1 - tip) ** 2) * (Math.PI / 2.4) * (motion.faction === 'dead' ? -1 : 1);
   ctx.save();
-  ctx.globalAlpha = 1 - amount;
-  ctx.translate(rect.x, rect.y);
-  drawUnitSprite(ctx, { type: motion.type, faction: motion.faction }, rect.s);
+  ctx.globalAlpha = Math.max(0, 1 - Math.max(0, amount - 0.35) / 0.65);
+  ctx.translate(rect.x + s * 0.5, rect.y + s * (0.86 + amount * 0.06));
+  ctx.rotate(lean);
+  ctx.translate(-s * 0.5, -s * 0.86);
+  drawUnitSprite(ctx, { type: motion.type, faction: motion.faction }, s);
   ctx.restore();
+  if (fixed === null) drawDust(ctx, tileRect(frame, motion.x, motion.y), Math.max(0, (amount - 0.25) / 0.75), motion.faction === 'dead' ? '170, 176, 150' : '130, 104, 76');
 }
 
 function drawDamage(ctx, frame, motion) {
@@ -640,6 +827,7 @@ function paintTerrain(surface, state, frame) {
     }
   }
   paintDaylight(ctx, surface.width, surface.height);
+  paintVignette(ctx);
 }
 
 function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuildingId, field, sites, buildType }) {
@@ -676,6 +864,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
   paintBarrow(ctx, state, frame);
+  paintWaves(ctx, state, frame);
   paintDawn(ctx, frame);
   paintSight(ctx, frame);
 
@@ -1097,6 +1286,11 @@ export function warClock(state) {
       ? `${camp.stage}. ${camp.closest.name} is ${camp.closest.distance} from the capital.`
       : `${camp.stage}. ${camp.marchingCount} hunt the capital.`)
     : `${camp.stage}. First march in ${camp.turnsToMarch}.`;
+  const wave = camp.waves?.[0];
+  if (wave) {
+    const where = wave.revealed ? ` at ${wave.x},${wave.y}` : '';
+    return { title: 'A march gathers', detail: `${wave.gathered}/${wave.size} dead massed${where}. They strike together.` };
+  }
   if (camp.raid) {
     const where = camp.raid.revealed ? ` at ${camp.raid.x},${camp.raid.y}` : '';
     return { title: 'The barrows stir', detail: `Grave-dead rise${where} ${camp.raid.turnsLeft <= 1 ? 'next turn' : `in ${camp.raid.turnsLeft}`}.` };
@@ -2426,6 +2620,56 @@ function drawChevrons(ctx, x, y, s, count) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+function paintWaves(ctx, state, frame) {
+  for (const wave of getMarchWaves(state)) {
+    if (!wave.revealed) continue;
+    const rect = tileRect(frame, wave.x, wave.y);
+    const pulse = 0.5 + 0.5 * Math.sin(frameNow / 260 + wave.id);
+    const cx = rect.x + rect.s / 2;
+    const base = rect.y + rect.s * 0.86;
+    ctx.save();
+    ctx.strokeStyle = `rgba(122, 28, 22, ${0.45 + pulse * 0.35})`;
+    ctx.lineWidth = Math.max(2, rect.s * 0.04);
+    ctx.setLineDash([rect.s * 0.1, rect.s * 0.07]);
+    ctx.beginPath();
+    ctx.arc(cx, rect.y + rect.s * 0.62, rect.s * (1.4 + pulse * 0.1), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#2a160a';
+    ctx.lineWidth = Math.max(2, rect.s * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(cx, base);
+    ctx.lineTo(cx, rect.y + rect.s * 0.12);
+    ctx.stroke();
+    ctx.fillStyle = '#5a1410';
+    ctx.beginPath();
+    ctx.moveTo(cx, rect.y + rect.s * 0.14);
+    ctx.lineTo(cx + rect.s * 0.34, rect.y + rect.s * 0.2 + Math.sin(frameNow / 200) * rect.s * 0.02);
+    ctx.lineTo(cx + rect.s * 0.26, rect.y + rect.s * 0.3);
+    ctx.lineTo(cx + rect.s * 0.34, rect.y + rect.s * 0.42 + Math.sin(frameNow / 200) * rect.s * 0.02);
+    ctx.lineTo(cx, rect.y + rect.s * 0.44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#e9e2cf';
+    ctx.beginPath();
+    ctx.arc(cx + rect.s * 0.13, rect.y + rect.s * 0.28, rect.s * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+    const label = `gathers ${wave.gathered}/${wave.size}`;
+    const size = Math.max(11, Math.round(frame.tile * 0.2));
+    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+    const width = ctx.measureText(label).width + size;
+    const top = rect.y - size - 4;
+    ctx.fillStyle = 'rgba(58, 14, 10, 0.92)';
+    roundRect(ctx, cx - width / 2, top, width, size + 6, 4);
+    ctx.fill();
+    ctx.fillStyle = '#ffd9c8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, top + (size + 6) / 2);
+    ctx.restore();
+  }
 }
 
 function paintBarrow(ctx, state, frame) {
