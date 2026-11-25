@@ -2854,9 +2854,21 @@ export function canEnter(state, unit, x, y) {
   return true;
 }
 
-export function findPath(state, unit, tx, ty, maxCost = Infinity) {
+// AI hosts may plan through their own ranks: they can pass a comrade, never stop on one.
+function canPassThrough(state, unit, x, y) {
+  if (canEnter(state, unit, x, y)) return true;
+  const tile = tileAt(state, x, y);
+  if (!tile || !TERRAIN[tile.terrain].passable) return false;
+  const occupant = unitAt(state, x, y);
+  if (!occupant || occupant.faction !== unit.faction) return false;
+  const building = buildingAt(state, x, y);
+  return !(building && isEnemy(state, unit.faction, building.faction));
+}
+
+export function findPath(state, unit, tx, ty, maxCost = Infinity, options = {}) {
   if (!inBounds(tx, ty)) return null;
   if (!canEnter(state, unit, tx, ty) && !(unit.x === tx && unit.y === ty)) return null;
+  const passable = options.passFriendly ? canPassThrough : canEnter;
   const startKey = idx(unit.x, unit.y);
   const targetKey = idx(tx, ty);
   const costs = new Map([[startKey, 0]]);
@@ -2868,7 +2880,7 @@ export function findPath(state, unit, tx, ty, maxCost = Infinity) {
     const currentKey = idx(current.x, current.y);
     if (currentKey === targetKey) break;
     for (const n of neighbors4(current.x, current.y)) {
-      if (!canEnter(state, unit, n.x, n.y) && !(n.x === tx && n.y === ty)) continue;
+      if (!passable(state, unit, n.x, n.y) && !(n.x === tx && n.y === ty)) continue;
       const step = moveCostFor(state, unit, n.x, n.y, current);
       const nextCost = current.cost + step;
       if (nextCost > maxCost) continue;
@@ -2898,16 +2910,47 @@ export function moveUnit(state, unitId, x, y) {
   const def = getUnitDef(unit);
   const path = findPath(state, unit, x, y, effectiveMoveRange(state, unit));
   if (!path) return { ok: false, reason: 'No valid path within this unit’s movement.' };
+  if (unit.moved) return { ok: false, reason: `${unit.name} has already marched this turn.` };
   const fromX = unit.x;
   const fromY = unit.y;
   unit.x = x;
   unit.y = y;
-  unit.hasActed = true;
+  unit.moved = true;
+  unit.charge = manhattan(fromX, fromY, x, y);
   unit.fortified = 0;
   const ruinWhisper = maybeSurveyRuin(state, unit);
   updateVisibility(state);
   updateAftermathMissions(state);
-  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles, ruinWhisper };
+  // A fighting company that marches into reach of a foe keeps its strike for this turn.
+  const strikeReady = unit.type !== 'engineer' && attackOptionsFor(state, unit).length > 0;
+  if (!strikeReady) unit.hasActed = true;
+  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles, ruinWhisper, strikeReady };
+}
+
+export function canStillMove(unit) {
+  return Boolean(unit) && !unit.hasActed && !unit.moved;
+}
+
+export function attackOptionsFor(state, unit) {
+  const def = getUnitDef(unit);
+  if (!def) return [];
+  const options = [];
+  for (const target of state.units) {
+    if (target.id === unit.id || !isEnemy(state, unit.faction, target.faction)) continue;
+    if (unit.faction === 'olundar' && !isVisible(state, target.x, target.y)) continue;
+    if (manhattan(unit.x, unit.y, target.x, target.y) <= def.range) options.push({ kind: 'unit', ref: target });
+  }
+  for (const target of state.buildings) {
+    if (target.type === 'road' || !isEnemy(state, unit.faction, target.faction)) continue;
+    if (unit.faction === 'olundar' && !isVisible(state, target.x, target.y)) continue;
+    if (manhattan(unit.x, unit.y, target.x, target.y) <= def.range) options.push({ kind: 'building', ref: target });
+  }
+  return options;
+}
+
+function chargeBonus(attacker) {
+  const def = getUnitDef(attacker);
+  return def?.tags.includes('mounted') && attacker.moved && (attacker.charge || 0) >= 2 ? 2 : 0;
 }
 
 function maybeSurveyRuin(state, unit) {
@@ -3139,6 +3182,7 @@ export function forecastUnitAttack(state, attackerId, defenderId) {
     terrainDefense,
     fortified: defender.fortified || 0,
     counter: counterblowFor(state, attacker, defender, damage),
+    charge: chargeBonus(attacker),
     attackerHp: attacker.hp,
     note: targetHpAfter <= 0 ? `${defender.name} is likely to fall.` : `${defender.name} survives on ${targetHpAfter} HP.`
   };
@@ -3409,7 +3453,7 @@ function calculateUnitDamage(state, attacker, defender) {
   const dDef = getUnitDef(defender);
   const defenderTile = tileAt(state, defender.x, defender.y);
   const attackerTile = tileAt(state, attacker.x, attacker.y);
-  let damage = aDef.attack + unitRank(attacker).attack;
+  let damage = aDef.attack + unitRank(attacker).attack + chargeBonus(attacker);
   damage -= dDef.armor;
   damage -= TERRAIN[defenderTile.terrain].defense || 0;
   damage -= defender.fortified || 0;
@@ -4216,12 +4260,17 @@ function runDeadwalkerTurn(state) {
   for (const unit of deadUnits) {
     if (!state.units.includes(unit)) continue;
     if (unit.march && capital) {
+      // Marchers have one quarry: Olundar and the pacts that stand with it. They
+      // only brawl with other living hosts when boxed in, so marches arrive.
+      const quarry = { priorityUnitType: 'onager', onlyFactions: marchQuarry(state) };
       const plan = deadwalkerMarchPlan(state, unit, capital);
       if (plan.mode === 'retreat' && executeDeadwalkerRetreat(state, unit, plan.target)) continue;
-      const acted = aiTryAttack(state, unit, { priorityUnitType: 'onager' });
+      const acted = aiTryAttack(state, unit, quarry);
       if (acted) continue;
+      const from = { x: unit.x, y: unit.y };
       aiAdvanceToward(state, unit, plan.target.x, plan.target.y);
-      aiTryAttack(state, unit, { priorityUnitType: 'onager' });
+      const stuck = unit.x === from.x && unit.y === from.y;
+      if (!aiTryAttack(state, unit, quarry) && stuck) aiTryAttack(state, unit, { priorityUnitType: 'onager' });
       continue;
     }
     const acted = aiTryAttack(state, unit);
@@ -4290,6 +4339,8 @@ function dispatchDeadwalkerMarch(state, config, camp) {
   for (const unit of standing) {
     if (mustered >= size) break;
     unit.march = true;
+    // The Hollow Crown re-knits the bones of every conscript before it marches.
+    unit.hp = unit.maxHp || getUnitDef(unit)?.hp || unit.hp;
     mustered += 1;
   }
   // Reinforce the shortfall from the deadwork closest to the capital.
@@ -4422,6 +4473,8 @@ function executeDeadwalkerRetreat(state, unit, target) {
   if (manhattan(unit.x, unit.y, target.x, target.y) <= 1) {
     unit.hasActed = true;
     unit.fortified = Math.max(unit.fortified || 0, 1);
+    const maxHp = unit.maxHp || getUnitDef(unit)?.hp || unit.hp;
+    unit.hp = Math.min(maxHp, unit.hp + 3);
     return true;
   }
   return aiAdvanceToward(state, unit, target.x, target.y);
@@ -4443,7 +4496,8 @@ function priorityOnagerTarget(state, unit, capital) {
 }
 
 function deadwalkerFlankTarget(state, unit, capital) {
-  if (manhattan(unit.x, unit.y, capital.x, capital.y) > 10) return capital;
+  // Spread out on the approach, then close in: a marcher that has taken its flank assaults the walls.
+  if (unit.flanked || manhattan(unit.x, unit.y, capital.x, capital.y) > 10) return capital;
   const lane = numericId(unit.id) % 2 === 0 ? 1 : -1;
   const candidates = [
     { x: capital.x + 2, y: capital.y + lane * 2 },
@@ -4453,10 +4507,15 @@ function deadwalkerFlankTarget(state, unit, capital) {
     { x: capital.x + 2, y: capital.y - lane * 2 },
     { x: capital.x + 1, y: capital.y - lane * 3 }
   ];
-  return candidates
-    .filter((point) => canEnter(state, unit, point.x, point.y))
+  const lanes = candidates
+    .filter((point) => inBounds(point.x, point.y) && (canEnter(state, unit, point.x, point.y) || (point.x === unit.x && point.y === unit.y)))
     .map((point) => ({ ...point, dist: manhattan(unit.x, unit.y, point.x, point.y) }))
-    .sort((a, b) => a.dist - b.dist)[0] || capital;
+    .sort((a, b) => a.dist - b.dist);
+  if (!lanes.length || lanes[0].dist === 0) {
+    unit.flanked = true;
+    return capital;
+  }
+  return lanes[0];
 }
 
 function numericId(id) {
@@ -4475,7 +4534,7 @@ function aiAdvanceToward(state, unit, tx, ty) {
       unit.fortified = Math.max(unit.fortified || 0, 1);
       return true;
     }
-    const route = findPath(state, unit, goal.x, goal.y, Infinity);
+    const route = approachRoute(state, unit, tx, ty, goal);
     if (route && route.path.length) {
       let budget = def.move;
       let from = { x: unit.x, y: unit.y };
@@ -4483,10 +4542,10 @@ function aiAdvanceToward(state, unit, tx, ty) {
       for (const key of route.path) {
         const point = xy(key);
         const step = moveCostFor(state, unit, point.x, point.y, from);
-        if (step > budget || !canEnter(state, unit, point.x, point.y)) break;
+        if (step > budget || !canPassThrough(state, unit, point.x, point.y)) break;
         budget -= step;
         from = point;
-        landed = point;
+        if (canEnter(state, unit, point.x, point.y)) landed = point;
       }
       if (landed) {
         unit.x = landed.x;
@@ -4498,6 +4557,28 @@ function aiAdvanceToward(state, unit, tx, ty) {
   }
   aiMoveToward(state, unit, tx, ty);
   return Boolean(unit.hasActed);
+}
+
+// The nearest open tile beside a target can be walled in by its defenders. Try the
+// other open ground around the target, nearest first, until one has a real route.
+function approachRoute(state, unit, tx, ty, goal) {
+  const first = findPath(state, unit, goal.x, goal.y, Infinity, { passFriendly: true });
+  if (first) return first;
+  const candidates = [];
+  for (let y = ty - 3; y <= ty + 3; y += 1) {
+    for (let x = tx - 3; x <= tx + 3; x += 1) {
+      const ring = manhattan(x, y, tx, ty);
+      if (!inBounds(x, y) || ring < 1 || ring > 3 || (x === goal.x && y === goal.y)) continue;
+      if (!canEnter(state, unit, x, y)) continue;
+      candidates.push({ x, y, ring, dist: manhattan(unit.x, unit.y, x, y) });
+    }
+  }
+  candidates.sort((a, b) => a.ring - b.ring || a.dist - b.dist);
+  for (const candidate of candidates.slice(0, 8)) {
+    const route = findPath(state, unit, candidate.x, candidate.y, Infinity, { passFriendly: true });
+    if (route) return route;
+  }
+  return null;
 }
 
 function openApproachTile(state, unit, tx, ty) {
@@ -4789,17 +4870,22 @@ function nearestFactionBuilding(state, x, y, factionId, types) {
     .sort((a, b) => a.dist - b.dist)[0] || null;
 }
 
+function marchQuarry(state) {
+  return ['olundar', ...['dawn', 'veyr', 'mire'].filter((id) => state.factions.olundar?.pacts?.[id])];
+}
+
 function aiTryAttack(state, unit, options = {}) {
   const def = getUnitDef(unit);
+  const allowed = (faction) => !options.onlyFactions || options.onlyFactions.includes(faction);
   const enemyUnit = state.units
-    .filter((target) => isEnemy(state, unit.faction, target.faction) && manhattan(unit.x, unit.y, target.x, target.y) <= def.range)
+    .filter((target) => allowed(target.faction) && isEnemy(state, unit.faction, target.faction) && manhattan(unit.x, unit.y, target.x, target.y) <= def.range)
     .sort((a, b) => aiAttackPriorityScore(b, options) - aiAttackPriorityScore(a, options) || a.hp - b.hp)[0];
   if (enemyUnit) {
     attackUnit(state, unit.id, enemyUnit.id);
     return true;
   }
   const enemyBuilding = state.buildings
-    .filter((target) => isEnemy(state, unit.faction, target.faction) && manhattan(unit.x, unit.y, target.x, target.y) <= def.range)
+    .filter((target) => allowed(target.faction) && isEnemy(state, unit.faction, target.faction) && manhattan(unit.x, unit.y, target.x, target.y) <= def.range)
     .sort((a, b) => a.hp - b.hp)[0];
   if (enemyBuilding) {
     attackBuilding(state, unit.id, enemyBuilding.id);
@@ -4869,7 +4955,11 @@ export function findSpawnNear(state, x, y, faction) {
 }
 
 function resetActions(state) {
-  for (const unit of state.units) unit.hasActed = false;
+  for (const unit of state.units) {
+    unit.hasActed = false;
+    unit.moved = false;
+    unit.charge = 0;
+  }
 }
 
 function checkLossConditions(state) {

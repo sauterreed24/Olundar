@@ -17,6 +17,8 @@ The deployment workflow runs `npm run quality:check` before publishing, then upl
 - Turn-based movement, attacking, training, construction, economy, diplomacy, and enemy AI.
 - **The March of the Hollow Crown:** the Deadwalkers gather menace and periodically dispatch escalating, telegraphed marches directed at Olundar Prime, conscripting their eastern horde and reinforcing from the nearest deadwork so ignoring the war is fatal and harder difficulties bite sooner.
 - **Barrow raids:** small bands of grave-dead claw out of old barrows a few tiles from Olundar Prime in the opening turns (turn 6 on Standard). Each raid is announced a turn ahead, and its barrow is marked on the map, so the first fights come long before the main march.
+- **March, then strike:** a fighting company that moves into reach of a foe keeps its attack for that turn, so you can close and hit instead of handing the enemy a free blow. Each unit moves once per turn. Engineers still spend their order when they move.
+- **Cavalry charge:** Equite Cavalry that ride 2 or more tiles before striking hit for +2. Spears still punish them.
 - **Counterblows:** a defender that survives a melee blow strikes back at half strength. Archers and onagers firing from beyond arm's reach are safe. The attack preview shows the blow you will take back, and whether it would kill your unit.
 - **Field ranks:** blows and kills earn experience. Units rise to Veteran, Elite, and Legend, gaining attack and max HP with each rank. A rank badge appears on the figure, and the unit card shows progress to the next rank.
 - **Spoils of war:** killing the dead pays grave-goods (gold, wood, iron), and razing Bone Pits, Grave Forges, and Necropolises pays a larger cache.
@@ -72,6 +74,7 @@ Browsers that support installation will expose an **Install** button after the a
 The campaign opens on a square tactical board. Terrain is drawn once and reused, so hovering does not rebuild the map. The dock on the right is the only command panel.
 
 - Click one of your units. Gold tiles are the legal moves. Click a gold tile to move.
+- Move a soldier next to a foe, then click the red bracket to strike in the same turn. Fortify instead to end its order.
 - Click an enemy outlined in red to attack. The preview shows the damage you deal and any counterblow you will take back. Soften the line with archers, then finish with infantry.
 - Watch for a green barrow marked "rises next turn". Grave-dead come out of it and march on the capital. Kill them for spoils and experience.
 - Click a city or camp to train. An engineer can place a building, then click a green outline.

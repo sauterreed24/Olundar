@@ -88,7 +88,8 @@ The map generator creates elevation and moisture, then stamps key regions and co
 
 The prototype uses a simple readable model:
 
-- Units act once per turn.
+- Units move once and strike once per turn. A fighting company that marches into reach of a foe keeps its strike, so closing and hitting is one order, as it is for the AI. A march with no foe in reach spends the order. Engineers spend their order when they move.
+- Cavalry that ride 2 or more tiles before striking charge for +2 damage.
 - Units have HP, attack, range, move, sight, armor, upkeep, and tags.
 - Hills improve ranged attacks.
 - Forests and hills improve defense.
@@ -194,6 +195,8 @@ This gives the player a visible long-term enemy growth curve instead of isolated
 ### The March of the Hollow Crown
 
 Local-target hatred alone let the Deadwalkers feast on the nearest rival civilization while a distant, turtling Olundar sat untouched for dozens of turns. To honor the pillar that the dead are *inevitable if ignored*, the campaign now tracks Deadwalker **menace** that rises every turn after the invasion begins. On a difficulty-scaled cadence the Hollow Crown dispatches a **march**: it conscripts the standing dead nearest to Olundar so the eastern horde turns west, then reinforces any shortfall from the deadwork closest to the capital. Marchers navigate real routes toward Olundar Prime instead of only chasing whatever is nearest.
+
+Marches must actually arrive. Three things used to stall them, and the first march rarely reached Olundar before turn 50. First, conscripts were often already wounded from fighting Veyr and Mireclan, so they turned back at once to heal. Second, marchers could not plan a route through their own crowd. Third, the open tile beside the capital they aimed for was often walled in by Olundar's own units, so they paced in place. Now the Hollow Crown re-knits every conscript to full health, retreating dead heal 3 HP a turn at a deadwork, and marchers plan through their own ranks. When the nearest approach is walled in, they try other open ground near the target. Marchers also ignore living hosts that are not pacted with Olundar unless boxed in. Once a marcher reaches its flank lane, it assaults the city instead of waiting there. Across eight seeds, the first march now comes within six tiles of the capital around turn 44 on Chronicle, 30 on Standard, 24 on Legion, and 22 on Hollow Crown.
 
 Marches are designed to be felt, fair, and legible:
 
