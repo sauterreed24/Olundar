@@ -64,7 +64,8 @@ import {
   getMarchAssaultVectors,
   getCoalitionInterceptLanes,
   getRallyForecast,
-  formatCampaignChronicle
+  formatCampaignChronicle,
+  unitRank
 } from '../src/rules.js';
 import { movementField } from '../src/play/board.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, removeSaveSlot, serializeSaveSlots, upsertSaveSlot } from '../src/saveSlots.js';
@@ -1911,6 +1912,48 @@ check('scarred veterans survive near-death and hold-the-line triumphs reward mar
   const state = createGame('quality-scar');
   assert(Array.isArray(predictBlightFuseTiles(state)), 'Blight fuse predictions must be available during play.');
   assert(Array.isArray(getMarchAssaultVectors(state)), 'March assault vectors must be available during play.');
+});
+
+check('counterblows, field ranks, spoils, and barrow raids make early fights count', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-ranks' });
+  const clear = (x, y) => { state.units = state.units.filter((unit) => unit.x !== x || unit.y !== y); };
+  for (const [x, y] of [[20, 26], [21, 26], [20, 24], [22, 24]]) clear(x, y);
+  const legion = addUnit(state, 'legionary', 'olundar', 20, 26);
+  const knight = addUnit(state, 'graveKnight', 'dead', 21, 26);
+  const melee = forecastUnitAttack(state, legion.id, knight.id);
+  assert(melee.ok && melee.counter > 0, 'A surviving melee defender should forecast a counterblow.');
+  const hpBefore = legion.hp;
+  const struck = attackUnit(state, legion.id, knight.id);
+  assert(struck.ok && struck.counterDamage === melee.counter && legion.hp === hpBefore - melee.counter, 'The counterblow should land exactly as forecast.');
+  assert(state.turnEvents.some((event) => event.kind === 'strike' && event.attackerId === legion.id && event.counter === melee.counter), 'Strikes should be recorded for the turn replay.');
+
+  const archer = addUnit(state, 'archer', 'olundar', 20, 24);
+  const thrall = addUnit(state, 'boneThrall', 'dead', 22, 24);
+  const volley = forecastUnitAttack(state, archer.id, thrall.id);
+  assert(volley.ok && volley.counter === 0, 'Ranged volleys from beyond arm\'s reach should be safe from counterblows.');
+  archer.xp = 2;
+  thrall.hp = 1;
+  const goldBefore = state.factions.olundar.resources.gold;
+  const maxBefore = archer.maxHp;
+  const kill = attackUnit(state, archer.id, thrall.id);
+  assert(kill.ok && kill.targetDestroyed, 'The archer should finish the thrall.');
+  assert(kill.spoils?.gold === 3 && state.factions.olundar.resources.gold === goldBefore + 3, 'Killing the dead should pay grave-goods spoils.');
+  assert(kill.promotion?.rank === 'Veteran' && unitRank(archer).id === 'veteran' && archer.maxHp === maxBefore + 2, 'A kill past the threshold should promote the unit and harden it.');
+
+  const raidState = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-barrow' });
+  let guard = 0;
+  while (!raidState.deadwalker.raid && guard < 20) {
+    endTurn(raidState);
+    guard += 1;
+  }
+  const pending = getDeadwalkerCampaign(raidState).raid;
+  assert(pending && pending.revealed && pending.turnsLeft === 1, 'A barrow raid should be announced a turn ahead on revealed ground.');
+  const reloaded = deserializeState(serializeState(raidState));
+  assert(reloaded.deadwalker.raid?.x === pending.x && reloaded.deadwalker.raid?.y === pending.y, 'A pending barrow raid should survive save and load.');
+  endTurn(reloaded);
+  assert(reloaded.turnEvents.some((event) => event.kind === 'raid'), 'The barrow raid should rise on its turn.');
+  assert(reloaded.units.some((unit) => unit.raid && unit.march && unit.faction === 'dead'), 'Barrow-dead should march on the capital.');
+  assert(pending.turn <= 8, 'The first barrow raid should land in the opening turns on Standard.');
 });
 
 for (const { name, fn } of checks) {

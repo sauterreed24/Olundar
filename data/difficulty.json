@@ -26,6 +26,13 @@
       "growth": 1,
       "cap": 6,
       "menacePerTurn": 1
+    },
+    "raids": {
+      "turns": [
+        8,
+        15
+      ],
+      "size": 2
     }
   },
   "standard": {
@@ -47,6 +54,14 @@
       "growth": 1,
       "cap": 8,
       "menacePerTurn": 1
+    },
+    "raids": {
+      "turns": [
+        6,
+        11,
+        17
+      ],
+      "size": 2
     }
   },
   "legion": {
@@ -73,6 +88,14 @@
       "growth": 1,
       "cap": 10,
       "menacePerTurn": 2
+    },
+    "raids": {
+      "turns": [
+        5,
+        9,
+        14
+      ],
+      "size": 3
     }
   },
   "hollowCrown": {
@@ -101,6 +124,14 @@
       "growth": 1,
       "cap": 12,
       "menacePerTurn": 2
+    },
+    "raids": {
+      "turns": [
+        4,
+        8,
+        12
+      ],
+      "size": 3
     }
   }
 }

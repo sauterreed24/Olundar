@@ -14,6 +14,7 @@ import {
   forecastBuildingAttack,
   forecastUnitAttack,
   getMarchAssaultVectors,
+  getBarrowRaid,
   getDeadwalkerCampaign,
   getWarCouncil,
   isEnemy,
@@ -24,7 +25,9 @@ import {
   olundarCompany,
   companySeat,
   comingCompanySeats,
-  tileAt
+  tileAt,
+  UNIT_RANKS,
+  unitRank
 } from '../rules.js';
 
 const TERRAIN_INK = {
@@ -383,8 +386,12 @@ function watch(callback) {
 
 function play(motion) {
   if (!motion || reducedMotion()) return;
-  motions.push({ ...motion, started: clock() });
+  motions.push({ ...motion, started: clock() + Math.max(0, motion.delay || 0) });
   startClock();
+}
+
+function begun(motion) {
+  return !motion.delay || frameNow >= motion.started;
 }
 
 function clearMotion() {
@@ -419,7 +426,7 @@ function startClock() {
 }
 
 function activeMotion(unitId, kind) {
-  return motions.find((motion) => motion.kind === kind && motion.unitId === unitId) || null;
+  return motions.find((motion) => motion.kind === kind && motion.unitId === unitId && begun(motion)) || null;
 }
 
 function motionAmount(motion) {
@@ -458,15 +465,84 @@ function spritePlace(unit) {
 
 function paintImpacts(ctx, frame) {
   for (const motion of motions) {
+    if (!begun(motion)) {
+      if (motion.kind === 'fall' && motion.ghost) drawFall(ctx, frame, motion, 0);
+      continue;
+    }
     if (motion.kind === 'fall') drawFall(ctx, frame, motion);
     if (motion.kind === 'impact') drawImpact(ctx, frame, motion);
     if (motion.kind === 'damage') drawDamage(ctx, frame, motion);
     if (motion.kind === 'mark') drawMark(ctx, frame, motion);
+    if (motion.kind === 'volley') drawVolley(ctx, frame, motion);
+    if (motion.kind === 'promote') drawPromote(ctx, frame, motion);
   }
 }
 
-function drawFall(ctx, frame, motion) {
+const FLOAT_TONES = {
+  hit: { fill: [255, 236, 196], stroke: [42, 16, 10] },
+  hurt: { fill: [255, 132, 112], stroke: [56, 8, 4] },
+  spoils: { fill: [255, 214, 102], stroke: [58, 34, 6] },
+  rank: { fill: [255, 246, 206], stroke: [92, 52, 8] }
+};
+
+function drawVolley(ctx, frame, motion) {
   const amount = motionAmount(motion);
+  const from = tileRect(frame, motion.fromX, motion.fromY);
+  const to = tileRect(frame, motion.x, motion.y);
+  const x1 = from.x + from.s / 2;
+  const y1 = from.y + from.s * 0.4;
+  const x2 = to.x + to.s / 2;
+  const y2 = to.y + to.s * 0.45;
+  const t = Math.min(1, amount * 1.15);
+  const arc = Math.sin(t * Math.PI) * Math.max(from.s * 0.5, Math.hypot(x2 - x1, y2 - y1) * 0.25);
+  const x = x1 + (x2 - x1) * t;
+  const y = y1 + (y2 - y1) * t - arc;
+  const nx = x1 + (x2 - x1) * Math.min(1, t + 0.05);
+  const ny = y1 + (y2 - y1) * Math.min(1, t + 0.05) - Math.sin(Math.min(1, t + 0.05) * Math.PI) * Math.max(from.s * 0.5, Math.hypot(x2 - x1, y2 - y1) * 0.25);
+  const angle = Math.atan2(ny - y, nx - x);
+  ctx.save();
+  ctx.globalAlpha = t >= 1 ? 0 : 1;
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.strokeStyle = motion.faction === 'dead' ? '#9cf38a' : '#3a2416';
+  ctx.lineWidth = Math.max(2, from.s * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(-from.s * 0.18, 0);
+  ctx.lineTo(from.s * 0.12, 0);
+  ctx.stroke();
+  ctx.fillStyle = motion.faction === 'dead' ? '#d8ffd0' : '#e8d3a0';
+  ctx.beginPath();
+  ctx.moveTo(from.s * 0.18, 0);
+  ctx.lineTo(from.s * 0.08, from.s * 0.05);
+  ctx.lineTo(from.s * 0.08, -from.s * 0.05);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPromote(ctx, frame, motion) {
+  const amount = motionAmount(motion);
+  const rect = tileRect(frame, motion.x, motion.y);
+  const cx = rect.x + rect.s / 2;
+  const cy = rect.y + rect.s * 0.5;
+  ctx.save();
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (index / 8) * Math.PI * 2 + amount * 1.4;
+    const reach = rect.s * (0.2 + amount * 0.55);
+    ctx.fillStyle = `rgba(255, 216, 110, ${1 - amount})`;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach * 0.7, rect.s * 0.04 * (1 - amount * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = `rgba(255, 226, 140, ${1 - amount})`;
+  ctx.lineWidth = Math.max(2, rect.s * 0.05);
+  ctx.beginPath();
+  ctx.arc(cx, cy, rect.s * (0.25 + amount * 0.35), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFall(ctx, frame, motion, fixed = null) {
+  const amount = fixed ?? motionAmount(motion);
   const rect = tileRectAt(frame, motion.x, motion.y + amount * 0.12);
   ctx.save();
   ctx.globalAlpha = 1 - amount;
@@ -479,14 +555,17 @@ function drawDamage(ctx, frame, motion) {
   const amount = motionAmount(motion);
   const rect = tileRect(frame, motion.x, motion.y);
   const text = motion.text;
+  const tone = FLOAT_TONES[motion.tone] || FLOAT_TONES.hit;
+  const fade = amount < 0.7 ? 1 : 1 - (amount - 0.7) / 0.3;
+  const pop = amount < 0.12 ? 0.7 + (amount / 0.12) * 0.45 : amount < 0.22 ? 1.15 - ((amount - 0.12) / 0.1) * 0.15 : 1;
   ctx.save();
-  ctx.font = `700 ${Math.max(13, frame.tile * 0.28)}px Palatino, Georgia, serif`;
+  ctx.font = `700 ${Math.max(13, frame.tile * (motion.size || 0.28) * pop)}px Palatino, Georgia, serif`;
   ctx.textAlign = 'center';
   ctx.lineWidth = Math.max(3, frame.tile * 0.06);
-  ctx.strokeStyle = `rgba(42, 16, 10, ${1 - amount})`;
-  ctx.fillStyle = `rgba(255, 236, 196, ${1 - amount})`;
+  ctx.strokeStyle = `rgba(${tone.stroke.join(', ')}, ${fade})`;
+  ctx.fillStyle = `rgba(${tone.fill.join(', ')}, ${fade})`;
   const x = rect.x + rect.s / 2;
-  const y = rect.y + rect.s * (0.42 - amount * 0.36);
+  const y = rect.y + rect.s * ((motion.lift ?? 0.42) - amount * 0.36);
   ctx.strokeText(text, x, y);
   ctx.fillText(text, x, y);
   ctx.restore();
@@ -595,6 +674,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   }
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
+  paintBarrow(ctx, state, frame);
   paintDawn(ctx, frame);
   paintSight(ctx, frame);
 
@@ -1016,6 +1096,10 @@ export function warClock(state) {
       ? `${camp.stage}. ${camp.closest.name} is ${camp.closest.distance} from the capital.`
       : `${camp.stage}. ${camp.marchingCount} hunt the capital.`)
     : `${camp.stage}. First march in ${camp.turnsToMarch}.`;
+  if (camp.raid) {
+    const where = camp.raid.revealed ? ` at ${camp.raid.x},${camp.raid.y}` : '';
+    return { title: 'The barrows stir', detail: `Grave-dead rise${where} ${camp.raid.turnsLeft <= 1 ? 'next turn' : `in ${camp.raid.turnsLeft}`}.` };
+  }
   return { title: council.headline || 'War council', detail };
 }
 
@@ -2299,11 +2383,90 @@ function drawUnit(ctx, frame, unit, selected, attack, place = null, aim = null, 
     ctx.stroke();
   }
   drawHealthPip(ctx, s * 0.22, s * 0.9, s * 0.56, Math.max(4, s * 0.055), unit.hp / unit.maxHp, pending / unit.maxHp);
+  const rank = UNIT_RANKS.indexOf(unitRank(unit));
+  if (rank > 0) drawChevrons(ctx, s * 0.16, s * 0.72, s, rank);
   if (attack) drawBrackets(ctx, { x: s * 0.02, y: s * 0.02, s: s * 0.96 }, '#d23b2e', 0);
   if (selected) {
     const glow = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(frameNow / 180));
     drawBrackets(ctx, { x: s * 0.06, y: s * 0.06, s: s * 0.88 }, `rgba(244, 212, 138, ${glow})`, 0);
   }
+  ctx.restore();
+}
+
+function drawChevrons(ctx, x, y, s, count) {
+  const size = s * 0.2;
+  const left = x - size / 2;
+  const top = y - size / 2;
+  ctx.save();
+  ctx.fillStyle = count >= 3 ? '#5a1a0e' : '#6a2a14';
+  ctx.strokeStyle = '#f0c866';
+  ctx.lineWidth = Math.max(1.2, s * 0.018);
+  ctx.beginPath();
+  ctx.moveTo(left, top);
+  ctx.lineTo(left + size, top);
+  ctx.lineTo(left + size, top + size * 0.7);
+  ctx.lineTo(left + size / 2, top + size * 1.05);
+  ctx.lineTo(left, top + size * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = count >= 3 ? '#fff1c0' : '#f0c866';
+  ctx.lineWidth = Math.max(1.4, s * 0.026);
+  const gap = size * 0.2;
+  const base = top + size * 0.45 + (count - 1) * gap * 0.5;
+  for (let index = 0; index < count; index += 1) {
+    const row = base - index * gap;
+    ctx.beginPath();
+    ctx.moveTo(left + size * 0.24, row + size * 0.1);
+    ctx.lineTo(left + size * 0.5, row - size * 0.08);
+    ctx.lineTo(left + size * 0.76, row + size * 0.1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function paintBarrow(ctx, state, frame) {
+  const raid = getBarrowRaid(state);
+  if (!raid || !raid.revealed) return;
+  const rect = tileRect(frame, raid.x, raid.y);
+  const pulse = 0.5 + 0.5 * Math.sin(frameNow / 220);
+  const cx = rect.x + rect.s / 2;
+  const cy = rect.y + rect.s * 0.62;
+  ctx.save();
+  ctx.fillStyle = `rgba(40, 70, 30, ${0.25 + pulse * 0.2})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rect.s * 0.36, rect.s * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(156, 243, 138, ${0.55 + pulse * 0.4})`;
+  ctx.lineWidth = Math.max(2, rect.s * 0.045);
+  ctx.setLineDash([rect.s * 0.08, rect.s * 0.06]);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rect.s * (0.36 + pulse * 0.06), rect.s * (0.16 + pulse * 0.03), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e9e2cf';
+  ctx.strokeStyle = '#2a160a';
+  ctx.lineWidth = Math.max(1, rect.s * 0.02);
+  for (const dx of [-0.14, 0.12]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + rect.s * dx, cy - rect.s * (0.06 + pulse * 0.05), rect.s * 0.035, rect.s * 0.09, dx * 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  const label = raid.turnsLeft <= 1 ? 'rises next turn' : `rises in ${raid.turnsLeft}`;
+  const size = Math.max(11, Math.round(frame.tile * 0.2));
+  ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+  const width = ctx.measureText(label).width + size;
+  const top = rect.y - size - 2;
+  ctx.fillStyle = 'rgba(28, 36, 20, 0.9)';
+  roundRect(ctx, cx - width / 2, top, width, size + 6, 4);
+  ctx.fill();
+  ctx.fillStyle = '#c8f5b8';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, cx, top + (size + 6) / 2);
   ctx.restore();
 }
 
@@ -2676,7 +2839,10 @@ export function hoverStrike(state, unit, x, y) {
   if (enemy) {
     const forecast = forecastUnitAttack(state, unit.id, enemy.id);
     if (!forecast.ok) return null;
-    return { x, y, damage: forecast.damage, lethal: Boolean(forecast.lethal), label: forecast.lethal ? 'falls' : `−${forecast.damage}` };
+    const back = forecast.counter > 0
+      ? (forecast.counter >= unit.hp ? `, takes ${forecast.counter}: fatal` : `, takes ${forecast.counter}`)
+      : '';
+    return { x, y, damage: forecast.damage, lethal: Boolean(forecast.lethal), counter: forecast.counter || 0, label: forecast.lethal ? 'falls' : `−${forecast.damage}${back}` };
   }
   const structure = state.buildings.find((item) => item.x === x && item.y === y && item.type !== 'road');
   if (!structure) return null;

@@ -511,7 +511,9 @@ function createDeadwalkerCampaignState(difficulty, scenarioMarch = null) {
     marchesSent: 0,
     nextMarchTurn: march.firstTurn,
     lastMarchTurn: 0,
-    lastMarchSize: 0
+    lastMarchSize: 0,
+    raidsRisen: 0,
+    raid: null
   };
 }
 
@@ -527,8 +529,19 @@ function normalizeDeadwalkerCampaign(state) {
     marchesSent: Math.max(0, Number(raw.marchesSent) || 0),
     nextMarchTurn: Number.isFinite(raw.nextMarchTurn) ? raw.nextMarchTurn : config.firstTurn,
     lastMarchTurn: Math.max(0, Number(raw.lastMarchTurn) || 0),
-    lastMarchSize: Math.max(0, Number(raw.lastMarchSize) || 0)
+    lastMarchSize: Math.max(0, Number(raw.lastMarchSize) || 0),
+    raidsRisen: Math.max(0, Number(raw.raidsRisen) || 0),
+    raid: normalizeBarrowRaid(raw.raid)
   };
+}
+
+function normalizeBarrowRaid(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const turn = Number(raw.turn);
+  const x = Number(raw.x);
+  const y = Number(raw.y);
+  if (![turn, x, y].every(Number.isInteger) || !inBounds(x, y)) return null;
+  return { turn, x, y, size: Math.max(1, Math.min(6, Number(raw.size) || 2)) };
 }
 
 function normalizeDiplomacyMemory(state) {
@@ -2443,7 +2456,7 @@ function applyAftermathMissionReward(state, mission, unit) {
   }
   if (mission.type === 'raid') {
     gainResources(state.factions.olundar.resources, { gold: 10, influence: 1 });
-    unit.xp += 1;
+    grantXp(state, unit, 1);
     return 'The raider trail is broken for gold, influence, and field experience.';
   }
   if (mission.type === 'escort') {
@@ -2595,6 +2608,7 @@ export function getDeadwalkerCampaign(state) {
     marchingCount: marchers.length,
     revealedMarchingCount: visibleMarchers.length,
     closest: closest ? { name: closest.unit.name, distance: closest.distance, x: closest.unit.x, y: closest.unit.y } : null,
+    raid: getBarrowRaid(state),
     summary
   };
 }
@@ -2982,7 +2996,7 @@ function honorScarredVeterans(state) {
   for (const unit of state.units) {
     if (unit.faction !== 'olundar' || unit.scarred !== true || unit.hp < unit.maxHp) continue;
     unit.scarred = 'honored';
-    unit.xp = (unit.xp || 0) + 2;
+    grantXp(state, unit, 2);
     unit.name = String(unit.name).replace(' (Scarred)', ' (Veteran)');
     addMessage(state, `${unit.name} rallies fully — scar becomes legend. +2 veteran experience.`, 'good');
   }
@@ -3124,6 +3138,8 @@ export function forecastUnitAttack(state, attackerId, defenderId) {
     terrain: defenderTile?.terrain || 'unknown',
     terrainDefense,
     fortified: defender.fortified || 0,
+    counter: counterblowFor(state, attacker, defender, damage),
+    attackerHp: attacker.hp,
     note: targetHpAfter <= 0 ? `${defender.name} is likely to fall.` : `${defender.name} survives on ${targetHpAfter} HP.`
   };
 }
@@ -3134,6 +3150,7 @@ export function attackUnit(state, attackerId, defenderId) {
   const attacker = state.units.find((u) => u.id === attackerId);
   const defender = state.units.find((u) => u.id === defenderId);
   const damage = forecast.damage;
+  const from = { x: attacker.x, y: attacker.y };
   defender.hp -= damage;
   attacker.hasActed = true;
   attacker.fortified = 0;
@@ -3144,9 +3161,13 @@ export function attackUnit(state, attackerId, defenderId) {
   if (!lethal && defender.faction === 'olundar') scarredName = maybeScarVeteran(defender);
   if (scarredName) addMessage(state, `${scarredName} is scarred but unbroken — +1 defense until fully rallied.`, 'info');
   let triumph = null;
+  let spoils = null;
+  let promotion = null;
+  let counter = null;
   if (lethal) {
     removeUnit(state, defender.id);
-    attacker.xp += 1;
+    promotion = grantXp(state, attacker, 2);
+    if (attacker.faction === 'olundar') spoils = claimSpoils(state, defender.type);
     if (defender.type === 'lichBoss') {
       state.flags.bossSlain = true;
       addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
@@ -3158,16 +3179,136 @@ export function attackUnit(state, attackerId, defenderId) {
         addMessage(state, `${attackerName} breaks the march before Olundar Prime. The legions roar.`, 'good');
       }
     }
+    const spoilText = spoils ? ` Spoils: ${formatCost(spoils)}.` : '';
     if (!triumph && (attacker.faction === 'olundar' || defender.faction === 'olundar')) {
-      addMessage(state, `${attackerName} destroyed ${defenderName}.`, attacker.faction === 'olundar' ? 'good' : 'danger');
+      addMessage(state, `${attackerName} destroyed ${defenderName}.${spoilText}`, attacker.faction === 'olundar' ? 'good' : 'danger');
     } else if (triumph) {
-      addMessage(state, `${attackerName} destroyed ${defenderName}.`, 'good');
+      addMessage(state, `${attackerName} destroyed ${defenderName}.${spoilText}`, 'good');
     }
-  } else if (attacker.faction === 'olundar' || defender.faction === 'olundar') {
-    addMessage(state, `${attackerName} hits ${defenderName} for ${damage}.`, attacker.faction === 'olundar' ? 'info' : 'danger');
+  } else {
+    promotion = grantXp(state, attacker, 1);
+    if (attacker.faction === 'olundar' || defender.faction === 'olundar') {
+      addMessage(state, `${attackerName} hits ${defenderName} for ${damage}.`, attacker.faction === 'olundar' ? 'info' : 'danger');
+    }
+    if (forecast.counter > 0) counter = resolveCounterblow(state, defender, attacker, forecast.counter);
   }
+  recordStrike(state, {
+    attackerId,
+    attackerFaction: attacker.faction,
+    from,
+    to: { x: forecast.targetX, y: forecast.targetY },
+    targetId: defenderId,
+    targetFaction: forecast.targetFaction,
+    targetType: forecast.targetType,
+    targetKind: 'unit',
+    damage,
+    lethal,
+    counter: counter ? counter.damage : 0,
+    counterLethal: Boolean(counter?.lethal)
+  });
   updateVisibility(state);
-  return { ...forecast, ok: true, damage, targetDestroyed: lethal, triumph, scarredName };
+  return { ...forecast, ok: true, damage, targetDestroyed: lethal, triumph, scarredName, spoils, promotion, counterDamage: counter?.damage || 0, attackerDestroyed: Boolean(counter?.lethal) };
+}
+
+// A defender that survives a melee blow strikes back at half strength. Ranged
+// volleys from beyond arm's reach are safe, so archers soften and the line finishes.
+export function counterblowFor(state, attacker, defender, damageDealt) {
+  if (!attacker || !defender) return 0;
+  if (defender.hp - damageDealt <= 0) return 0;
+  if (manhattan(attacker.x, attacker.y, defender.x, defender.y) !== 1) return 0;
+  const raw = calculateUnitDamage(state, defender, attacker);
+  return Math.max(1, Math.ceil(raw / 2));
+}
+
+function resolveCounterblow(state, defender, attacker, damage) {
+  attacker.hp -= damage;
+  const lethal = attacker.hp <= 0;
+  if (lethal) {
+    removeUnit(state, attacker.id);
+    grantXp(state, defender, 2);
+    if (defender.faction === 'olundar') {
+      const spoils = claimSpoils(state, attacker.type);
+      addMessage(state, `${defender.name} turns the blow and destroys ${attacker.name}.${spoils ? ` Spoils: ${formatCost(spoils)}.` : ''}`, 'good');
+    } else if (attacker.faction === 'olundar') {
+      addMessage(state, `${attacker.name} falls to ${defender.name}'s counterblow.`, 'danger');
+    }
+  } else {
+    if (attacker.faction === 'olundar') {
+      const scarred = maybeScarVeteran(attacker);
+      if (scarred) addMessage(state, `${scarred} is scarred but unbroken — +1 defense until fully rallied.`, 'info');
+    }
+    if (attacker.faction === 'olundar' || defender.faction === 'olundar') {
+      addMessage(state, `${defender.name} strikes back at ${attacker.name} for ${damage}.`, defender.faction === 'olundar' ? 'info' : 'danger');
+    }
+  }
+  return { damage, lethal };
+}
+
+// Field ranks: blows and kills earn experience; each rank hardens the company.
+export const UNIT_RANKS = [
+  { id: 'recruit', name: '', minXp: 0, attack: 0, hp: 0 },
+  { id: 'veteran', name: 'Veteran', minXp: 3, attack: 1, hp: 2 },
+  { id: 'elite', name: 'Elite', minXp: 7, attack: 2, hp: 4 },
+  { id: 'legend', name: 'Legend', minXp: 12, attack: 3, hp: 6 }
+];
+
+export function unitRank(unit) {
+  const xp = unit?.xp || 0;
+  let rank = UNIT_RANKS[0];
+  for (const entry of UNIT_RANKS) if (xp >= entry.minXp) rank = entry;
+  return rank;
+}
+
+export function nextUnitRank(unit) {
+  const xp = unit?.xp || 0;
+  return UNIT_RANKS.find((entry) => entry.minXp > xp) || null;
+}
+
+function grantXp(state, unit, amount) {
+  if (!unit || !amount || unit.faction === 'dead') return null;
+  const before = unitRank(unit);
+  unit.xp = (unit.xp || 0) + amount;
+  const after = unitRank(unit);
+  if (after.minXp <= before.minXp) return null;
+  const gained = after.hp - before.hp;
+  unit.maxHp = (unit.maxHp || getUnitDef(unit)?.hp || 1) + gained;
+  unit.hp = Math.min(unit.maxHp, unit.hp + gained + 2);
+  const promotion = { unitId: unit.id, name: unit.name, rank: after.name, x: unit.x, y: unit.y, faction: unit.faction };
+  if (unit.faction === 'olundar') {
+    addMessage(state, `${unit.name} earns ${after.name} rank: +${after.attack} attack, +${after.hp} max HP.`, 'good');
+  }
+  recordTurnEvent(state, { kind: 'promotion', ...promotion });
+  return promotion;
+}
+
+const UNIT_SPOILS = {
+  boneThrall: { gold: 3 },
+  corpseArcher: { gold: 3, wood: 3 },
+  graveKnight: { iron: 5, gold: 5 },
+  lichBoss: { gold: 40, iron: 10, influence: 4 }
+};
+
+const STRUCTURE_SPOILS = {
+  bonePit: { stone: 8, gold: 10 },
+  graveForge: { iron: 12, gold: 12 },
+  necropolis: { gold: 24, stone: 12, influence: 2 }
+};
+
+function claimSpoils(state, type, table = UNIT_SPOILS) {
+  const spoils = table[type];
+  if (!spoils) return null;
+  gainResources(state.factions.olundar.resources, spoils);
+  return { ...spoils };
+}
+
+function recordTurnEvent(state, event) {
+  if (!Array.isArray(state.turnEvents)) state.turnEvents = [];
+  state.turnEvents.push(event);
+  if (state.turnEvents.length > 80) state.turnEvents.shift();
+}
+
+function recordStrike(state, strike) {
+  recordTurnEvent(state, { kind: 'strike', ...strike });
 }
 
 export function forecastBuildingAttack(state, attackerId, buildingId) {
@@ -3215,8 +3356,11 @@ export function attackBuilding(state, attackerId, buildingId) {
   const targetX = building.x;
   const targetY = building.y;
   const targetDestroyed = forecast.lethal && !forecast.portalReforms;
+  const from = { x: attacker.x, y: attacker.y };
   building.hp -= damage;
   attacker.hasActed = true;
+  const promotion = grantXp(state, attacker, targetDestroyed ? 2 : 1);
+  let spoils = null;
   if (building.faction === 'dead' || attacker.faction === 'olundar' || building.faction === 'olundar') {
     addMessage(state, `${attacker.name} damages ${building.name} for ${damage}.`, attacker.faction === 'olundar' ? 'info' : 'danger');
   }
@@ -3225,16 +3369,34 @@ export function attackBuilding(state, attackerId, buildingId) {
       building.hp = 10;
       addMessage(state, 'The portal reforms around Vorgath’s command. Kill the Hollow Crown first.', 'danger');
     } else {
+      const type = building.type;
       destroyBuilding(state, building.id, attacker.faction);
+      if (attacker.faction === 'olundar' && building.faction === 'dead') {
+        spoils = claimSpoils(state, type, STRUCTURE_SPOILS);
+        if (spoils) addMessage(state, `Grave-goods recovered from the ${building.name}: ${formatCost(spoils)}.`, 'good');
+      }
     }
   }
+  recordStrike(state, {
+    attackerId,
+    attackerFaction: attacker.faction,
+    from,
+    to: { x: targetX, y: targetY },
+    targetId: buildingId,
+    targetFaction: building.faction,
+    targetType: building.type,
+    targetKind: 'building',
+    damage,
+    lethal: targetDestroyed,
+    counter: 0
+  });
   updateVisibility(state);
-  return { ...forecast, ok: true, damage, targetX, targetY, targetDestroyed };
+  return { ...forecast, ok: true, damage, targetX, targetY, targetDestroyed, spoils, promotion };
 }
 
 function calculateBuildingDamage(state, attacker, building) {
   const def = getUnitDef(attacker);
-  let damage = def.attack + Math.floor((attacker.xp || 0) / 2);
+  let damage = def.attack + unitRank(attacker).attack;
   if (def.tags.includes('siege')) damage += 6;
   if (building.type === 'portal' && !state.flags.bossSlain) {
     damage = Math.max(1, Math.floor(damage / 3));
@@ -3247,7 +3409,7 @@ function calculateUnitDamage(state, attacker, defender) {
   const dDef = getUnitDef(defender);
   const defenderTile = tileAt(state, defender.x, defender.y);
   const attackerTile = tileAt(state, attacker.x, attacker.y);
-  let damage = aDef.attack + Math.floor((attacker.xp || 0) / 2);
+  let damage = aDef.attack + unitRank(attacker).attack;
   damage -= dDef.armor;
   damage -= TERRAIN[defenderTile.terrain].defense || 0;
   damage -= defender.fortified || 0;
@@ -3800,6 +3962,7 @@ function recordFieldOrderFulfillment(state, factionId, orderId, label, detail, a
 
 export function endTurn(state) {
   if (state.status !== 'playing') return state;
+  state.turnEvents = [];
   state.turn += 1;
   resolveTributeExchanges(state);
   processConstructionAndTraining(state);
@@ -4046,6 +4209,7 @@ function runDeadwalkerTurn(state) {
   if (state.turn >= pressure.startTurn && state.turn % pressure.knightEvery === 0) spawnUndeadFrom(state, 'graveForge', 'graveKnight');
   if (state.turn >= pressure.startTurn && state.turn % pressure.outpostEvery === 0) growDeadwalkerOutpost(state);
   advanceDeadwalkerMarch(state, pressure);
+  advanceBarrowRaids(state);
 
   const capital = olundarCapital(state);
   const deadUnits = state.units.filter((u) => u.faction === 'dead');
@@ -4072,6 +4236,19 @@ function runDeadwalkerTurn(state) {
     const target = nearestLivingTarget(state, building.x, building.y, 2);
     if (target && target.kind === 'building' && building.type !== 'bonePit') {
       target.ref.hp -= 2;
+      recordStrike(state, {
+        attackerId: building.id,
+        attackerFaction: 'dead',
+        from: { x: building.x, y: building.y },
+        to: { x: target.ref.x, y: target.ref.y },
+        targetId: target.ref.id,
+        targetFaction: target.ref.faction,
+        targetType: target.ref.type,
+        targetKind: 'building',
+        damage: 2,
+        lethal: target.ref.hp <= 0,
+        counter: 0
+      });
       if (target.ref.hp <= 0) destroyBuilding(state, target.ref.id, 'dead');
     }
   }
@@ -4131,6 +4308,82 @@ function dispatchDeadwalkerMarch(state, config, camp) {
     addMessage(state, `The Hollow Crown marshals a march of ${mustered} dead toward Olundar Prime.`, 'danger');
   }
   return mustered;
+}
+
+// Barrow raids: small bands of grave-dead claw out of old barrows close to the
+// capital in the early turns, so the first fights come long before the main march.
+// Each raid is announced a turn ahead with the barrow it will rise from.
+function raidConfigFor(state) {
+  normalizeCampaignState(state);
+  return DIFFICULTY_PRESETS[state.campaign.difficultyId]?.raids || DIFFICULTY_PRESETS.standard.raids || { turns: [], size: 2 };
+}
+
+function advanceBarrowRaids(state) {
+  const config = raidConfigFor(state);
+  const camp = state.deadwalker;
+  if (!camp || !Array.isArray(config.turns) || !config.turns.length) return null;
+  const capital = olundarCapital(state);
+  if (!capital) return null;
+  if (camp.raid && camp.raid.turn <= state.turn) {
+    const raid = camp.raid;
+    camp.raid = null;
+    camp.raidsRisen = (camp.raidsRisen || 0) + 1;
+    const risen = [];
+    const wave = camp.raidsRisen;
+    for (let index = 0; index < raid.size; index += 1) {
+      const spot = findSpawnNear(state, raid.x, raid.y, 'dead') || (!unitAt(state, raid.x, raid.y) ? { x: raid.x, y: raid.y } : null);
+      if (!spot) break;
+      const type = index === raid.size - 1 && wave >= 2 ? (wave >= 3 ? 'graveKnight' : 'corpseArcher') : 'boneThrall';
+      const unit = addUnit(state, type, 'dead', spot.x, spot.y);
+      unit.march = true;
+      unit.raid = true;
+      risen.push(unit);
+    }
+    if (risen.length) {
+      addMessage(state, `Barrow-dead claw free at ${raid.x},${raid.y}: ${risen.length} march on Olundar Prime. Their grave-goods are yours if you cut them down.`, 'danger');
+      recordTurnEvent(state, { kind: 'raid', x: raid.x, y: raid.y, count: risen.length });
+    }
+  }
+  const next = config.turns.find((turn) => turn === state.turn + 1);
+  if (next && !camp.raid) {
+    const site = chooseBarrowSite(state, capital);
+    if (site) {
+      camp.raid = { turn: next, x: site.x, y: site.y, size: config.size || 2 };
+      revealRadius(state, site.x, site.y, 1);
+      addMessage(state, `The old barrows stir at ${site.x},${site.y}. Grave-dead will rise there next turn.`, 'danger');
+    }
+  }
+  return camp.raid;
+}
+
+function chooseBarrowSite(state, capital) {
+  const portal = state.buildings.find((b) => b.faction === 'dead' && b.type === 'portal');
+  const towardX = portal ? Math.sign(portal.x - capital.x) : 1;
+  const towardY = portal ? Math.sign(portal.y - capital.y) : 0;
+  const phantom = { id: 'barrow', type: 'boneThrall', faction: 'dead', x: capital.x, y: capital.y };
+  const options = [];
+  for (let y = capital.y - 9; y <= capital.y + 9; y += 1) {
+    for (let x = capital.x - 9; x <= capital.x + 9; x += 1) {
+      if (!inBounds(x, y)) continue;
+      const dist = manhattan(x, y, capital.x, capital.y);
+      if (dist < 6 || dist > 9) continue;
+      if (!canEnter(state, phantom, x, y) || unitAt(state, x, y) || buildingAt(state, x, y)) continue;
+      const tile = tileAt(state, x, y);
+      let score = (x - capital.x) * towardX + (y - capital.y) * towardY * 0.5;
+      if (['ruins', 'forest', 'hills', 'marsh'].includes(tile.terrain)) score += 3;
+      if (isVisible(state, x, y)) score -= 6;
+      score += ((x * 7 + y * 13 + state.turn * 5) % 7) * 0.9;
+      options.push({ x, y, score });
+    }
+  }
+  options.sort((a, b) => b.score - a.score);
+  return options[0] || null;
+}
+
+export function getBarrowRaid(state) {
+  const raid = state.deadwalker?.raid;
+  if (!raid) return null;
+  return { ...raid, turnsLeft: Math.max(0, raid.turn - state.turn), revealed: isRevealed(state, raid.x, raid.y) };
 }
 
 function forwardDeadwork(state, capital) {
