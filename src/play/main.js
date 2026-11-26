@@ -39,6 +39,7 @@ import {
   nextReadyOlundarUnit,
   getSunEdictStatus,
   getWarCouncil,
+  getCampaignRecap,
   isRevealed,
   isVisible,
   canBuildOn,
@@ -49,6 +50,7 @@ import {
   nextUnitRank,
   canStillMove
 } from '../rules.js';
+import { RECORDS_KEY, fallCause, noteCampaignEnd, parseRecords } from '../records.js';
 import { createSaveSlot, defaultSaveSlotName, parseSaveSlots, serializeSaveSlots, upsertSaveSlot } from '../saveSlots.js';
 import { initAudioPreference, playAudioCue, toggleAudio, audioIsEnabled } from '../audio.js';
 import { BUILDING_SPRITE_ORDER, approachFor, coverClause, createBoard, dawnStepFor, groundAStepWouldOpen, holdingLine, hostsReaching, hoverSummary, loadUnitSprites, musterGround, musterOnTile, plannedYieldLabel, reachersFor, stoodBeside, traceMovePath, UNIT_SPRITE_ORDER, visibleMarchAnchor, visibleThreats, warClock } from './board.js';
@@ -489,12 +491,59 @@ function renderGlance() {
   if (glance) glance.textContent = orderGlance();
 }
 
+// The end of a campaign: what happened, why, and the record to beat next time.
+let endingMemo = { id: '', result: null };
+
+function endingCard() {
+  const won = state.status === 'won';
+  const recap = getCampaignRecap(state);
+  // Note the ending once and keep that verdict while this ending is on screen,
+  // so a repaint does not turn "a new record" into the plain standing record.
+  const endingId = `${state.seed}|${state.campaign.scenarioId}|${state.campaign.difficultyId}|${state.status}|${state.turn}`;
+  if (endingMemo.id !== endingId) {
+    let result = null;
+    try {
+      result = noteCampaignEnd(parseRecords(localStorage.getItem(RECORDS_KEY)), state);
+      if (result.fresh) localStorage.setItem(RECORDS_KEY, JSON.stringify(result.records));
+    } catch {
+      result = null;
+    }
+    endingMemo = { id: endingId, result };
+  }
+  const ending = endingMemo.result;
+  const where = `${state.campaign.scenarioName} on ${state.campaign.difficultyName}`;
+  let record = '';
+  if (ending) {
+    const { before, after, isBest } = ending;
+    if (won) {
+      record = isBest
+        ? `A new record: your fastest victory in ${where}${before.fastestWin ? ` (was turn ${before.fastestWin})` : ''}.`
+        : `Your fastest victory in ${where} is turn ${after.fastestWin}.`;
+    } else {
+      record = isBest
+        ? `Your longest stand yet in ${where}${before.longestStand ? ` (was turn ${before.longestStand})` : ''}.`
+        : `Your longest stand in ${where} is turn ${after.longestStand}${after.fastestWin ? `, and your fastest victory turn ${after.fastestWin}` : ''}.`;
+    }
+  }
+  const done = recap.milestones.filter((item) => item.done).length;
+  const cause = fallCause(state);
+  const next = won ? [] : recap.nextSteps.slice(0, 2);
+  return `
+    <section class="card ending ${won ? 'good' : 'danger'}">
+      <h2>${won ? 'Olundar stands' : 'Olundar has fallen'} · turn ${state.turn}</h2>
+      <p>${escapeHtml(recap.summary)}</p>
+      ${cause ? `<p>${escapeHtml(cause)}</p>` : ''}
+      ${record ? `<p class="record"><strong>${escapeHtml(record)}</strong></p>` : ''}
+      <p class="muted">${done}/${recap.milestones.length} campaign goals met · ${recap.stats.map((item) => `${escapeHtml(item.label)} ${escapeHtml(item.value)}`).slice(1).join(' · ')}</p>
+      ${next.length ? `<p class="note">Next time: ${next.map(escapeHtml).join(' ')}</p>` : ''}
+      <p>Start a new campaign or load a saved one.</p>
+    </section>`;
+}
+
 function fieldTab() {
   const unit = state.units.find((item) => item.id === state.selectedUnitId);
   const building = state.buildings.find((item) => item.id === state.selectedBuildingId);
-  if (state.status !== 'playing') {
-    return `<section class="card"><h2>${state.status === 'won' ? 'Olundar stands' : 'Olundar has fallen'}</h2><p>Start a new campaign or load a saved one.</p></section>`;
-  }
+  if (state.status !== 'playing') return endingCard();
   if (!unit && !building) {
     const owed = owingPhrase();
     const line = owed ? `${owed} Press a seat, or N.` : 'The company has spent its orders.';
@@ -1555,6 +1604,7 @@ function openNewGame() {
     event.preventDefault();
     const data = new FormData(event.target);
     const scenario = SCENARIOS[data.get('scenario')] || SCENARIOS.founding;
+    endingMemo = { id: '', result: null };
     state = createGame({
       scenarioId: scenario.id,
       difficultyId: data.get('difficulty') || scenario.difficultyId || 'standard',
@@ -1592,6 +1642,7 @@ function onModalClick(event) {
   const slot = parseSaveSlots(localStorage.getItem(SAVE_SLOTS_KEY)).find((item) => item.id === slotId);
   if (!slot) return;
   state = deserializeState(slot.data);
+  endingMemo = { id: '', result: null };
   modal.hidden = true;
   buildType = null;
   const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
