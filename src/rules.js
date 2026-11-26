@@ -3235,10 +3235,8 @@ export function attackUnit(state, attackerId, defenderId) {
     removeUnit(state, defender.id);
     promotion = grantXp(state, attacker, 2);
     if (attacker.faction === 'olundar') spoils = claimSpoils(state, defender.type);
-    if (defender.type === 'lichBoss') {
-      state.flags.bossSlain = true;
-      addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
-    } else if (attacker.faction === 'olundar' && defender.march) {
+    // removeUnit breaks the Crown and announces it when Vorgath falls.
+    if (defender.type !== 'lichBoss' && attacker.faction === 'olundar' && defender.march) {
       const capital = olundarCapital(state);
       if (capital && manhattan(attacker.x, attacker.y, capital.x, capital.y) <= 8) {
         triumph = 'holdTheLine';
@@ -3490,8 +3488,14 @@ function calculateUnitDamage(state, attacker, defender) {
 }
 
 function removeUnit(state, unitId) {
+  const fallen = state.units.find((u) => u.id === unitId);
   state.units = state.units.filter((u) => u.id !== unitId);
   if (state.selectedUnitId === unitId) state.selectedUnitId = null;
+  // However Vorgath falls (a strike, a counterblow, an ally's blade), the Crown is broken.
+  if (fallen?.type === 'lichBoss' && !state.flags.bossSlain) {
+    state.flags.bossSlain = true;
+    addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
+  }
 }
 
 function destroyBuilding(state, buildingId, attackerFaction = null) {
@@ -4152,8 +4156,10 @@ function payUpkeepWithMoralePenalty(state, factionId, upkeep) {
     } else {
       faction.resources[resource] = 0;
       faction.resources.morale = Math.max(0, (faction.resources.morale || 0) - 1);
+      // Seeded by campaign, turn, and resource so a replayed campaign starves the same way.
+      const roll = makeRng(`${state.seed}-upkeep-${state.turn}-${factionId}-${resource}`);
       for (const unit of state.units.filter((u) => u.faction === factionId)) {
-        if (Math.random() < 0.12) unit.hp = Math.max(1, unit.hp - 1);
+        if (roll() < 0.12) unit.hp = Math.max(1, unit.hp - 1);
       }
       addMessage(state, `${faction.name} lacks ${resource} for upkeep. Morale suffers.`, 'danger');
     }
@@ -5219,6 +5225,12 @@ export function deserializeState(json) {
   const state = JSON.parse(json);
   if (state.version !== CURRENT_SAVE_VERSION) throw new Error('Save file version is not compatible with this prototype.');
   normalizeCampaignState(state);
+  // Older builds lost the flag when Vorgath died to a counterblow, leaving a portal
+  // that reformed forever. A loaded campaign with no Hollow Crown left has a broken Crown.
+  if (Array.isArray(state.units) && state.status === 'playing' && !state.flags.bossSlain
+    && !state.units.some((u) => u.type === 'lichBoss') && state.buildings?.some((b) => b.type === 'portal')) {
+    state.flags.bossSlain = true;
+  }
   updateVisibility(state);
   return state;
 }

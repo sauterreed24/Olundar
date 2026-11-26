@@ -2073,6 +2073,26 @@ check('every company can step into hard ground, and Vorgath\'s death breaks the 
   assert(getDeadwalkerCampaign(siege).broken, 'The war clock should know the Crown is broken.');
 });
 
+check('Vorgath falling to a counterblow still breaks the Crown, and stuck saves recover', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-counter-crown' });
+  const boss = state.units.find((unit) => unit.type === 'lichBoss');
+  state.units = state.units.filter((unit) => unit.id === boss.id || Math.abs(unit.x - boss.x) + Math.abs(unit.y - boss.y) > 2);
+  const guard = addUnit(state, 'legionary', 'dawn', boss.x - 1, boss.y);
+  guard.hp = 40;
+  guard.maxHp = 40;
+  boss.hp = 1;
+  const strike = attackUnit(state, boss.id, guard.id);
+  assert(strike.ok && strike.attackerDestroyed, 'Vorgath should fall to the counterblow in this setup.');
+  assert(state.flags.bossSlain, 'A counterblow that kills Vorgath must still set the boss-slain flag, or the portal reforms forever.');
+
+  const stuck = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-stuck-crown' });
+  stuck.units = stuck.units.filter((unit) => unit.type !== 'lichBoss');
+  stuck.flags.bossSlain = false;
+  const restored = deserializeState(serializeState(stuck));
+  getObjectiveProgress(restored);
+  assert(restored.flags.bossSlain, 'A save with no Hollow Crown left should unlock the portal.');
+});
+
 for (const { name, fn } of checks) {
   try {
     fn();
