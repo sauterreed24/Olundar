@@ -60,7 +60,7 @@ Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
 | Pacing: skilled win turn, median | 50–110 | 85 / 83 | 85 / 83 ✅ |
 | Tension: skilled wins with a close call | 15–60% | 11 / 0% | 11 / 0% ❌ |
 | Readability: strikes from unseen attackers | ≤ 35% | 13 / 11% | 10 / 11% ✅ |
-| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10 tune seeds) / 0% | 85 / 70% ⚠️ (big gain; held-out below target) |
+| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10 tune seeds) / 0% | 100 / 80% ✅ (after review fix; 85 / 70% before) |
 | Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 / 3406 ms | ~105 ms measured alone. 313 / 763 ms when 3 evaluators and a reviewer ran in parallel, so timing under load is noise ❌ |
 
 Like for like under the same parallel load (held-out set), the novice on Hollow Crown
@@ -78,8 +78,8 @@ whether the war-table art reads well on a phone, audio, touch controls, and
 whether the march waves feel tense.
 
 ## Backlog (top first)
-1. Advice check on held-out seeds is 70%. When no ore is revealed, the advice is only
-   "scout for hills". Point the scout advice somewhere concrete.
+1. Advice check on held-out seeds is 80%, right at the target. The remaining misses: no ore
+   is revealed, so the advice is only "scout for hills". Point the scout advice somewhere concrete.
 2. Hollow Crown is no harder than Standard for the skilled bot (90% wins on both).
    The novice wins 30% on Hollow Crown and 0% on Standard, because allied
    factions kill Vorgath once he wanders out (see Decisions).
@@ -144,6 +144,11 @@ Kept, each committed separately:
   check: 0% → 85% tune, 70% held-out.
 Rejected: the Vorgath leash (see Alternatives and Decisions) and +1 stone a turn
 (no effect).
+Independent review (a separate agent that didn't see my reasoning): it confirmed
+findPath identical across 14.8k fuzzed searches and 36 full campaigns hashed every
+turn. It found 3 minor issues, all fixed: the advice named a tile under a unit,
+the marker cache key was stale, and the toast sat under the modal. Fixing the first
+lifted the advice check to 100 / 80%.
 Round gain: two game-breaking bugs fixed, End Turn ~12× faster, and onboarding
 advice that can actually be followed. No scorecard check got worse.
 Failures and why:
@@ -155,6 +160,10 @@ Failures and why:
 - Held-out advice failures are mostly seeds where the novice scout never
   reveals ore, so the advice stays at "scout for hills". Next candidate:
   have the opening scout advice point toward unexplored ground near the capital.
+
+- Lesson (provisional): advice must pass the same checks as the action it
+  recommends, including units standing on the tile. Test the advice against
+  canBuildOn rather than terrain alone.
 
 ## Decisions for me
 1. **Should Vorgath stay at his portal?** Right now he walks up to 40 tiles
