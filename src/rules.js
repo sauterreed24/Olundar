@@ -3013,12 +3013,17 @@ function searchFrom(state, unit, maxCost = Infinity, options = {}, targetKey = n
     return top;
   };
   push({ x: unit.x, y: unit.y, cost: 0, seq: seq++ });
-  while (heap.length) {
+  // The search is lazy: route() expands tiles in cost order only until the tile it
+  // was asked for is settled, and a later route() resumes where it stopped. Pop
+  // order never depends on where it paused, so every route is the one a full
+  // search would give, and a marcher whose goal is near skips the rest of the map.
+  const settled = new Uint8Array(cells);
+  const expandNext = () => {
     const current = pop();
     const currentKey = idx(current.x, current.y);
     // A stale entry was beaten by a cheaper one already expanded.
-    if (current.cost > costs[currentKey]) continue;
-    if (currentKey === targetKey) break;
+    if (current.cost > costs[currentKey]) return;
+    settled[currentKey] = 1;
     for (const n of neighbors4(current.x, current.y)) {
       if (!passable(n.x, n.y) && !(targetKey !== null && inBounds(n.x, n.y) && idx(n.x, n.y) === targetKey)) continue;
       // A company can always take one step onto passable ground by spending its whole march.
@@ -3033,17 +3038,21 @@ function searchFrom(state, unit, maxCost = Infinity, options = {}, targetKey = n
         push({ x: n.x, y: n.y, cost: nextCost, seq: seq++ });
       }
     }
-  }
+  };
   return {
     route(tx, ty) {
+      if (!inBounds(tx, ty)) return null;
       const goalKey = idx(tx, ty);
-      if (!inBounds(tx, ty) || !reached[goalKey]) return null;
+      while (!settled[goalKey] && heap.length) expandNext();
+      if (!reached[goalKey]) return null;
       const path = [];
       let key = goalKey;
-      while (key !== startKey) {
-        path.unshift(key);
+      // The guard only matters for malformed coordinates; a real chain is shorter.
+      for (let guard = 0; key !== startKey && guard < cells; guard += 1) {
+        path.push(key);
         key = cameFrom[key];
       }
+      path.reverse();
       return { cost: costs[goalKey], path };
     }
   };
