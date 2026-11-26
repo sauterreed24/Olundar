@@ -62,14 +62,15 @@ Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
 | Readability: strikes from unseen attackers | ≤ 35% | 13 / 11% | 11 / 11% ✅ |
 | Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0 / 0% | 95 / 95% ✅ |
 | Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 / 3406 ms | 136 / 117 ms in a full run, ~90 ms in a solo heavy-game run ❌ |
-| UI playthrough (`eval/ui.mjs`): New, fresh map, seed, End turn, Save/Load, defeat recap and record | all pass | dialogs unclickable | 8/8 ✅ |
+| UI playthrough (`eval/ui.mjs`): New, fresh map, seed, End turn, Save/Load, defeat recap and record, phone readouts | all pass | dialogs unclickable; 4/8 readouts on phones | 9/9 ✅ |
 
 Round 3 changed only the UI and tests, so bot numbers can't move. The start and
 end columns are the same measured run.
 
 Checks for a human (bots can't judge these): how the battle animations feel,
 whether the war-table art reads well on a phone, audio, touch controls, and
-whether the march waves feel tense.
+whether the march waves feel tense, and whether the resource icons read
+clearly on a phone now that the words are hidden there.
 
 ## Backlog (top first)
 1. **Tension:** the skilled bot's capital is never threatened (0–11% close calls),
@@ -86,12 +87,8 @@ whether the march waves feel tense.
 4. **Economy floats:** banked food, iron, and gold reach the hundreds or thousands
    late on. A sink is a design change; propose it under Decisions if it comes up
    in a playtest.
-5. **Phone:** the resource bar scrolls sideways with a hidden scrollbar, so gold,
-   influence, and morale are off screen on a 390 px phone. Check for a human
-   (layout taste) before changing it.
 6. **Ally wins in the recap:** blocked on Decision 2. If allies may win, the new
    end card should name who broke the portal.
-7. `moveUnit` returns `pathTiles: path.tiles`, which is always undefined (unused).
 
 ## Alternatives (strong losers worth revisiting)
 - **Leash Vorgath to his court** (radius 3 or 8 around the portal). Allied kills
@@ -119,6 +116,8 @@ whether the march waves feel tense.
 - Goals/progression: 1/1 kept (personal records, round 3). No bot metric, so it's
   verified by UI steps.
 - Replayability: 1/1 kept (fresh maps).
+- Phone readability: 1/1 kept (round 4: 4/8 → 8/8 readouts on screen). Two
+  versions were compared on measured bar height.
 - Difficulty tuning: 0/4 (Hollow Crown march variants). Tuning can't fix a
   check whose outcome is dominated by an AI behaviour (Vorgath walking out).
 - New mechanic / AI behaviour: 0/1 (Vorgath leash), moved to Decisions.
@@ -198,6 +197,19 @@ gain is a visible player feature (a goal to beat, and what went wrong). For two
 rounds the gains have been small and the remaining failing checks need Decisions
 1 and 3. Next session: get those answers, or switch focus to a phone playtest of
 feel and readability.
+
+### Round 4 (session 3, short) — phone readouts, cleanup
+Decisions 1–3 are still unanswered, so this round covered only unblocked
+items. Kept:
+- **Phone resource bar.** It wraps into two compact rows with labels kept for
+  screen readers. Readouts on screen: 4/8 → 8/8 on iPhone 13 and Galaxy S8.
+  The bar grows 14 px, against 39–79 px for a plain wrap, which lost the
+  comparison. The UI step fails on the old layout.
+- **Removed moveUnit's always-undefined `pathTiles`.**
+Verification: my own skeptical pass, not independent (small CSS change and a
+one-field removal). Round gain: small. Two rounds of small gains in a row. Every
+remaining failing check now waits on Decisions 1–3, so the loop should
+pause until they're answered, or until a phone playtest brings new problems.
 
 ## Decisions for me
 1. **Should Vorgath stay at his portal?** Right now he walks up to 40 tiles
