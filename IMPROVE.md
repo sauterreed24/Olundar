@@ -60,8 +60,8 @@ Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
 | Pacing: skilled win turn, median | 50–110 | 85 / 83 | 85 / 83 ✅ |
 | Tension: skilled wins with a close call | 15–60% | 11 / 0% | 11 / 0% ❌ |
 | Readability: strikes from unseen attackers | ≤ 35% | 13 / 11% | 10 / 11% ✅ |
-| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10 tune seeds) / 0% | 100 / 80% ✅ (after review fix; 85 / 70% before) |
-| Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 / 3406 ms | ~105 ms measured alone. 313 / 763 ms when 3 evaluators and a reviewer ran in parallel, so timing under load is noise ❌ |
+| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10 tune seeds) / 0% | 95 / 95% ✅ (round 2, with stone income; round 1: 100 / 80%) |
+| Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 / 3406 ms | ~90 ms measured alone after round 2 (round 1 ~105–143 ms). 141–150 ms with two evaluators in parallel ❌ |
 
 Like for like under the same parallel load (held-out set), the novice on Hollow Crown
 went from a mean End Turn of 129 ms to 15 ms, and the worst from 3406 ms to 763 ms.
@@ -78,18 +78,21 @@ whether the war-table art reads well on a phone, audio, touch controls, and
 whether the march waves feel tense.
 
 ## Backlog (top first)
-1. Advice check on held-out seeds is 80%, right at the target. The remaining misses: no ore
-   is revealed, so the advice is only "scout for hills". Point the scout advice somewhere concrete.
-2. Hollow Crown is no harder than Standard for the skilled bot (90% wins on both).
-   The novice wins 30% on Hollow Crown and 0% on Standard, because allied
-   factions kill Vorgath once he wanders out (see Decisions).
-3. Tension: the skilled bot's capital is rarely threatened (11% close calls).
-   Marches break on the field army.
+1. Hollow Crown is no harder than Standard for the skilled bot (90–95% wins on both).
+   The novice wins 30–40% on Hollow Crown and 0% on Standard, because allied
+   factions kill Vorgath once he wanders out. Blocked on Decision 1.
+2. Tension: the skilled bot's capital is rarely threatened (0–11% close calls).
+   Marches break on the field army. Probably tied to Decision 1 and to march
+   sizing. Try a march that targets a second holding, not only the capital.
+3. Responsiveness is still ~90 ms worst in Node. What's left is walled-in marchers
+   exploring their whole region. Next idea: one shared ground search per
+   march target per turn, reused by every marcher heading there. It must still
+   match the reference routes.
 4. Economy floats: by turn 80, banked food, iron, and gold reach the hundreds or
    thousands (the novice holds 15k food). Nothing to spend on means no decisions.
-   Stone has no income at all.
-5. The New dialog always uses the scenario's fixed seed, so every Founding
-   campaign has the same map. The old UI had an editable seed.
+5. Watch: with stone income, the plain novice's Chronicle wins went 65% → 45% on
+   tune seeds (75% → 75% held-out; more timeouts). It's probably noise. Re-check
+   next round.
 6. `moveUnit` returns `pathTiles: path.tiles`, which is always undefined (unused).
 7. The skilled bot's portal siege is slow (boss dead around turn 45, portal
    around turn 80). Look at whether the portal assault is a grind.
@@ -100,15 +103,20 @@ whether the march waves feel tense.
   But the skilled bot's win rate fell from ~90% to ~33% (6-seed probe), with many
   timeouts: a defended heartland is very hard to crack. It needs a stronger
   siege bot, or siege help, before it can ship. Under Decisions.
-- **City produces +1 stone a turn.** Not needed: the advice check scored 90%
-  both with and without it. Stone still has no income, so it's worth revisiting
-  if economy work starts.
+- (Shipped in round 2: city +1 stone a turn. Once the advice was fixed, stone
+  became the binding constraint, so last round's "no effect" result had gone stale.)
 
 ## Strategy (kinds of change and hit rate)
-- Bug fixes found by bots or scripted play: 3/3 kept. The counterblow boss-kill
+- Bug fixes found by bots or scripted play: 4/4 kept (round 2: Procedural
+  Frontier always generated the same map). The counterblow boss-kill
   flag, the dialog stacking, and the unseeded upkeep roll.
-- Performance with a reference-equivalence test: 1/1 kept (End Turn 12× faster).
-- Onboarding/readability (advice you can act on): 1/1 kept. See Log, round 1.
+- Performance with a reference-equivalence test: 2/2 kept (round 1: 12×; round 2:
+  lazy search, ~110 → ~90 ms). Gains are shrinking. The next step needs a
+  different idea, or a stop.
+- Onboarding/readability (advice you can act on): 2/2 kept (round 2: stone
+  income, which unblocked the advice).
+- Replayability (fresh maps): 1/1 kept. No bot metric covers it; it's verified
+  by eval/ui.mjs and a scenario fresh-seed check.
 - New mechanic / AI behaviour (Vorgath leash): 0/1. It trades off against
   winnability, so it went to Decisions.
 
@@ -121,6 +129,10 @@ whether the march waves feel tense.
   CSS, dialogs, or input handling change.
 - Advice text must name real places, and the board must mark them. Players
   can't act on "secure iron" when no ore is in supply range.
+- A rejected candidate can become right later. Re-test Alternatives when the
+  constraint that blocked them changes (stone income: rejected in round 1,
+  kept in round 2).
+- Run timing checks alone. Parallel evaluator runs inflate End Turn ms 1.5–7×.
 - When bot outcomes look odd (a novice wins on the hardest difficulty), check
   who landed the decisive blows (`bossKiller`, `portalBreaker` in the run JSON).
 
@@ -164,6 +176,25 @@ Failures and why:
 - Lesson (provisional): advice must pass the same checks as the action it
   recommends, including units standing on the tile. Test the advice against
   canBuildOn rather than terrain alone.
+
+### Round 2 (2026-11-26) — speed, fresh maps, stone
+Kept:
+- **Lazy route search.** A marcher's shared search now stops once its goal
+  settles. Worst End Turn: ~110 → ~90 ms. 18 full campaigns hash identically
+  after every turn.
+- **Fresh maps.** The New dialog offers the scenario map, a fresh map, or a typed
+  seed. Procedural Frontier now defaults to fresh (it had generated the same map
+  every time). Covered by a fresh-seed check for every scenario and eval/ui.mjs.
+- **City +1 stone a turn.** Advice check: tune 100 → 95%, held-out 80 → 95%. No
+  other check moved beyond noise.
+Prediction check: the stone change was predicted to lift held-out advice to
+≥ 90% with no other check worse, and it did. The lazy search was predicted to
+"cut worst End Turn"; it did, by less than hoped (~20%).
+Round gain: small to medium (one more readability win, fresh maps, modest
+speed). Two rounds of perf work are now giving shrinking returns. Next round
+should move to tension and challenge, which depends on Decision 1.
+Failures: none wasted. One miss: last round's "stone income has no effect"
+was true only until the advice bug was fixed. Hence the new Playbook line.
 
 ## Decisions for me
 1. **Should Vorgath stay at his portal?** Right now he walks up to 40 tiles
