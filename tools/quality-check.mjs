@@ -2103,11 +2103,8 @@ check('fast pathfinding matches the reference routes on generated boards', () =>
   let compared = 0;
   for (let game = 0; game < 3; game += 1) {
     const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: `quality-paths-${game}` });
-    let roll = game * 7919 + 17;
-    const next = (n) => {
-      roll = (roll * 1103515245 + 12345) % 2147483648;
-      return roll % n;
-    };
+    const rng = makeRng(`quality-paths-rng-${game}`);
+    const next = (n) => Math.floor(rng() * n);
     for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) {
       endTurn(state);
       for (let k = 0; k < 12; k += 1) {
