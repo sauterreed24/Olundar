@@ -50,18 +50,22 @@ Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
 - Don't publish, deploy, or add monetization.
 
 ## Scorecard (Standard unless noted; n=20 per cell; tune / held-out seeds)
-| Check | Target | Baseline 647a926 (tune) | Round 1 (tune / hold) |
+| Check | Target | Baseline 647a926 (tune / hold) | Round 1 (tune / hold) |
 |---|---|---|---|
-| Skill gap: skilled − novice win rate | ≥ 50 pp | 90 pp | 95 / 90 pp ✅ |
-| Fairness: skilled loss rate, Chronicle | ≤ 10% | 0% | 0 / 0% ✅ |
-| Fairness: skilled loss rate, Standard | ≤ 10% | 5% | 5 / 10% ✅ |
-| Challenge: skilled win rate, Hollow Crown | 30–85% | 90% | 90 / 95% ❌ too easy |
-| Pacing: first strike (novice), median turn | ≤ 8 | 6 | 6 / 6 ✅ |
-| Pacing: skilled win turn, median | 50–110 | 85 | 85 / 83 ✅ |
-| Tension: skilled wins with a close call | 15–60% | 11% | 11 / 0% ❌ |
-| Readability: strikes from unseen attackers | ≤ 35% | 13% | 10 / 11% ✅ |
-| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10-seed tune) | 85 / 70% ⚠️ (big gain; held-out below target) |
-| Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 ms | ~105 ms measured alone. 313 / 763 ms when 3 evaluators and a reviewer ran in parallel, so timing under load is noise ❌ |
+| Skill gap: skilled − novice win rate | ≥ 50 pp | 90 / 90 pp | 95 / 90 pp ✅ |
+| Fairness: skilled loss rate, Chronicle | ≤ 10% | 0 / 0% | 0 / 0% ✅ |
+| Fairness: skilled loss rate, Standard | ≤ 10% | 5 / 10% | 5 / 10% ✅ |
+| Challenge: skilled win rate, Hollow Crown | 30–85% | 90 / 95% | 90 / 95% ❌ too easy |
+| Pacing: first strike (novice), median turn | ≤ 8 | 6 / 6 | 6 / 6 ✅ |
+| Pacing: skilled win turn, median | 50–110 | 85 / 83 | 85 / 83 ✅ |
+| Tension: skilled wins with a close call | 15–60% | 11 / 0% | 11 / 0% ❌ |
+| Readability: strikes from unseen attackers | ≤ 35% | 13 / 11% | 10 / 11% ✅ |
+| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10 tune seeds) / 0% | 85 / 70% ⚠️ (big gain; held-out below target) |
+| Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 / 3406 ms | ~105 ms measured alone. 313 / 763 ms when 3 evaluators and a reviewer ran in parallel, so timing under load is noise ❌ |
+
+Like for like under the same parallel load (held-out set), the novice on Hollow Crown
+went from a mean End Turn of 129 ms to 15 ms, and the worst from 3406 ms to 763 ms.
+The guided novice on Standard went from 0% to 10% wins on held-out seeds.
 
 The other bots don't read the advice, so their outcomes are unaffected by the
 advice change. The pathfinding rewrite is route-identical and the boss fix rarely
