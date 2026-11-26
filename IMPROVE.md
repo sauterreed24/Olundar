@@ -49,36 +49,45 @@ Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
   generation, so changing map generation changes challenge maps.
 - Don't publish, deploy, or add monetization.
 
-## Scorecard (Standard unless noted; tune seeds n=20)
-| Check | Target | Baseline (647a926) | Now |
+## Scorecard (Standard unless noted; n=20 per cell; tune / held-out seeds)
+| Check | Target | Baseline 647a926 (tune) | Round 1 (tune / hold) |
 |---|---|---|---|
-| Skill gap: skilled minus novice win rate | ≥ 50 pp | 90 pp | see Log |
-| Fairness: skilled loss rate (Chronicle / Standard) | ≤ 10% | 0% / 5% | see Log |
-| Challenge: skilled win rate on Hollow Crown | 30–85% | 90% (too easy) | see Log |
-| Pacing: first strike turn (novice), median | ≤ 8 | 6 | see Log |
-| Pacing: skilled win turn, median | 50–110 | 85 | see Log |
-| Tension: skilled wins with a close call (capital below 50%) | 15–60% | 11% | see Log |
-| Readability: enemy strikes from unseen attackers (skilled) | ≤ 35% | 13% | see Log |
-| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% | see Log |
-| Responsiveness: worst End Turn compute in Node | ≤ 60 ms | 1409 ms | see Log |
+| Skill gap: skilled − novice win rate | ≥ 50 pp | 90 pp | 95 / 90 pp ✅ |
+| Fairness: skilled loss rate, Chronicle | ≤ 10% | 0% | 0 / 0% ✅ |
+| Fairness: skilled loss rate, Standard | ≤ 10% | 5% | 5 / 10% ✅ |
+| Challenge: skilled win rate, Hollow Crown | 30–85% | 90% | 90 / 95% ❌ too easy |
+| Pacing: first strike (novice), median turn | ≤ 8 | 6 | 6 / 6 ✅ |
+| Pacing: skilled win turn, median | 50–110 | 85 | 85 / 83 ✅ |
+| Tension: skilled wins with a close call | 15–60% | 11% | 11 / 0% ❌ |
+| Readability: strikes from unseen attackers | ≤ 35% | 13% | 10 / 11% ✅ |
+| Advice works: guided novice has a mine by turn 30 | ≥ 80% | 0% (10-seed tune) | 85 / 70% ⚠️ (big gain; held-out below target) |
+| Responsiveness: worst End Turn in Node | ≤ 60 ms | 1409 ms | ~105 ms measured alone. 313 / 763 ms when 3 evaluators and a reviewer ran in parallel, so timing under load is noise ❌ |
+
+The other bots don't read the advice, so their outcomes are unaffected by the
+advice change. The pathfinding rewrite is route-identical and the boss fix rarely
+fires, so outcome differences between baseline and round 1 are small and within
+noise. Side effect: the guided novice wins 100% on Chronicle, against 65% for the
+novice.
 
 Checks for a human (bots can't judge these): how the battle animations feel,
 whether the war-table art reads well on a phone, audio, touch controls, and
 whether the march waves feel tense.
 
 ## Backlog (top first)
-1. Hollow Crown is no harder than Standard for the skilled bot (90% wins on both).
+1. Advice check on held-out seeds is 70%. When no ore is revealed, the advice is only
+   "scout for hills". Point the scout advice somewhere concrete.
+2. Hollow Crown is no harder than Standard for the skilled bot (90% wins on both).
    The novice wins 30% on Hollow Crown and 0% on Standard, because allied
    factions kill Vorgath once he wanders out (see Decisions).
-2. Tension: the skilled bot's capital is rarely threatened (11% close calls).
+3. Tension: the skilled bot's capital is rarely threatened (11% close calls).
    Marches break on the field army.
-3. Economy floats: by turn 80, banked food, iron, and gold reach the hundreds or
+4. Economy floats: by turn 80, banked food, iron, and gold reach the hundreds or
    thousands (the novice holds 15k food). Nothing to spend on means no decisions.
    Stone has no income at all.
-4. The New dialog always uses the scenario's fixed seed, so every Founding
+5. The New dialog always uses the scenario's fixed seed, so every Founding
    campaign has the same map. The old UI had an editable seed.
-5. `moveUnit` returns `pathTiles: path.tiles`, which is always undefined (unused).
-6. The skilled bot's portal siege is slow (boss dead around turn 45, portal
+6. `moveUnit` returns `pathTiles: path.tiles`, which is always undefined (unused).
+7. The skilled bot's portal siege is slow (boss dead around turn 45, portal
    around turn 80). Look at whether the portal assault is a grind.
 
 ## Alternatives (strong losers worth revisiting)
@@ -113,7 +122,35 @@ whether the march waves feel tense.
 
 ## Log
 ### Round 1 (2026-11-26) — set up the evaluator, fix what the bots found
-See the detailed entries below this heading (filled in as the round goes).
+Kept, each committed separately:
+- **Vorgath killed by a counterblow never set `bossSlain`**, so the portal
+  reformed forever and the campaign couldn't be won. Found on 1 of 3 skilled
+  games. Fixed in `removeUnit`, and loading a save with no Hollow Crown repairs it.
+  A new check fails on the old code.
+- **Unseeded upkeep roll** (`Math.random`) is now seeded, so games replay exactly.
+- **End Turn speed:** findPath rewrite (heap, occupancy index, typed arrays,
+  one shared search for approach fallbacks). 1310 → about 105 ms on the worst
+  3 games, measured alone, with identical outcomes. A reference-equivalence
+  check covers it.
+- **New, Save, and Load dialogs were under the board canvas** (a regression from the
+  layered-board commit), so clicks never reached them. Fixed with z-index.
+  `eval/ui.mjs` plus a CSS stacking check.
+- **Iron advice:** the council said "build a Hill Mine" when none could be placed.
+  It now names an outpost or mine tile and marks it on the board. Advice
+  check: 0% → 85% tune, 70% held-out.
+Rejected: the Vorgath leash (see Alternatives and Decisions) and +1 stone a turn
+(no effect).
+Round gain: two game-breaking bugs fixed, End Turn ~12× faster, and onboarding
+advice that can actually be followed. No scorecard check got worse.
+Failures and why:
+- Baseline numbers for the advice check were first measured on 10 seeds only,
+  because the check was added mid-round.
+- The responsiveness check is unreliable when evaluators run in parallel.
+  Fix for next round: measure timing in a dedicated solo run
+  (`--bots novice --diffs hollowCrown`). Provisional.
+- Held-out advice failures are mostly seeds where the novice scout never
+  reveals ore, so the advice stays at "scout for hills". Next candidate:
+  have the opening scout advice point toward unexplored ground near the capital.
 
 ## Decisions for me
 1. **Should Vorgath stay at his portal?** Right now he walks up to 40 tiles
