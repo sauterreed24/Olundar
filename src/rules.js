@@ -3080,7 +3080,7 @@ export function moveUnit(state, unitId, x, y) {
   // A fighting company that marches into reach of a foe keeps its strike for this turn.
   const strikeReady = unit.type !== 'engineer' && attackOptionsFor(state, unit).length > 0;
   if (!strikeReady) unit.hasActed = true;
-  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, pathTiles: path.tiles, ruinWhisper, strikeReady };
+  return { ok: true, reason: `${unit.name} moved.`, unitId: unit.id, fromX, fromY, x, y, ruinWhisper, strikeReady };
 }
 
 export function canStillMove(unit) {
