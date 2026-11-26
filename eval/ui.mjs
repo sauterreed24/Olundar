@@ -84,6 +84,31 @@ await step('Starting a new campaign from the dialog works by pointer', async () 
   assert(await page.$eval('#modal', (el) => el.hidden), 'The dialog should close after starting.');
 });
 
+await step('A fresh map or a typed seed starts a different campaign map', async () => {
+  const seedOf = async () => page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+  await page.click('#newTop');
+  await page.waitForSelector('#modal:not([hidden])');
+  await page.selectOption('#modal select[name="map"]', 'fresh');
+  await page.click('#modal button.primary');
+  await page.waitForTimeout(300);
+  const fresh = await seedOf();
+  assert(/begun on map founding-/.test(fresh), `A fresh map should draw a new seed, notice was: ${fresh}`);
+  await page.click('#newTop');
+  await page.waitForSelector('#modal:not([hidden])');
+  await page.fill('#modal input[name="seed"]', 'ui check seed');
+  await page.click('#modal button.primary');
+  await page.waitForTimeout(300);
+  assert((await seedOf()).includes('map ui-check-seed'), 'A typed seed should be used as the map seed.');
+  await page.click('#newTop');
+  await page.waitForSelector('#modal:not([hidden])');
+  await page.selectOption('#modal select[name="scenario"]', 'proceduralFrontier');
+  assert((await page.$eval('#modal select[name="map"]', (el) => el.value)) === 'fresh', 'Procedural Frontier should default to a fresh map.');
+  await page.selectOption('#modal select[name="scenario"]', 'founding');
+  await page.click('#modal button.primary');
+  await page.waitForTimeout(300);
+  assert((await seedOf()).includes('map Olundar-Founding'), 'The default should keep the scenario map.');
+});
+
 await step('End turn advances the turn (twice, confirming idle units)', async () => {
   await page.keyboard.press('e');
   await page.keyboard.press('e');

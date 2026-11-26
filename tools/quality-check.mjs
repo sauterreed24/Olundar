@@ -2168,6 +2168,23 @@ check('iron advice names real ground and leads to a mine', () => {
   }
 });
 
+check('every scenario plays on a fresh map seed', () => {
+  for (const scenario of Object.values(SCENARIOS)) {
+    if (scenario.challenge) continue;
+    for (let i = 0; i < 4; i += 1) {
+      const state = createGame({ scenarioId: scenario.id, difficultyId: scenario.difficultyId || 'standard', seed: `${scenario.id}-fresh-${i}` });
+      const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+      const portal = state.buildings.find((b) => b.type === 'portal');
+      assert(capital && portal, `${scenario.id} on a fresh seed needs a capital and a portal.`);
+      const walker = state.units.find((u) => u.faction === 'olundar' && u.type !== 'engineer') || state.units.find((u) => u.faction === 'olundar');
+      const probe = { ...walker, x: capital.x, y: capital.y };
+      assert(findPath(state, probe, portal.x, portal.y, Infinity, { ignoreUnits: true }), `${scenario.id} on a fresh seed must keep a land route from the capital to the portal.`);
+      for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) endTurn(state);
+      assert(state.turn > 10, `${scenario.id} on a fresh seed should run past turn 10.`);
+    }
+  }
+});
+
 for (const { name, fn } of checks) {
   try {
     fn();
