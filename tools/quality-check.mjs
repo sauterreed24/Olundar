@@ -15,6 +15,7 @@ import {
   moveCommand,
   trainCommand
 } from '../src/engine/commands.js';
+import { referenceFindPath } from '../eval/reference/find-path.mjs';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import { DEFAULT_COSMETIC_PROFILE, cosmeticStyleForUnit, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState, validateCosmeticsConfig } from '../src/cosmetics.js';
 import {
@@ -2091,6 +2092,33 @@ check('Vorgath falling to a counterblow still breaks the Crown, and stuck saves 
   const restored = deserializeState(serializeState(stuck));
   getObjectiveProgress(restored);
   assert(restored.flags.bossSlain, 'A save with no Hollow Crown left should unlock the portal.');
+});
+
+check('fast pathfinding matches the reference routes on generated boards', () => {
+  let compared = 0;
+  for (let game = 0; game < 3; game += 1) {
+    const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: `quality-paths-${game}` });
+    let roll = game * 7919 + 17;
+    const next = (n) => {
+      roll = (roll * 1103515245 + 12345) % 2147483648;
+      return roll % n;
+    };
+    for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) {
+      endTurn(state);
+      for (let k = 0; k < 12; k += 1) {
+        const unit = state.units[next(state.units.length)];
+        const tx = next(MAP_WIDTH);
+        const ty = next(MAP_HEIGHT);
+        const options = [{}, { passFriendly: true }, { ignoreUnits: true }][k % 3];
+        const maxCost = [Infinity, 2, 4][next(3)];
+        const fast = JSON.stringify(findPath(state, unit, tx, ty, maxCost, options));
+        const slow = JSON.stringify(referenceFindPath(state, unit, tx, ty, maxCost, options));
+        assert(fast === slow, `findPath differs from the reference for ${unit.type} to ${tx},${ty} (${JSON.stringify(options)}, max ${maxCost}).`);
+        compared += 1;
+      }
+    }
+  }
+  assert(compared > 500, 'The path comparison should cover hundreds of searches.');
 });
 
 for (const { name, fn } of checks) {

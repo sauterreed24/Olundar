@@ -2890,39 +2890,116 @@ function canCrossGround(state, unit, x, y) {
 export function findPath(state, unit, tx, ty, maxCost = Infinity, options = {}) {
   if (!inBounds(tx, ty)) return null;
   if (!options.ignoreUnits && !canEnter(state, unit, tx, ty) && !(unit.x === tx && unit.y === ty)) return null;
-  const passable = options.ignoreUnits ? canCrossGround : options.passFriendly ? canPassThrough : canEnter;
+  const search = searchFrom(state, unit, maxCost, options, idx(tx, ty));
+  return search.route(tx, ty);
+}
+
+// Cheapest routes from a unit to every tile it can reach (or until `targetKey` is
+// settled). Used by findPath and by AI hosts that weigh several destinations at once.
+function searchFrom(state, unit, maxCost = Infinity, options = {}, targetKey = null) {
+  // One index of who stands where per search, instead of scanning every unit and
+  // work for every tile the search touches. First match wins, as in unitAt/buildingAt.
+  const cells = MAP_WIDTH * MAP_HEIGHT;
+  const occupant = new Array(cells);
+  for (const other of state.units) {
+    if (!inBounds(other.x, other.y)) continue;
+    const at = idx(other.x, other.y);
+    if (!occupant[at]) occupant[at] = other;
+  }
+  const work = new Array(cells);
+  for (const building of state.buildings) {
+    if (!inBounds(building.x, building.y)) continue;
+    const at = idx(building.x, building.y);
+    if (!work[at]) work[at] = building;
+  }
+  const passable = (x, y) => {
+    const tile = tileAt(state, x, y);
+    if (!tile || !TERRAIN[tile.terrain].passable) return false;
+    const at = idx(x, y);
+    const building = work[at];
+    if (building && isEnemy(state, unit.faction, building.faction)) return false;
+    if (options.ignoreUnits) return true;
+    const other = occupant[at];
+    if (!other || other.id === unit.id) return true;
+    return Boolean(options.passFriendly && other.faction === unit.faction);
+  };
   const startKey = idx(unit.x, unit.y);
-  const targetKey = idx(tx, ty);
-  const costs = new Map([[startKey, 0]]);
-  const cameFrom = new Map();
-  const frontier = [{ x: unit.x, y: unit.y, cost: 0 }];
-  while (frontier.length) {
-    frontier.sort((a, b) => a.cost - b.cost);
-    const current = frontier.shift();
+  const costs = new Float64Array(cells).fill(Infinity);
+  const cameFrom = new Int32Array(cells);
+  // Reached separately from cost: a step onto impassable ground costs Infinity yet
+  // still counts as reached, as it always has.
+  const reached = new Uint8Array(cells);
+  costs[startKey] = 0;
+  reached[startKey] = 1;
+  // Binary heap ordered by cost, then by push order, so ties resolve exactly as the
+  // old sorted-array frontier did.
+  const heap = [];
+  let seq = 0;
+  const before = (a, b) => a.cost < b.cost || (a.cost === b.cost && a.seq < b.seq);
+  const push = (item) => {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!before(heap[i], heap[parent])) break;
+      [heap[i], heap[parent]] = [heap[parent], heap[i]];
+      i = parent;
+    }
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && before(heap[l], heap[m])) m = l;
+        if (r < heap.length && before(heap[r], heap[m])) m = r;
+        if (m === i) break;
+        [heap[i], heap[m]] = [heap[m], heap[i]];
+        i = m;
+      }
+    }
+    return top;
+  };
+  push({ x: unit.x, y: unit.y, cost: 0, seq: seq++ });
+  while (heap.length) {
+    const current = pop();
     const currentKey = idx(current.x, current.y);
+    // A stale entry was beaten by a cheaper one already expanded.
+    if (current.cost > costs[currentKey]) continue;
     if (currentKey === targetKey) break;
     for (const n of neighbors4(current.x, current.y)) {
-      if (!passable(state, unit, n.x, n.y) && !(n.x === tx && n.y === ty)) continue;
+      if (!passable(n.x, n.y) && !(targetKey !== null && inBounds(n.x, n.y) && idx(n.x, n.y) === targetKey)) continue;
       // A company can always take one step onto passable ground by spending its whole march.
       const step = Math.min(moveCostFor(state, unit, n.x, n.y, current), maxCost);
       const nextCost = current.cost + step;
       if (nextCost > maxCost) continue;
       const key = idx(n.x, n.y);
-      if (!costs.has(key) || nextCost < costs.get(key)) {
-        costs.set(key, nextCost);
-        cameFrom.set(key, currentKey);
-        frontier.push({ x: n.x, y: n.y, cost: nextCost });
+      if (!reached[key] || nextCost < costs[key]) {
+        reached[key] = 1;
+        costs[key] = nextCost;
+        cameFrom[key] = currentKey;
+        push({ x: n.x, y: n.y, cost: nextCost, seq: seq++ });
       }
     }
   }
-  if (!costs.has(targetKey)) return null;
-  const path = [];
-  let key = targetKey;
-  while (key !== startKey) {
-    path.unshift(key);
-    key = cameFrom.get(key);
-  }
-  return { cost: costs.get(targetKey), path };
+  return {
+    route(tx, ty) {
+      const goalKey = idx(tx, ty);
+      if (!inBounds(tx, ty) || !reached[goalKey]) return null;
+      const path = [];
+      let key = goalKey;
+      while (key !== startKey) {
+        path.unshift(key);
+        key = cameFrom[key];
+      }
+      return { cost: costs[goalKey], path };
+    }
+  };
 }
 
 export function moveUnit(state, unitId, x, y) {
@@ -4747,7 +4824,13 @@ function forcedMarchBonus(state, unit) {
 }
 
 function approachRoute(state, unit, tx, ty, goal) {
-  const first = canEnter(state, unit, goal.x, goal.y) ? findPath(state, unit, goal.x, goal.y, Infinity, { passFriendly: true }) : null;
+  // One search through friendly ranks answers the goal and every fallback approach.
+  let friendly = null;
+  const routeTo = (x, y) => {
+    friendly = friendly || searchFrom(state, unit, Infinity, { passFriendly: true });
+    return friendly.route(x, y);
+  };
+  const first = canEnter(state, unit, goal.x, goal.y) ? routeTo(goal.x, goal.y) : null;
   if (first) return first;
   const candidates = [];
   for (let y = ty - 3; y <= ty + 3; y += 1) {
@@ -4760,7 +4843,7 @@ function approachRoute(state, unit, tx, ty, goal) {
   }
   candidates.sort((a, b) => a.ring - b.ring || a.dist - b.dist);
   for (const candidate of candidates.slice(0, 8)) {
-    const route = findPath(state, unit, candidate.x, candidate.y, Infinity, { passFriendly: true });
+    const route = routeTo(candidate.x, candidate.y);
     if (route) return route;
   }
   // Every approach is held: plan over the ground alone and press as far as it opens.
