@@ -1300,7 +1300,7 @@ export function getIronRoute(state) {
   const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
   const from = capital || { x: 0, y: 0 };
   const ore = state.map.tiles
-    .filter((tile) => (tile.terrain === 'hills' || tile.terrain === 'ruins') && isRevealed(state, tile.x, tile.y) && !buildingAt(state, tile.x, tile.y))
+    .filter((tile) => (tile.terrain === 'hills' || tile.terrain === 'ruins') && isRevealed(state, tile.x, tile.y) && !buildingAt(state, tile.x, tile.y) && !unitAt(state, tile.x, tile.y))
     .sort((a, b) => manhattan(a.x, a.y, from.x, from.y) - manhattan(b.x, b.y, from.x, from.y));
   const ground = (tile) => (tile.terrain === 'ruins' ? 'ruins' : 'hills');
   const supplied = ore.find((tile) => nearSupply(state, tile.x, tile.y));
@@ -1317,7 +1317,8 @@ export function getIronRoute(state) {
         const reach = manhattan(x, y, tile.x, tile.y);
         if (reach > 12 || reach < 1) continue;
         const spot = tileAt(state, x, y);
-        if (!isRevealed(state, x, y) || !TERRAIN[spot.terrain].passable || spot.terrain === 'blight' || buildingAt(state, x, y)) continue;
+        // A unit on the tile blocks construction, so advise open ground only.
+        if (!isRevealed(state, x, y) || !TERRAIN[spot.terrain].passable || spot.terrain === 'blight' || buildingAt(state, x, y) || unitAt(state, x, y)) continue;
         if (!nearSupply(state, x, y)) continue;
         const score = reach * 10 + manhattan(x, y, from.x, from.y);
         if (!best || score < best.score) best = { x, y, score, reach, ore: tile };

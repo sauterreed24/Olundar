@@ -2683,10 +2683,15 @@ function paintWaves(ctx, state, frame) {
 let ironRouteMemo = { key: '', route: null };
 
 function ironRouteFor(state) {
-  if (state.buildings.some((b) => b.faction === 'olundar' && b.type === 'mine')) return null;
+  if (state.status !== 'playing' || state.buildings.some((b) => b.faction === 'olundar' && b.type === 'mine')) return null;
   let revealed = 0;
   for (const seen of state.revealed) if (seen) revealed += 1;
-  const memoKey = `${state.seed}:${state.turn}:${state.buildings.length}:${revealed}`;
+  // Where works and companies stand changes the advice (a unit blocks a site), so
+  // they are part of the key; a loaded save with the same counts still recomputes.
+  let places = '';
+  for (const b of state.buildings) places += `${b.x},${b.y};`;
+  for (const u of state.units) places += `${u.x},${u.y};`;
+  const memoKey = `${state.seed}:${state.campaign?.scenarioId}:${state.turn}:${revealed}:${places}`;
   if (ironRouteMemo.key !== memoKey) ironRouteMemo = { key: memoKey, route: getIronRoute(state) };
   return ironRouteMemo.route;
 }

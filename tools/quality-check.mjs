@@ -2134,11 +2134,19 @@ check('dialogs and notices draw above the layered board', () => {
   const board = layer('#board');
   assert(layer('.modal') > board, 'The New/Save/Load dialogs must stack above the board canvas, or the board swallows every click on them.');
   assert(layer('.toast') > board, 'Notices must stack above the board canvas.');
+  assert(layer('.toast') > layer('.modal'), 'Notices must stay readable above an open dialog.');
 });
 
 check('iron advice names real ground and leads to a mine', () => {
   const opening = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-iron-opening' });
   const council = getWarCouncil(opening).priorities.map((item) => item.text).join(' ');
+  const engineer = opening.units.find((u) => u.faction === 'olundar' && u.type === 'engineer');
+  opening.revealed = opening.revealed.map(() => true);
+  const advised = getIronRoute(opening);
+  engineer.x = advised.x;
+  engineer.y = advised.y;
+  const moved = getIronRoute(opening);
+  assert(moved.x !== advised.x || moved.y !== advised.y, 'When a company stands on the advised tile, the advice should name open ground instead.');
   assert(!/Secure iron with a Hill Mine\. /.test(council), 'With no ore in supply, the council must not ask for a Hill Mine it cannot place.');
   for (let i = 0; i < 12; i += 1) {
     const state = createGame({ scenarioId: ['founding', 'proceduralFrontier', 'dawnroad', 'ashgate'][i % 4], difficultyId: 'standard', seed: `quality-iron-${i}` });
@@ -2149,6 +2157,7 @@ check('iron advice names real ground and leads to a mine', () => {
       assert(isTileSupplied(state, route.x, route.y), `Advised outpost ${route.x},${route.y} must be in supply.`);
       assert(!state.buildings.some((b) => b.x === route.x && b.y === route.y) && tileAt(state, route.x, route.y).terrain !== 'blight', `Advised outpost ${route.x},${route.y} must be open ground.`);
       assert(route.advice.includes(`${route.x},${route.y}`), 'The advice must name the tile it marks.');
+      assert(!state.units.some((u) => u.x === route.x && u.y === route.y), 'The advice must not name a tile a unit stands on.');
       addBuilding(state, 'outpost', 'olundar', route.x, route.y, { complete: true });
       route = getIronRoute(state);
       hops += 1;

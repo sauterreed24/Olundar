@@ -658,7 +658,7 @@ button.primary, button.armed {
 
 .toast {
   position: fixed;
-  z-index: 40;
+  z-index: 60;
   left: 50%;
   bottom: 1rem;
   transform: translateX(-50%) translateY(1rem);
