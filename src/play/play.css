@@ -706,7 +706,11 @@ button.primary, button.armed {
   .stage { grid-template-columns: 1fr; grid-template-rows: minmax(16rem, 58vh) minmax(0, 1fr); }
   .bar { flex-wrap: wrap; align-items: flex-start; }
   .bar-actions { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
-  .resources { order: 3; flex-basis: 100%; }
+  .resources { order: 3; flex-basis: 100%; flex-wrap: wrap; overflow: visible; gap: 0.3rem; }
+  /* On a phone every store stays in sight: the icon names it (and the title
+     carries the word), so the label line gives way to two compact rows. */
+  .resources .res { padding: 0.12rem 0.36rem 0.12rem 0.3rem; }
+  .resources .res em { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .dock { border-left: 0; border-top: 1px solid var(--line); }
   .map-frame { padding: 6px; }
 }

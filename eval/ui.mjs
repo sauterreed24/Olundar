@@ -188,6 +188,23 @@ await step('A lost campaign ends on a recap with its cause and a personal record
   assert(/Your longest stand in .* is turn 2/.test(again), `A repeat defeat should show the standing record: ${again.slice(0, 300)}`);
 });
 
+await step('On a phone every resource readout is on screen', async () => {
+  const { devices } = require('playwright');
+  for (const name of ['iPhone 13', 'Galaxy S8']) {
+    const phone = await browser.newContext({ ...devices[name] });
+    const tab = await phone.newPage();
+    await tab.goto(base, { waitUntil: 'networkidle' });
+    await tab.waitForTimeout(600);
+    const shown = await tab.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const chips = [...document.querySelectorAll('#resources .res')];
+      return { total: chips.length, inView: chips.filter((c) => { const r = c.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= vw + 0.5; }).length };
+    });
+    await phone.close();
+    assert(shown.total >= 8 && shown.inView === shown.total, `${name}: only ${shown.inView} of ${shown.total} resource readouts are on screen.`);
+  }
+});
+
 await step('No page errors', async () => {
   assert(!errors.length, errors.join(' | '));
 });
