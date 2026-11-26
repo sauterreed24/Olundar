@@ -12,7 +12,7 @@ The Deadwalkers then march, raid, and spread blight. Barrow raids start around
 turn 6, and marches start at turn 12 on Standard. A Standard win takes about 70–100 turns.
 
 **Run it:** `npm ci && npm start`, then open http://localhost:4173.
-**Gate:** `npm run quality:check`, about 45 s and 62 checks. It must pass before any commit.
+**Gate:** `npm run quality:check`, about 45 s and 63 checks. It must pass before any commit.
 **Evaluator:** `node eval/run.mjs` plays tuning seeds and prints the scorecard.
 Add `--set hold` for the held-out seeds, and `--n 20` for more seeds.
 `node eval/ui.mjs` plays the menus in a real browser (New, fresh map, seed, End turn, Save, Load, a defeat with its recap and record).
@@ -142,6 +142,8 @@ whether the march waves feel tense.
 - Test generators must use `makeRng`, never a bare power-of-two LCG: its low
   bits cycle, and it let a broken records check pass (round 3). Prove every new
   check fails on 2–3 deliberate mutations.
+- Never do bookkeeping (records, saves) inside a tab's renderer. Other tabs
+  skip it (round 3 review).
 - UI state that "announces once" (a new record) needs a memo keyed to the event.
   Repaints are frequent. Reset it on New and Load.
 - When bot outcomes look odd (a novice wins on the hardest difficulty), check
@@ -176,7 +178,15 @@ Kept:
   makeRng. The old LCG had cycling low bits.
 Rejected: four Hollow Crown march tunings (Alternatives). Performance stopped
 for shrinking returns.
+Independent review (a separate agent): it found five real problems, all fixed.
+A defeat on a non-Field tab wasn't recorded. The record line named the wrong
+map. A rival's sack was blamed on the dead. The fallback text claimed a morale
+collapse. The turn wasn't escaped. It also found that Load didn't clear undo
+(pre-existing, fixed).
 Failures:
+- (d) Side effects in render code (writing records inside the Field tab's
+  card) missed every other tab. Lesson: do game-event bookkeeping where the
+  state changes or in tab-independent chrome, never in a tab's renderer.
 - (a) The first records check passed a mutation because of the weak LCG. Caught
   by the mutation step; now a Playbook rule.
 - (b) The record line flipped on repaint. Caught by a UI step written before the
