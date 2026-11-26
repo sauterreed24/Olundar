@@ -15,6 +15,8 @@ import {
   moveCommand,
   trainCommand
 } from '../src/engine/commands.js';
+import { makeRng } from '../src/map.js';
+import { RECORDS_KEY, fallCause, noteCampaignEnd, parseRecords, recordsFor } from '../src/records.js';
 import { referenceFindPath } from '../eval/reference/find-path.mjs';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import { DEFAULT_COSMETIC_PROFILE, cosmeticStyleForUnit, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState, validateCosmeticsConfig } from '../src/cosmetics.js';
@@ -2101,11 +2103,8 @@ check('fast pathfinding matches the reference routes on generated boards', () =>
   let compared = 0;
   for (let game = 0; game < 3; game += 1) {
     const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: `quality-paths-${game}` });
-    let roll = game * 7919 + 17;
-    const next = (n) => {
-      roll = (roll * 1103515245 + 12345) % 2147483648;
-      return roll % n;
-    };
+    const rng = makeRng(`quality-paths-rng-${game}`);
+    const next = (n) => Math.floor(rng() * n);
     for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) {
       endTurn(state);
       for (let k = 0; k < 12; k += 1) {
@@ -2181,6 +2180,63 @@ check('every scenario plays on a fresh map seed', () => {
       assert(findPath(state, probe, portal.x, portal.y, Infinity, { ignoreUnits: true }), `${scenario.id} on a fresh seed must keep a land route from the capital to the portal.`);
       for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) endTurn(state);
       assert(state.turn > 10, `${scenario.id} on a fresh seed should run past turn 10.`);
+    }
+  }
+});
+
+check('the fall of Olundar names who struck the last blows', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-fall-cause' });
+  state.status = 'lost';
+  state.turnEvents = [
+    { kind: 'strike', attackerFaction: 'dawn', attackerId: 'u1', targetFaction: 'olundar', targetKind: 'building', damage: 5 },
+    { kind: 'strike', attackerFaction: 'dead', attackerId: 'u2', targetFaction: 'olundar', targetKind: 'building', damage: 3 }
+  ];
+  const cause = fallCause(state);
+  assert(cause.includes(`of ${state.factions.dawn.name} struck for 5`) && cause.includes('of the dead struck for 3'), `A rival's blows must not be blamed on the dead: ${cause}`);
+  state.turnEvents = [];
+  assert(!/morale/i.test(fallCause(state)), 'With no strikes on record, the cause must not invent a morale collapse.');
+});
+
+check('personal records keep the fastest victory and longest stand, once per ending', () => {
+  assert(RECORDS_KEY !== 'olundar.deadwalker.prototype.save' && RECORDS_KEY !== 'olundar.deadwalker.prototype.saveSlots', 'Records must live apart from saves.');
+  for (const raw of [null, '', 'not json', '[]', '{"entries":[]}', '{"entries":{"x":{"wins":-3,"fastestWin":"9"}}}']) {
+    const parsed = parseRecords(raw);
+    assert(parsed && typeof parsed.entries === 'object' && Array.isArray(parsed.noted), `Corrupt records (${raw}) should parse to an empty book.`);
+  }
+  const rng = makeRng('quality-records');
+  const next = (n) => Math.floor(rng() * n);
+  for (let trial = 0; trial < 40; trial += 1) {
+    let records = parseRecords(null);
+    const reference = {};
+    const endings = [];
+    for (let i = 0; i < 12; i += 1) {
+      const scenarioId = ['founding', 'dawnroad'][next(2)];
+      const difficultyId = ['standard', 'hollowCrown'][next(2)];
+      const ending = { seed: `s${next(4)}`, status: next(2) ? 'won' : 'lost', turn: 20 + next(80), campaign: { scenarioId, difficultyId } };
+      // Replays of an earlier ending must change nothing.
+      const state = endings.length && next(4) === 0 ? endings[next(endings.length)] : ending;
+      endings.push(state);
+      const id = `${state.seed}|${state.campaign.scenarioId}:${state.campaign.difficultyId}|${state.status}|${state.turn}`;
+      const key = `${state.campaign.scenarioId}:${state.campaign.difficultyId}`;
+      const ref = reference[key] || (reference[key] = { wins: 0, losses: 0, fastestWin: null, longestStand: null, seen: new Set() });
+      const result = noteCampaignEnd(records, state);
+      if (!ref.seen.has(id)) {
+        ref.seen.add(id);
+        if (state.status === 'won') {
+          ref.wins += 1;
+          ref.fastestWin = ref.fastestWin === null ? state.turn : Math.min(ref.fastestWin, state.turn);
+        } else {
+          ref.losses += 1;
+          ref.longestStand = Math.max(ref.longestStand || 0, state.turn);
+        }
+        assert(result.fresh, 'A new ending should be noted.');
+      } else {
+        assert(!result.fresh && !result.isBest, 'A replayed ending must not count again or claim a record.');
+      }
+      records = parseRecords(JSON.stringify(result.records));
+      const got = recordsFor(records, state);
+      assert(got.wins === ref.wins && got.losses === ref.losses && got.fastestWin === ref.fastestWin && got.longestStand === ref.longestStand,
+        `Records diverged from the reference for ${key}: ${JSON.stringify(got)} vs ${JSON.stringify({ ...ref, seen: undefined })}.`);
     }
   }
 });

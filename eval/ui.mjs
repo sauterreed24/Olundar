@@ -137,6 +137,74 @@ await step('Save then Load restores the campaign by pointer', async () => {
   assert((await page.textContent('#turnLabel')).includes('Turn 2'), `Loading should restore Turn 2, saw ${await page.textContent('#turnLabel')}.`);
 });
 
+await step('A lost campaign ends on a recap with its cause and a personal record', async () => {
+  // A capital one blow from falling, with a grave knight at the gate.
+  const doomed = await page.evaluate(async () => {
+    const rules = await import('./src/rules.js');
+    const state = rules.createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'ui-doomed' });
+    const city = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+    city.hp = 1;
+    state.units = state.units.filter((u) => Math.abs(u.x - city.x) + Math.abs(u.y - city.y) > 1);
+    rules.addUnit(state, 'graveKnight', 'dead', city.x + 1, city.y);
+    return rules.serializeState(state);
+  });
+  const loadDoomed = async () => {
+    await page.evaluate((data) => {
+      const slot = { id: 'slot-doomed', name: 'Doomed', savedAt: new Date().toISOString(), turn: 1, status: 'playing', scenarioName: 'Founding', difficultyName: 'Standard', seed: 'ui-doomed', data };
+      localStorage.setItem('olundar.deadwalker.prototype.saveSlots', JSON.stringify([slot]));
+    }, doomed);
+    await page.click('#loadTop');
+    await page.waitForSelector('#modal button[data-slot]');
+    await page.click('#modal button[data-slot]');
+    await page.waitForTimeout(500);
+    await page.keyboard.press('e');
+    await page.keyboard.press('e');
+    await page.waitForTimeout(2500);
+    return page.$eval('#dock', (el) => el.innerText);
+  };
+  await page.evaluate(() => localStorage.removeItem('olundar.deadwalker.records'));
+  const first = await loadDoomed();
+  assert(/Olundar has fallen/.test(first), 'The dock should say Olundar has fallen.');
+  assert(/against Olundar's holdings/.test(first), `The recap should name what brought the capital down: ${first.slice(0, 300)}`);
+  assert(/longest stand yet/i.test(first), 'The first defeat should set a personal record.');
+  await page.click('text=COUNCIL');
+  await page.click('text=FIELD');
+  await page.waitForTimeout(200);
+  assert(/longest stand yet/i.test(await page.$eval('#dock', (el) => el.innerText)), 'A repaint must keep the new-record line on screen.');
+  // An ending seen from another tab must still be recorded.
+  await page.evaluate(() => localStorage.removeItem('olundar.deadwalker.records'));
+  await page.click('#loadTop');
+  await page.waitForSelector('#modal button[data-slot]');
+  await page.click('#modal button[data-slot]');
+  await page.waitForTimeout(500);
+  await page.click('text=LOG');
+  await page.keyboard.press('e');
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+  const stored = await page.evaluate(() => localStorage.getItem('olundar.deadwalker.records'));
+  assert(stored && stored.includes('founding:standard'), 'A defeat seen on the Log tab must still be recorded.');
+  await page.click('text=FIELD');
+  const again = await loadDoomed();
+  assert(/Your longest stand in .* is turn 2/.test(again), `A repeat defeat should show the standing record: ${again.slice(0, 300)}`);
+});
+
+await step('On a phone every resource readout is on screen', async () => {
+  const { devices } = require('playwright');
+  for (const name of ['iPhone 13', 'Galaxy S8']) {
+    const phone = await browser.newContext({ ...devices[name] });
+    const tab = await phone.newPage();
+    await tab.goto(base, { waitUntil: 'networkidle' });
+    await tab.waitForTimeout(600);
+    const shown = await tab.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const chips = [...document.querySelectorAll('#resources .res')];
+      return { total: chips.length, inView: chips.filter((c) => { const r = c.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= vw + 0.5; }).length };
+    });
+    await phone.close();
+    assert(shown.total >= 8 && shown.inView === shown.total, `${name}: only ${shown.inView} of ${shown.total} resource readouts are on screen.`);
+  }
+});
+
 await step('No page errors', async () => {
   assert(!errors.length, errors.join(' | '));
 });
