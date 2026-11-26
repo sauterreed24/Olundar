@@ -24,6 +24,7 @@ import {
   attackBuilding,
   attackUnit,
   canAfford,
+  canBuildOn,
   createGame,
   deserializeState,
   endTurn,
@@ -43,8 +44,10 @@ import {
   getSiegeOperations,
   getStrategicMapLens,
   getWarCouncil,
+  getIronRoute,
   getWeeklyChallenge,
   isTileSupplied,
+  isVisible,
   makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
@@ -2131,6 +2134,29 @@ check('dialogs and notices draw above the layered board', () => {
   const board = layer('#board');
   assert(layer('.modal') > board, 'The New/Save/Load dialogs must stack above the board canvas, or the board swallows every click on them.');
   assert(layer('.toast') > board, 'Notices must stack above the board canvas.');
+});
+
+check('iron advice names real ground and leads to a mine', () => {
+  const opening = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-iron-opening' });
+  const council = getWarCouncil(opening).priorities.map((item) => item.text).join(' ');
+  assert(!/Secure iron with a Hill Mine\. /.test(council), 'With no ore in supply, the council must not ask for a Hill Mine it cannot place.');
+  for (let i = 0; i < 12; i += 1) {
+    const state = createGame({ scenarioId: ['founding', 'proceduralFrontier', 'dawnroad', 'ashgate'][i % 4], difficultyId: 'standard', seed: `quality-iron-${i}` });
+    state.revealed = state.revealed.map(() => true);
+    let route = getIronRoute(state);
+    let hops = 0;
+    while (route.kind === 'outpost' && hops < 4) {
+      assert(isTileSupplied(state, route.x, route.y), `Advised outpost ${route.x},${route.y} must be in supply.`);
+      assert(!state.buildings.some((b) => b.x === route.x && b.y === route.y) && tileAt(state, route.x, route.y).terrain !== 'blight', `Advised outpost ${route.x},${route.y} must be open ground.`);
+      assert(route.advice.includes(`${route.x},${route.y}`), 'The advice must name the tile it marks.');
+      addBuilding(state, 'outpost', 'olundar', route.x, route.y, { complete: true });
+      route = getIronRoute(state);
+      hops += 1;
+    }
+    assert(route.kind === 'mine', `Following the advice should reach a mine site (seed ${i}, ${route.kind} after ${hops} outposts).`);
+    assert(['hills', 'ruins'].includes(tileAt(state, route.x, route.y).terrain) && isTileSupplied(state, route.x, route.y), 'The advised mine must sit on supplied hills or ruins.');
+    assert(canBuildOn(state, 'mine', route.x, route.y).ok || !isVisible(state, route.x, route.y), 'The advised mine site should pass the real build check when seen.');
+  }
 });
 
 for (const { name, fn } of checks) {

@@ -15,6 +15,7 @@ import {
   forecastUnitAttack,
   getMarchAssaultVectors,
   getBarrowRaid,
+  getIronRoute,
   getMarchWaves,
   getDeadwalkerCampaign,
   getWarCouncil,
@@ -864,6 +865,7 @@ function paintPieces(surface, state, frame, { hover, selectedUnit, selectedBuild
   if (buildType && hover) drawBuildWash(ctx, frame, hover, sites, state);
   paintMarches(ctx, state, frame);
   paintBarrow(ctx, state, frame);
+  paintIronRoute(ctx, state, frame);
   paintWaves(ctx, state, frame);
   paintDawn(ctx, frame);
   paintSight(ctx, frame);
@@ -2673,6 +2675,50 @@ function paintWaves(ctx, state, frame) {
     ctx.fillText(label, cx, top + (size + 6) / 2);
     ctx.restore();
   }
+}
+
+// The War Council names where iron can come from. Mark that ground on the board so
+// the advice can be followed without reading coordinates. Recomputed only when
+// the turn, the works, or the revealed ground change.
+let ironRouteMemo = { key: '', route: null };
+
+function ironRouteFor(state) {
+  if (state.buildings.some((b) => b.faction === 'olundar' && b.type === 'mine')) return null;
+  let revealed = 0;
+  for (const seen of state.revealed) if (seen) revealed += 1;
+  const memoKey = `${state.seed}:${state.turn}:${state.buildings.length}:${revealed}`;
+  if (ironRouteMemo.key !== memoKey) ironRouteMemo = { key: memoKey, route: getIronRoute(state) };
+  return ironRouteMemo.route;
+}
+
+function paintIronRoute(ctx, state, frame) {
+  const route = ironRouteFor(state);
+  if (!route || route.kind === 'scout') return;
+  const marks = [{ x: route.x, y: route.y, label: route.kind === 'mine' ? 'mine for iron' : 'outpost for iron' }];
+  if (route.kind === 'outpost' && Number.isInteger(route.oreX)) marks.push({ x: route.oreX, y: route.oreY, label: 'iron ground' });
+  const size = Math.max(10, Math.round(frame.tile * 0.18));
+  ctx.save();
+  for (const mark of marks) {
+    const rect = tileRect(frame, mark.x, mark.y);
+    ctx.strokeStyle = 'rgba(214, 160, 72, 0.9)';
+    ctx.lineWidth = Math.max(2, rect.s * 0.04);
+    ctx.setLineDash([rect.s * 0.1, rect.s * 0.07]);
+    roundRect(ctx, rect.x + rect.s * 0.1, rect.y + rect.s * 0.1, rect.s * 0.8, rect.s * 0.8, rect.s * 0.12);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `700 ${size}px Palatino, Georgia, serif`;
+    const width = ctx.measureText(mark.label).width + size;
+    const cx = rect.x + rect.s / 2;
+    const top = rect.y + rect.s - size * 0.4;
+    ctx.fillStyle = 'rgba(58, 34, 12, 0.88)';
+    roundRect(ctx, cx - width / 2, top, width, size + 6, 4);
+    ctx.fill();
+    ctx.fillStyle = '#f3d79a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(mark.label, cx, top + (size + 6) / 2);
+  }
+  ctx.restore();
 }
 
 function paintBarrow(ctx, state, frame) {

@@ -1265,7 +1265,7 @@ export function getWarCouncil(state) {
   } else {
     if (ready.length) priorities.push({ tone: 'good', text: `Issue orders to ${ready.length} ready unit${ready.length === 1 ? '' : 's'} before ending the turn.` });
     if (!state.flags.firstAllySeen) priorities.push({ tone: 'info', text: 'Send the scout along the roads to locate living civilizations before diplomacy becomes urgent.' });
-    if (!hasOperationalBuilding(state, 'mine')) priorities.push({ tone: 'info', text: 'Secure iron with a Hill Mine. Legionaries, spears, and siege all depend on it.' });
+    if (!hasOperationalBuilding(state, 'mine') && !state.buildings.some((b) => b.faction === 'olundar' && b.type === 'mine')) priorities.push({ tone: 'info', text: getIronRoute(state).advice });
     if (!hasOperationalBuilding(state, 'archeryYard')) priorities.push({ tone: 'info', text: 'Build an Archery Yard before the first major Deadwalker push reaches your roads.' });
     if (discoveredLiving > 0 && !Object.values(faction.pacts).some(Boolean)) priorities.push({ tone: 'info', text: 'Turn first contact into a Survival Pact for shared vision and emergency aid.' });
     if (knownDead && !hasOperationalBuilding(state, 'workshop')) priorities.push({ tone: 'danger', text: 'Deadwalker infrastructure is known. Prepare a Siege Workshop and onagers before entering blight.' });
@@ -1291,6 +1291,52 @@ export function getWarCouncil(state) {
       { label: 'Dead pressure', value: knownDead ? knownDead.label : 'Unknown' }
     ]
   };
+}
+
+// Where Olundar's iron can come from. No hills or ruins lie within supply of the
+// capital, so the first mine usually needs a Frontier Outpost pushed toward ore.
+// The advice names real tiles so a new player can act on it.
+export function getIronRoute(state) {
+  const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const from = capital || { x: 0, y: 0 };
+  const ore = state.map.tiles
+    .filter((tile) => (tile.terrain === 'hills' || tile.terrain === 'ruins') && isRevealed(state, tile.x, tile.y) && !buildingAt(state, tile.x, tile.y))
+    .sort((a, b) => manhattan(a.x, a.y, from.x, from.y) - manhattan(b.x, b.y, from.x, from.y));
+  const ground = (tile) => (tile.terrain === 'ruins' ? 'ruins' : 'hills');
+  const supplied = ore.find((tile) => nearSupply(state, tile.x, tile.y));
+  if (supplied) {
+    return { kind: 'mine', x: supplied.x, y: supplied.y, advice: `Secure iron with a Hill Mine on the ${ground(supplied)} at ${supplied.x},${supplied.y}. Legionaries, spears, and siege all depend on it.` };
+  }
+  // Push supply toward the nearest known ore: the best outpost site is the supplied,
+  // buildable ground closest to it. Within six tiles the next step is the mine.
+  let best = null;
+  for (const tile of ore.slice(0, 12)) {
+    for (let y = tile.y - 12; y <= tile.y + 12; y += 1) {
+      for (let x = tile.x - 12; x <= tile.x + 12; x += 1) {
+        if (!inBounds(x, y)) continue;
+        const reach = manhattan(x, y, tile.x, tile.y);
+        if (reach > 12 || reach < 1) continue;
+        const spot = tileAt(state, x, y);
+        if (!isRevealed(state, x, y) || !TERRAIN[spot.terrain].passable || spot.terrain === 'blight' || buildingAt(state, x, y)) continue;
+        if (!nearSupply(state, x, y)) continue;
+        const score = reach * 10 + manhattan(x, y, from.x, from.y);
+        if (!best || score < best.score) best = { x, y, score, reach, ore: tile };
+      }
+    }
+  }
+  if (best) {
+    const tile = best.ore;
+    const then = best.reach <= 6 ? `then mine the ${ground(tile)} at ${tile.x},${tile.y}` : `to carry supply toward the ${ground(tile)} at ${tile.x},${tile.y}`;
+    return {
+      kind: 'outpost',
+      x: best.x,
+      y: best.y,
+      oreX: tile.x,
+      oreY: tile.y,
+      advice: `No hills or ruins lie within supply. Raise a Frontier Outpost at ${best.x},${best.y}, ${then}. Iron feeds legionaries, spears, and siege.`
+    };
+  }
+  return { kind: 'scout', advice: 'No hills or ruins lie within supply. Scout for hills or ruins, then push a Frontier Outpost toward them for iron.' };
 }
 
 export function getDiplomacyLedger(state) {
