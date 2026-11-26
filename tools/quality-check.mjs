@@ -2121,6 +2121,18 @@ check('fast pathfinding matches the reference routes on generated boards', () =>
   assert(compared > 500, 'The path comparison should cover hundreds of searches.');
 });
 
+check('dialogs and notices draw above the layered board', () => {
+  const css = readProjectFile('src/play/play.css');
+  const layer = (selector) => {
+    const block = css.match(new RegExp(`(^|\\n)${selector.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`));
+    const z = block && block[2].match(/z-index:\s*(\d+)/);
+    return z ? Number(z[1]) : 0;
+  };
+  const board = layer('#board');
+  assert(layer('.modal') > board, 'The New/Save/Load dialogs must stack above the board canvas, or the board swallows every click on them.');
+  assert(layer('.toast') > board, 'Notices must stack above the board canvas.');
+});
+
 for (const { name, fn } of checks) {
   try {
     fn();
