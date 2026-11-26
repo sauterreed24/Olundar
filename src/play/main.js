@@ -150,6 +150,7 @@ function renderChrome() {
   document.querySelector('#audioTop').textContent = audioIsEnabled() ? 'Audio on' : 'Audio';
   document.querySelector('#endTurn').textContent = endArmed ? 'End turn now' : 'End turn';
   document.querySelector('#endTurn').title = endArmed ? owingPhrase() : '';
+  noteEnding();
   renderDock();
 }
 
@@ -494,12 +495,12 @@ function renderGlance() {
 // The end of a campaign: what happened, why, and the record to beat next time.
 let endingMemo = { id: '', result: null };
 
-function endingCard() {
-  const won = state.status === 'won';
-  const recap = getCampaignRecap(state);
-  // Note the ending once and keep that verdict while this ending is on screen,
-  // so a repaint does not turn "a new record" into the plain standing record.
-  const endingId = `${state.seed}|${state.campaign.scenarioId}|${state.campaign.difficultyId}|${state.status}|${state.turn}`;
+// Note a finished campaign in the records once, whatever tab is open, and keep the
+// verdict while this ending stands so a repaint does not turn "a new record" into
+// the plain standing record.
+function noteEnding() {
+  if (state.status !== 'won' && state.status !== 'lost') return null;
+  const endingId = `${state.seed}|${state.campaign?.scenarioId}|${state.campaign?.difficultyId}|${state.status}|${state.turn}`;
   if (endingMemo.id !== endingId) {
     let result = null;
     try {
@@ -510,10 +511,17 @@ function endingCard() {
     }
     endingMemo = { id: endingId, result };
   }
-  const ending = endingMemo.result;
-  const where = `${state.campaign.scenarioName} on ${state.campaign.difficultyName}`;
+  return endingMemo.result;
+}
+
+function endingCard() {
+  const won = state.status === 'won';
+  const recap = getCampaignRecap(state);
+  const ending = noteEnding();
+  // Records pool every map of a scenario, so name the scenario, not this map's title.
+  const where = `${SCENARIOS[state.campaign.scenarioId]?.name || state.campaign.scenarioName} on ${state.campaign.difficultyName}`;
   let record = '';
-  if (ending) {
+  if (ending && (won ? ending.after.fastestWin : ending.after.longestStand)) {
     const { before, after, isBest } = ending;
     if (won) {
       record = isBest
@@ -530,7 +538,7 @@ function endingCard() {
   const next = won ? [] : recap.nextSteps.slice(0, 2);
   return `
     <section class="card ending ${won ? 'good' : 'danger'}">
-      <h2>${won ? 'Olundar stands' : 'Olundar has fallen'} · turn ${state.turn}</h2>
+      <h2>${won ? 'Olundar stands' : 'Olundar has fallen'} · turn ${escapeHtml(state.turn)}</h2>
       <p>${escapeHtml(recap.summary)}</p>
       ${cause ? `<p>${escapeHtml(cause)}</p>` : ''}
       ${record ? `<p class="record"><strong>${escapeHtml(record)}</strong></p>` : ''}
@@ -1643,6 +1651,8 @@ function onModalClick(event) {
   if (!slot) return;
   state = deserializeState(slot.data);
   endingMemo = { id: '', result: null };
+  // Undo must not reach back into the campaign that was open before the load.
+  getCommandHistory().clear();
   modal.hidden = true;
   buildType = null;
   const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');

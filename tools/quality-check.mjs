@@ -16,7 +16,7 @@ import {
   trainCommand
 } from '../src/engine/commands.js';
 import { makeRng } from '../src/map.js';
-import { RECORDS_KEY, noteCampaignEnd, parseRecords, recordsFor } from '../src/records.js';
+import { RECORDS_KEY, fallCause, noteCampaignEnd, parseRecords, recordsFor } from '../src/records.js';
 import { referenceFindPath } from '../eval/reference/find-path.mjs';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import { DEFAULT_COSMETIC_PROFILE, cosmeticStyleForUnit, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState, validateCosmeticsConfig } from '../src/cosmetics.js';
@@ -2182,6 +2182,19 @@ check('every scenario plays on a fresh map seed', () => {
       assert(state.turn > 10, `${scenario.id} on a fresh seed should run past turn 10.`);
     }
   }
+});
+
+check('the fall of Olundar names who struck the last blows', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-fall-cause' });
+  state.status = 'lost';
+  state.turnEvents = [
+    { kind: 'strike', attackerFaction: 'dawn', attackerId: 'u1', targetFaction: 'olundar', targetKind: 'building', damage: 5 },
+    { kind: 'strike', attackerFaction: 'dead', attackerId: 'u2', targetFaction: 'olundar', targetKind: 'building', damage: 3 }
+  ];
+  const cause = fallCause(state);
+  assert(cause.includes(`of ${state.factions.dawn.name} struck for 5`) && cause.includes('of the dead struck for 3'), `A rival's blows must not be blamed on the dead: ${cause}`);
+  state.turnEvents = [];
+  assert(!/morale/i.test(fallCause(state)), 'With no strikes on record, the cause must not invent a morale collapse.');
 });
 
 check('personal records keep the fastest victory and longest stand, once per ending', () => {

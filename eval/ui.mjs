@@ -165,12 +165,25 @@ await step('A lost campaign ends on a recap with its cause and a personal record
   await page.evaluate(() => localStorage.removeItem('olundar.deadwalker.records'));
   const first = await loadDoomed();
   assert(/Olundar has fallen/.test(first), 'The dock should say Olundar has fallen.');
-  assert(/struck Olundar's holdings/.test(first), `The recap should name what brought the capital down: ${first.slice(0, 300)}`);
+  assert(/against Olundar's holdings/.test(first), `The recap should name what brought the capital down: ${first.slice(0, 300)}`);
   assert(/longest stand yet/i.test(first), 'The first defeat should set a personal record.');
   await page.click('text=COUNCIL');
   await page.click('text=FIELD');
   await page.waitForTimeout(200);
   assert(/longest stand yet/i.test(await page.$eval('#dock', (el) => el.innerText)), 'A repaint must keep the new-record line on screen.');
+  // An ending seen from another tab must still be recorded.
+  await page.evaluate(() => localStorage.removeItem('olundar.deadwalker.records'));
+  await page.click('#loadTop');
+  await page.waitForSelector('#modal button[data-slot]');
+  await page.click('#modal button[data-slot]');
+  await page.waitForTimeout(500);
+  await page.click('text=LOG');
+  await page.keyboard.press('e');
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+  const stored = await page.evaluate(() => localStorage.getItem('olundar.deadwalker.records'));
+  assert(stored && stored.includes('founding:standard'), 'A defeat seen on the Log tab must still be recorded.');
+  await page.click('text=FIELD');
   const again = await loadDoomed();
   assert(/Your longest stand in .* is turn 2/.test(again), `A repeat defeat should show the standing record: ${again.slice(0, 300)}`);
 });

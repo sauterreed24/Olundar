@@ -2,7 +2,7 @@
 // the fastest victory and the longest stand in defeat. Stored under their own
 // key, apart from save slots, so they never touch saved campaigns.
 export const RECORDS_KEY = 'olundar.deadwalker.records';
-const NOTED_MAX = 24;
+const NOTED_MAX = 200;
 
 export function recordKey(state) {
   return `${state.campaign?.scenarioId || 'founding'}:${state.campaign?.difficultyId || 'standard'}`;
@@ -40,7 +40,7 @@ export function recordsFor(records, state) {
 export function noteCampaignEnd(records, state) {
   const key = recordKey(state);
   const before = recordsFor(records, state);
-  if (state.status !== 'won' && state.status !== 'lost') return { records, before, after: before, isBest: false, fresh: false };
+  if ((state.status !== 'won' && state.status !== 'lost') || !Number.isInteger(state.turn)) return { records, before, after: before, isBest: false, fresh: false };
   const id = `${state.seed}|${key}|${state.status}|${state.turn}`;
   // The same ending seen again (a reload, an undo and replay) is not a new record.
   if (records.noted.includes(id)) return { records, before, after: before, isBest: false, fresh: false };
@@ -66,22 +66,23 @@ export function noteCampaignEnd(records, state) {
   return { records: next, before, after, isBest, fresh: true };
 }
 
-// What brought Olundar Prime down, from the last night's strikes on it.
+// What brought Olundar Prime down, from the last night's strikes on Olundar's works.
 export function fallCause(state) {
   if (state.status !== 'lost') return null;
   const strikes = (state.turnEvents || []).filter((event) => event.kind === 'strike' && event.targetFaction === 'olundar' && event.targetKind === 'building');
-  if (!strikes.length) {
-    return state.buildings.some((b) => b.faction === 'olundar' && b.type === 'city')
-      ? 'Morale and stores gave out.'
-      : 'The dead broke into Olundar Prime.';
+  if (!strikes.length) return 'Olundar Prime fell.';
+  const byFaction = new Map();
+  for (const event of strikes) {
+    const entry = byFaction.get(event.attackerFaction) || { attackers: new Set(), damage: 0 };
+    entry.attackers.add(event.attackerId);
+    entry.damage += event.damage || 0;
+    byFaction.set(event.attackerFaction, entry);
   }
-  const attackers = new Set(strikes.map((event) => event.attackerId)).size;
-  const damage = strikes.reduce((sum, event) => sum + (event.damage || 0), 0);
-  return `On the last night ${attackers} of the dead struck Olundar's holdings for ${damage} damage, and the capital fell.`;
-}
-
-function emptyRecords() {
-  return { entries: {}, noted: [] };
+  const parts = [...byFaction.entries()].map(([faction, entry]) => {
+    const who = faction === 'dead' ? 'of the dead' : `of ${state.factions?.[faction]?.name || 'a rival host'}`;
+    return `${entry.attackers.size} ${who} struck for ${entry.damage}`;
+  });
+  return `On the last night ${parts.join(', and ')} against Olundar's holdings, and the capital fell.`;
 }
 
 function count(value) {
@@ -90,4 +91,8 @@ function count(value) {
 
 function turnOrNull(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function emptyRecords() {
+  return { entries: {}, noted: [] };
 }
