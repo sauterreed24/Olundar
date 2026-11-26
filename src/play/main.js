@@ -1530,12 +1530,27 @@ function openNewGame() {
       <label>Difficulty
         <select name="difficulty">${Object.values(DIFFICULTY_PRESETS).map((item) => `<option value="${item.id}" ${item.id === 'standard' ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select>
       </label>
+      <label>Map
+        <select name="map">
+          <option value="scenario">The scenario's own map</option>
+          <option value="fresh">A fresh map</option>
+        </select>
+      </label>
+      <label>Seed <small class="muted">(optional: replay or share a map)</small>
+        <input name="seed" autocomplete="off" spellcheck="false" maxlength="48" placeholder="Leave blank" />
+      </label>
       <div class="actions">
         <button type="submit" class="primary">Start</button>
         <button type="button" data-close="1">Close</button>
       </div>
     </form>
   `;
+  // A procedural scenario is meant to be new each time, so it starts on a fresh map.
+  const form = modal.querySelector('#newGame');
+  form.elements.scenario.addEventListener('change', () => {
+    const picked = SCENARIOS[form.elements.scenario.value];
+    form.elements.map.value = picked?.procedural && !picked.challenge ? 'fresh' : 'scenario';
+  });
   modal.querySelector('#newGame').addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
@@ -1543,7 +1558,7 @@ function openNewGame() {
     state = createGame({
       scenarioId: scenario.id,
       difficultyId: data.get('difficulty') || scenario.difficultyId || 'standard',
-      seed: scenario.seed
+      seed: campaignSeedFor(scenario, data.get('map'), data.get('seed'))
     });
     buildType = null;
     endArmed = false;
@@ -1551,10 +1566,20 @@ function openNewGame() {
     getCommandHistory().clear();
     const city = state.buildings.find((building) => building.faction === 'olundar' && building.type === 'city');
     board.focus(city?.x ?? 7, city?.y ?? 16);
-    notice(`${state.campaign.scenarioName} begun.`, 'good');
+    notice(`${state.campaign.scenarioName} begun on map ${state.seed}.`, 'good');
     renderChrome();
     paint();
   });
+}
+
+// A typed seed replays that exact map. A fresh map draws a new seed. Otherwise the
+// scenario keeps its own hand-checked map. (The weekly challenge always uses the
+// week's seed.)
+function campaignSeedFor(scenario, mapChoice, typed) {
+  const seed = String(typed || '').trim().replace(/\s+/g, '-').slice(0, 48);
+  if (seed) return seed;
+  if (mapChoice === 'fresh') return `${scenario.id}-${Math.random().toString(36).slice(2, 8)}`;
+  return scenario.seed;
 }
 
 function onModalClick(event) {

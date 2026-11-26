@@ -15,6 +15,7 @@ import {
   moveCommand,
   trainCommand
 } from '../src/engine/commands.js';
+import { referenceFindPath } from '../eval/reference/find-path.mjs';
 import { DEFAULT_SETTINGS, MAP_SCALE_PRESETS, MOTION_MODES, normalizeSettings, validateSettingsConfig } from '../src/settings.js';
 import { DEFAULT_COSMETIC_PROFILE, cosmeticStyleForUnit, normalizeCosmeticProfile, readCosmeticProfile, saveCosmeticProfile, setSelectedCosmetics, updateCosmeticProfileFromState, validateCosmeticsConfig } from '../src/cosmetics.js';
 import {
@@ -23,6 +24,7 @@ import {
   attackBuilding,
   attackUnit,
   canAfford,
+  canBuildOn,
   createGame,
   deserializeState,
   endTurn,
@@ -42,8 +44,10 @@ import {
   getSiegeOperations,
   getStrategicMapLens,
   getWarCouncil,
+  getIronRoute,
   getWeeklyChallenge,
   isTileSupplied,
+  isVisible,
   makeDiplomaticPromise,
   moveUnit,
   performDiplomacy,
@@ -2071,6 +2075,114 @@ check('every company can step into hard ground, and Vorgath\'s death breaks the 
   assert(siege.buildings.filter((building) => building.faction === 'dead').length <= worksBefore, 'No new deadwork should rise after Vorgath falls.');
   assert(tileAt(siege, 12, 26).terrain !== 'blight' && !tileAt(siege, 12, 26).blight, 'Grave-blight should wither where no deadwork feeds it.');
   assert(getDeadwalkerCampaign(siege).broken, 'The war clock should know the Crown is broken.');
+});
+
+check('Vorgath falling to a counterblow still breaks the Crown, and stuck saves recover', () => {
+  const state = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-counter-crown' });
+  const boss = state.units.find((unit) => unit.type === 'lichBoss');
+  state.units = state.units.filter((unit) => unit.id === boss.id || Math.abs(unit.x - boss.x) + Math.abs(unit.y - boss.y) > 2);
+  const guard = addUnit(state, 'legionary', 'dawn', boss.x - 1, boss.y);
+  guard.hp = 40;
+  guard.maxHp = 40;
+  boss.hp = 1;
+  const strike = attackUnit(state, boss.id, guard.id);
+  assert(strike.ok && strike.attackerDestroyed, 'Vorgath should fall to the counterblow in this setup.');
+  assert(state.flags.bossSlain, 'A counterblow that kills Vorgath must still set the boss-slain flag, or the portal reforms forever.');
+
+  const stuck = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-stuck-crown' });
+  stuck.units = stuck.units.filter((unit) => unit.type !== 'lichBoss');
+  stuck.flags.bossSlain = false;
+  const restored = deserializeState(serializeState(stuck));
+  getObjectiveProgress(restored);
+  assert(restored.flags.bossSlain, 'A save with no Hollow Crown left should unlock the portal.');
+});
+
+check('fast pathfinding matches the reference routes on generated boards', () => {
+  let compared = 0;
+  for (let game = 0; game < 3; game += 1) {
+    const state = createGame({ scenarioId: 'founding', difficultyId: 'hollowCrown', seed: `quality-paths-${game}` });
+    let roll = game * 7919 + 17;
+    const next = (n) => {
+      roll = (roll * 1103515245 + 12345) % 2147483648;
+      return roll % n;
+    };
+    for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) {
+      endTurn(state);
+      for (let k = 0; k < 12; k += 1) {
+        const unit = state.units[next(state.units.length)];
+        const tx = next(MAP_WIDTH);
+        const ty = next(MAP_HEIGHT);
+        const options = [{}, { passFriendly: true }, { ignoreUnits: true }][k % 3];
+        const maxCost = [Infinity, 2, 4][next(3)];
+        const fast = JSON.stringify(findPath(state, unit, tx, ty, maxCost, options));
+        const slow = JSON.stringify(referenceFindPath(state, unit, tx, ty, maxCost, options));
+        assert(fast === slow, `findPath differs from the reference for ${unit.type} to ${tx},${ty} (${JSON.stringify(options)}, max ${maxCost}).`);
+        compared += 1;
+      }
+    }
+  }
+  assert(compared > 500, 'The path comparison should cover hundreds of searches.');
+});
+
+check('dialogs and notices draw above the layered board', () => {
+  const css = readProjectFile('src/play/play.css');
+  const layer = (selector) => {
+    const block = css.match(new RegExp(`(^|\\n)${selector.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`));
+    const z = block && block[2].match(/z-index:\s*(\d+)/);
+    return z ? Number(z[1]) : 0;
+  };
+  const board = layer('#board');
+  assert(layer('.modal') > board, 'The New/Save/Load dialogs must stack above the board canvas, or the board swallows every click on them.');
+  assert(layer('.toast') > board, 'Notices must stack above the board canvas.');
+  assert(layer('.toast') > layer('.modal'), 'Notices must stay readable above an open dialog.');
+});
+
+check('iron advice names real ground and leads to a mine', () => {
+  const opening = createGame({ scenarioId: 'founding', difficultyId: 'standard', seed: 'quality-iron-opening' });
+  const council = getWarCouncil(opening).priorities.map((item) => item.text).join(' ');
+  const engineer = opening.units.find((u) => u.faction === 'olundar' && u.type === 'engineer');
+  opening.revealed = opening.revealed.map(() => true);
+  const advised = getIronRoute(opening);
+  engineer.x = advised.x;
+  engineer.y = advised.y;
+  const moved = getIronRoute(opening);
+  assert(moved.x !== advised.x || moved.y !== advised.y, 'When a company stands on the advised tile, the advice should name open ground instead.');
+  assert(!/Secure iron with a Hill Mine\. /.test(council), 'With no ore in supply, the council must not ask for a Hill Mine it cannot place.');
+  for (let i = 0; i < 12; i += 1) {
+    const state = createGame({ scenarioId: ['founding', 'proceduralFrontier', 'dawnroad', 'ashgate'][i % 4], difficultyId: 'standard', seed: `quality-iron-${i}` });
+    state.revealed = state.revealed.map(() => true);
+    let route = getIronRoute(state);
+    let hops = 0;
+    while (route.kind === 'outpost' && hops < 4) {
+      assert(isTileSupplied(state, route.x, route.y), `Advised outpost ${route.x},${route.y} must be in supply.`);
+      assert(!state.buildings.some((b) => b.x === route.x && b.y === route.y) && tileAt(state, route.x, route.y).terrain !== 'blight', `Advised outpost ${route.x},${route.y} must be open ground.`);
+      assert(route.advice.includes(`${route.x},${route.y}`), 'The advice must name the tile it marks.');
+      assert(!state.units.some((u) => u.x === route.x && u.y === route.y), 'The advice must not name a tile a unit stands on.');
+      addBuilding(state, 'outpost', 'olundar', route.x, route.y, { complete: true });
+      route = getIronRoute(state);
+      hops += 1;
+    }
+    assert(route.kind === 'mine', `Following the advice should reach a mine site (seed ${i}, ${route.kind} after ${hops} outposts).`);
+    assert(['hills', 'ruins'].includes(tileAt(state, route.x, route.y).terrain) && isTileSupplied(state, route.x, route.y), 'The advised mine must sit on supplied hills or ruins.');
+    assert(canBuildOn(state, 'mine', route.x, route.y).ok || !isVisible(state, route.x, route.y), 'The advised mine site should pass the real build check when seen.');
+  }
+});
+
+check('every scenario plays on a fresh map seed', () => {
+  for (const scenario of Object.values(SCENARIOS)) {
+    if (scenario.challenge) continue;
+    for (let i = 0; i < 4; i += 1) {
+      const state = createGame({ scenarioId: scenario.id, difficultyId: scenario.difficultyId || 'standard', seed: `${scenario.id}-fresh-${i}` });
+      const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+      const portal = state.buildings.find((b) => b.type === 'portal');
+      assert(capital && portal, `${scenario.id} on a fresh seed needs a capital and a portal.`);
+      const walker = state.units.find((u) => u.faction === 'olundar' && u.type !== 'engineer') || state.units.find((u) => u.faction === 'olundar');
+      const probe = { ...walker, x: capital.x, y: capital.y };
+      assert(findPath(state, probe, portal.x, portal.y, Infinity, { ignoreUnits: true }), `${scenario.id} on a fresh seed must keep a land route from the capital to the portal.`);
+      for (let turn = 0; turn < 30 && state.status === 'playing'; turn += 1) endTurn(state);
+      assert(state.turn > 10, `${scenario.id} on a fresh seed should run past turn 10.`);
+    }
+  }
 });
 
 for (const { name, fn } of checks) {

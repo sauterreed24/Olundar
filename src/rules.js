@@ -1265,7 +1265,7 @@ export function getWarCouncil(state) {
   } else {
     if (ready.length) priorities.push({ tone: 'good', text: `Issue orders to ${ready.length} ready unit${ready.length === 1 ? '' : 's'} before ending the turn.` });
     if (!state.flags.firstAllySeen) priorities.push({ tone: 'info', text: 'Send the scout along the roads to locate living civilizations before diplomacy becomes urgent.' });
-    if (!hasOperationalBuilding(state, 'mine')) priorities.push({ tone: 'info', text: 'Secure iron with a Hill Mine. Legionaries, spears, and siege all depend on it.' });
+    if (!hasOperationalBuilding(state, 'mine') && !state.buildings.some((b) => b.faction === 'olundar' && b.type === 'mine')) priorities.push({ tone: 'info', text: getIronRoute(state).advice });
     if (!hasOperationalBuilding(state, 'archeryYard')) priorities.push({ tone: 'info', text: 'Build an Archery Yard before the first major Deadwalker push reaches your roads.' });
     if (discoveredLiving > 0 && !Object.values(faction.pacts).some(Boolean)) priorities.push({ tone: 'info', text: 'Turn first contact into a Survival Pact for shared vision and emergency aid.' });
     if (knownDead && !hasOperationalBuilding(state, 'workshop')) priorities.push({ tone: 'danger', text: 'Deadwalker infrastructure is known. Prepare a Siege Workshop and onagers before entering blight.' });
@@ -1291,6 +1291,53 @@ export function getWarCouncil(state) {
       { label: 'Dead pressure', value: knownDead ? knownDead.label : 'Unknown' }
     ]
   };
+}
+
+// Where Olundar's iron can come from. No hills or ruins lie within supply of the
+// capital, so the first mine usually needs a Frontier Outpost pushed toward ore.
+// The advice names real tiles so a new player can act on it.
+export function getIronRoute(state) {
+  const capital = state.buildings.find((b) => b.faction === 'olundar' && b.type === 'city');
+  const from = capital || { x: 0, y: 0 };
+  const ore = state.map.tiles
+    .filter((tile) => (tile.terrain === 'hills' || tile.terrain === 'ruins') && isRevealed(state, tile.x, tile.y) && !buildingAt(state, tile.x, tile.y) && !unitAt(state, tile.x, tile.y))
+    .sort((a, b) => manhattan(a.x, a.y, from.x, from.y) - manhattan(b.x, b.y, from.x, from.y));
+  const ground = (tile) => (tile.terrain === 'ruins' ? 'ruins' : 'hills');
+  const supplied = ore.find((tile) => nearSupply(state, tile.x, tile.y));
+  if (supplied) {
+    return { kind: 'mine', x: supplied.x, y: supplied.y, advice: `Secure iron with a Hill Mine on the ${ground(supplied)} at ${supplied.x},${supplied.y}. Legionaries, spears, and siege all depend on it.` };
+  }
+  // Push supply toward the nearest known ore: the best outpost site is the supplied,
+  // buildable ground closest to it. Within six tiles the next step is the mine.
+  let best = null;
+  for (const tile of ore.slice(0, 12)) {
+    for (let y = tile.y - 12; y <= tile.y + 12; y += 1) {
+      for (let x = tile.x - 12; x <= tile.x + 12; x += 1) {
+        if (!inBounds(x, y)) continue;
+        const reach = manhattan(x, y, tile.x, tile.y);
+        if (reach > 12 || reach < 1) continue;
+        const spot = tileAt(state, x, y);
+        // A unit on the tile blocks construction, so advise open ground only.
+        if (!isRevealed(state, x, y) || !TERRAIN[spot.terrain].passable || spot.terrain === 'blight' || buildingAt(state, x, y) || unitAt(state, x, y)) continue;
+        if (!nearSupply(state, x, y)) continue;
+        const score = reach * 10 + manhattan(x, y, from.x, from.y);
+        if (!best || score < best.score) best = { x, y, score, reach, ore: tile };
+      }
+    }
+  }
+  if (best) {
+    const tile = best.ore;
+    const then = best.reach <= 6 ? `then mine the ${ground(tile)} at ${tile.x},${tile.y}` : `to carry supply toward the ${ground(tile)} at ${tile.x},${tile.y}`;
+    return {
+      kind: 'outpost',
+      x: best.x,
+      y: best.y,
+      oreX: tile.x,
+      oreY: tile.y,
+      advice: `No hills or ruins lie within supply. Raise a Frontier Outpost at ${best.x},${best.y}, ${then}. Iron feeds legionaries, spears, and siege.`
+    };
+  }
+  return { kind: 'scout', advice: 'No hills or ruins lie within supply. Scout for hills or ruins, then push a Frontier Outpost toward them for iron.' };
 }
 
 export function getDiplomacyLedger(state) {
@@ -2890,39 +2937,125 @@ function canCrossGround(state, unit, x, y) {
 export function findPath(state, unit, tx, ty, maxCost = Infinity, options = {}) {
   if (!inBounds(tx, ty)) return null;
   if (!options.ignoreUnits && !canEnter(state, unit, tx, ty) && !(unit.x === tx && unit.y === ty)) return null;
-  const passable = options.ignoreUnits ? canCrossGround : options.passFriendly ? canPassThrough : canEnter;
+  const search = searchFrom(state, unit, maxCost, options, idx(tx, ty));
+  return search.route(tx, ty);
+}
+
+// Cheapest routes from a unit to every tile it can reach (or until `targetKey` is
+// settled). Used by findPath and by AI hosts that weigh several destinations at once.
+function searchFrom(state, unit, maxCost = Infinity, options = {}, targetKey = null) {
+  // One index of who stands where per search, instead of scanning every unit and
+  // work for every tile the search touches. First match wins, as in unitAt/buildingAt.
+  const cells = MAP_WIDTH * MAP_HEIGHT;
+  const occupant = new Array(cells);
+  for (const other of state.units) {
+    if (!inBounds(other.x, other.y)) continue;
+    const at = idx(other.x, other.y);
+    if (!occupant[at]) occupant[at] = other;
+  }
+  const work = new Array(cells);
+  for (const building of state.buildings) {
+    if (!inBounds(building.x, building.y)) continue;
+    const at = idx(building.x, building.y);
+    if (!work[at]) work[at] = building;
+  }
+  const passable = (x, y) => {
+    const tile = tileAt(state, x, y);
+    if (!tile || !TERRAIN[tile.terrain].passable) return false;
+    const at = idx(x, y);
+    const building = work[at];
+    if (building && isEnemy(state, unit.faction, building.faction)) return false;
+    if (options.ignoreUnits) return true;
+    const other = occupant[at];
+    if (!other || other.id === unit.id) return true;
+    return Boolean(options.passFriendly && other.faction === unit.faction);
+  };
   const startKey = idx(unit.x, unit.y);
-  const targetKey = idx(tx, ty);
-  const costs = new Map([[startKey, 0]]);
-  const cameFrom = new Map();
-  const frontier = [{ x: unit.x, y: unit.y, cost: 0 }];
-  while (frontier.length) {
-    frontier.sort((a, b) => a.cost - b.cost);
-    const current = frontier.shift();
+  const costs = new Float64Array(cells).fill(Infinity);
+  const cameFrom = new Int32Array(cells);
+  // Reached separately from cost: a step onto impassable ground costs Infinity yet
+  // still counts as reached, as it always has.
+  const reached = new Uint8Array(cells);
+  costs[startKey] = 0;
+  reached[startKey] = 1;
+  // Binary heap ordered by cost, then by push order, so ties resolve exactly as the
+  // old sorted-array frontier did.
+  const heap = [];
+  let seq = 0;
+  const before = (a, b) => a.cost < b.cost || (a.cost === b.cost && a.seq < b.seq);
+  const push = (item) => {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!before(heap[i], heap[parent])) break;
+      [heap[i], heap[parent]] = [heap[parent], heap[i]];
+      i = parent;
+    }
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && before(heap[l], heap[m])) m = l;
+        if (r < heap.length && before(heap[r], heap[m])) m = r;
+        if (m === i) break;
+        [heap[i], heap[m]] = [heap[m], heap[i]];
+        i = m;
+      }
+    }
+    return top;
+  };
+  push({ x: unit.x, y: unit.y, cost: 0, seq: seq++ });
+  // The search is lazy: route() expands tiles in cost order only until the tile it
+  // was asked for is settled, and a later route() resumes where it stopped. Pop
+  // order never depends on where it paused, so every route is the one a full
+  // search would give, and a marcher whose goal is near skips the rest of the map.
+  const settled = new Uint8Array(cells);
+  const expandNext = () => {
+    const current = pop();
     const currentKey = idx(current.x, current.y);
-    if (currentKey === targetKey) break;
+    // A stale entry was beaten by a cheaper one already expanded.
+    if (current.cost > costs[currentKey]) return;
+    settled[currentKey] = 1;
     for (const n of neighbors4(current.x, current.y)) {
-      if (!passable(state, unit, n.x, n.y) && !(n.x === tx && n.y === ty)) continue;
+      if (!passable(n.x, n.y) && !(targetKey !== null && inBounds(n.x, n.y) && idx(n.x, n.y) === targetKey)) continue;
       // A company can always take one step onto passable ground by spending its whole march.
       const step = Math.min(moveCostFor(state, unit, n.x, n.y, current), maxCost);
       const nextCost = current.cost + step;
       if (nextCost > maxCost) continue;
       const key = idx(n.x, n.y);
-      if (!costs.has(key) || nextCost < costs.get(key)) {
-        costs.set(key, nextCost);
-        cameFrom.set(key, currentKey);
-        frontier.push({ x: n.x, y: n.y, cost: nextCost });
+      if (!reached[key] || nextCost < costs[key]) {
+        reached[key] = 1;
+        costs[key] = nextCost;
+        cameFrom[key] = currentKey;
+        push({ x: n.x, y: n.y, cost: nextCost, seq: seq++ });
       }
     }
-  }
-  if (!costs.has(targetKey)) return null;
-  const path = [];
-  let key = targetKey;
-  while (key !== startKey) {
-    path.unshift(key);
-    key = cameFrom.get(key);
-  }
-  return { cost: costs.get(targetKey), path };
+  };
+  return {
+    route(tx, ty) {
+      if (!inBounds(tx, ty)) return null;
+      const goalKey = idx(tx, ty);
+      while (!settled[goalKey] && heap.length) expandNext();
+      if (!reached[goalKey]) return null;
+      const path = [];
+      let key = goalKey;
+      // The guard only matters for malformed coordinates; a real chain is shorter.
+      for (let guard = 0; key !== startKey && guard < cells; guard += 1) {
+        path.push(key);
+        key = cameFrom[key];
+      }
+      path.reverse();
+      return { cost: costs[goalKey], path };
+    }
+  };
 }
 
 export function moveUnit(state, unitId, x, y) {
@@ -3235,10 +3368,8 @@ export function attackUnit(state, attackerId, defenderId) {
     removeUnit(state, defender.id);
     promotion = grantXp(state, attacker, 2);
     if (attacker.faction === 'olundar') spoils = claimSpoils(state, defender.type);
-    if (defender.type === 'lichBoss') {
-      state.flags.bossSlain = true;
-      addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
-    } else if (attacker.faction === 'olundar' && defender.march) {
+    // removeUnit breaks the Crown and announces it when Vorgath falls.
+    if (defender.type !== 'lichBoss' && attacker.faction === 'olundar' && defender.march) {
       const capital = olundarCapital(state);
       if (capital && manhattan(attacker.x, attacker.y, capital.x, capital.y) <= 8) {
         triumph = 'holdTheLine';
@@ -3490,8 +3621,14 @@ function calculateUnitDamage(state, attacker, defender) {
 }
 
 function removeUnit(state, unitId) {
+  const fallen = state.units.find((u) => u.id === unitId);
   state.units = state.units.filter((u) => u.id !== unitId);
   if (state.selectedUnitId === unitId) state.selectedUnitId = null;
+  // However Vorgath falls (a strike, a counterblow, an ally's blade), the Crown is broken.
+  if (fallen?.type === 'lichBoss' && !state.flags.bossSlain) {
+    state.flags.bossSlain = true;
+    addMessage(state, 'Vorgath the Hollow Crown collapses into ash. The Bone Portal can now be destroyed.', 'good');
+  }
 }
 
 function destroyBuilding(state, buildingId, attackerFaction = null) {
@@ -4152,8 +4289,10 @@ function payUpkeepWithMoralePenalty(state, factionId, upkeep) {
     } else {
       faction.resources[resource] = 0;
       faction.resources.morale = Math.max(0, (faction.resources.morale || 0) - 1);
+      // Seeded by campaign, turn, and resource so a replayed campaign starves the same way.
+      const roll = makeRng(`${state.seed}-upkeep-${state.turn}-${factionId}-${resource}`);
       for (const unit of state.units.filter((u) => u.faction === factionId)) {
-        if (Math.random() < 0.12) unit.hp = Math.max(1, unit.hp - 1);
+        if (roll() < 0.12) unit.hp = Math.max(1, unit.hp - 1);
       }
       addMessage(state, `${faction.name} lacks ${resource} for upkeep. Morale suffers.`, 'danger');
     }
@@ -4741,7 +4880,13 @@ function forcedMarchBonus(state, unit) {
 }
 
 function approachRoute(state, unit, tx, ty, goal) {
-  const first = canEnter(state, unit, goal.x, goal.y) ? findPath(state, unit, goal.x, goal.y, Infinity, { passFriendly: true }) : null;
+  // One search through friendly ranks answers the goal and every fallback approach.
+  let friendly = null;
+  const routeTo = (x, y) => {
+    friendly = friendly || searchFrom(state, unit, Infinity, { passFriendly: true });
+    return friendly.route(x, y);
+  };
+  const first = canEnter(state, unit, goal.x, goal.y) ? routeTo(goal.x, goal.y) : null;
   if (first) return first;
   const candidates = [];
   for (let y = ty - 3; y <= ty + 3; y += 1) {
@@ -4754,7 +4899,7 @@ function approachRoute(state, unit, tx, ty, goal) {
   }
   candidates.sort((a, b) => a.ring - b.ring || a.dist - b.dist);
   for (const candidate of candidates.slice(0, 8)) {
-    const route = findPath(state, unit, candidate.x, candidate.y, Infinity, { passFriendly: true });
+    const route = routeTo(candidate.x, candidate.y);
     if (route) return route;
   }
   // Every approach is held: plan over the ground alone and press as far as it opens.
@@ -5219,6 +5364,12 @@ export function deserializeState(json) {
   const state = JSON.parse(json);
   if (state.version !== CURRENT_SAVE_VERSION) throw new Error('Save file version is not compatible with this prototype.');
   normalizeCampaignState(state);
+  // Older builds lost the flag when Vorgath died to a counterblow, leaving a portal
+  // that reformed forever. A loaded campaign with no Hollow Crown left has a broken Crown.
+  if (Array.isArray(state.units) && state.status === 'playing' && !state.flags.bossSlain
+    && !state.units.some((u) => u.type === 'lichBoss') && state.buildings?.some((b) => b.type === 'portal')) {
+    state.flags.bossSlain = true;
+  }
   updateVisibility(state);
   return state;
 }

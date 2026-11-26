@@ -16,6 +16,7 @@
       "food": 6,
       "wood": 2,
       "gold": 5,
+      "stone": 1,
       "influence": 1
     },
     "text": "Seat of Olundar. Produces scouts and engineers, stores population, and projects vision."
